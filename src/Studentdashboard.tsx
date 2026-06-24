@@ -1,423 +1,509 @@
-import { useEffect, useState } from 'react';
-import { supabase } from './lib/supabase';
+import { useMemo } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  LabelList,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  LineChart,
+  Line,
 } from 'recharts';
+import { useUploadedExcel } from './context/UploadedExcelContext';
+import type { ColumnMapping } from './types/dynamicSchema';
+import {
+  buildSessionTrendFromClassWise,
+  buildAttendanceDonutFromHours,
+  computeHoursBasedAttendance,
+  countAttendedSessions,
+  countMissedSessions,
+  getClassWiseAttendanceForStudent,
+  parseProgramHours,
+} from './services/classWiseAttendance';
+import {
+  lookupStudentByEmail,
+} from './services/studentEmailLookup';
+import './styles/StudentDashboard.css';
 
-interface StudentSummary {
-  student_pk: string;
+interface Props {
+  email: string;
+  onBack: () => void;
+}
+
+type MappingEntry = ColumnMapping[string];
+
+function stringifyCellValue(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v).trim();
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'object') {
+    const obj = v as Record<string, unknown>;
+    if (typeof obj.text === 'string') return obj.text.trim();
+    if (typeof obj.result === 'string' || typeof obj.result === 'number') return String(obj.result).trim();
+    if (Array.isArray(obj.richText)) {
+      return (obj.richText as Array<{ text?: unknown }>).map(p => String(p?.text ?? '')).join('').trim();
+    }
+    try {
+      return JSON.stringify(obj);
+    } catch {
+      return '';
+    }
+  }
+  return String(v).trim();
+}
+
+function parsePct(raw: unknown): number {
+  const text = stringifyCellValue(raw);
+  const m = text.match(/-?\d+(\.\d+)?/);
+  if (!m) return 0;
+  const n = Number(m[0]);
+  if (!Number.isFinite(n)) return 0;
+  const pct = text.includes('%') ? n : n <= 1 && n >= 0 ? n * 100 : n;
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
+
+function isAccepted(value: string): boolean {
+  const s = value.toLowerCase();
+  return ['accepted', 'submitted', 'complete', 'completed', 'pass'].some(k => s.includes(k));
+}
+
+function isPending(value: string): boolean {
+  const s = value.toLowerCase();
+  return ['pending', 'no submission', 'not submission', 'in progress', 'awaiting'].some(k => s.includes(k));
+}
+
+function normalizeColumnKey(key: string): string {
+  return key.replace(/^\uFEFF/, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function columnKeyMatches(key: string, keyword: string): boolean {
+  const k = normalizeColumnKey(key);
+  const kw = normalizeColumnKey(keyword);
+  if (!k || !kw) return false;
+  return k.includes(kw) || kw.includes(k);
+}
+
+function getByKeywords(row: Record<string, unknown>, keywords: string[]): string {
+  const entries = Object.entries(row);
+  for (const keyword of keywords) {
+    for (const [key, value] of entries) {
+      const lk = key.toLowerCase();
+      if (lk.includes(keyword) || columnKeyMatches(key, keyword)) {
+        const out = stringifyCellValue(value);
+        if (out) return out;
+      }
+    }
+  }
+  return '—';
+}
+
+function resolveField(
+  row: Record<string, unknown>,
+  fallback: string | undefined,
+  keywords: string[],
+): string {
+  const fromRow = getByKeywords(row, keywords);
+  if (fromRow !== '—') return fromRow;
+  if (fallback?.trim()) return fallback.trim();
+  return '—';
+}
+
+function getMappedColumns(mapping: ColumnMapping, predicate: (entry: MappingEntry, col: string) => boolean): string[] {
+  return Object.entries(mapping)
+    .filter(([col, entry]) => predicate(entry, col))
+    .map(([col]) => col);
+}
+
+function studentToDisplayRow(student: {
   student_id: string;
   name: string;
   email: string;
-  status: string;
-  college_id: string;
-  current_program_id: string;
-  current_cohort_id: string;
-  state: string;
-  total_sessions: number;
-  attended_sessions: number;
-  attendance_percentage: number;
-  total_assignments: number;
-  submitted_assignments: number;
-  assignment_completion_pct: number;
-  total_quizzes: number;
-  attempted_quizzes: number;
-  average_quiz_score: number;
-  engagement_score: number;
-  category: string;
-  last_calculated_at: string;
+  college?: string;
+  cohort?: string;
+  state?: string;
+  program?: string;
+  imported_attendance_pct?: number;
+  imported_assignment_pct?: number;
+  imported_quiz_pct?: number;
+}): Record<string, unknown> {
+  return {
+    Name: student.name,
+    Email: student.email,
+    'Student ID': student.student_id,
+    College: student.college ?? '',
+    Cohort: student.cohort ?? '',
+    State: student.state ?? '',
+    Program: student.program ?? '',
+    'Attendance %': student.imported_attendance_pct != null ? String(student.imported_attendance_pct) : '',
+    'Assignment %': student.imported_assignment_pct != null ? String(student.imported_assignment_pct) : '',
+    'Quiz Score': student.imported_quiz_pct != null ? String(student.imported_quiz_pct) : '',
+  };
 }
-
-/* ── Synthetic data helpers ──────────────────────────── */
-
-function makeTrendData(totalSessions: number, attendedSessions: number) {
-  if (totalSessions === 0) return [];
-
-  const numMissed = totalSessions - attendedSessions;
-
-  // Spread missed sessions evenly through the middle of the programme
-  const missedSet = new Set<number>();
-  if (numMissed > 0) {
-    const step = totalSessions / (numMissed + 1);
-    for (let m = 1; m <= numMissed; m++) {
-      missedSet.add(Math.round(m * step) - 1);
-    }
-  }
-
-  // Realistic day gaps between sessions (weekly with occasional doubles / breaks)
-  const gaps = [7, 7, 5, 2, 7, 14, 7, 2, 5, 7, 7, 5, 7, 2, 7, 14, 5, 7, 2, 7, 7, 5, 2, 7];
-  let totalDays = 0;
-  for (let i = 0; i < totalSessions; i++) totalDays += gaps[i % gaps.length];
-
-  const today = new Date();
-  const d = new Date(today);
-  d.setDate(today.getDate() - totalDays);
-
-  return Array.from({ length: totalSessions }, (_, i) => {
-    d.setDate(d.getDate() + gaps[i % gaps.length]);
-    return {
-      date: new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      timestamp: new Date(d).getTime(),
-      hours: missedSet.has(i) ? 0 : 2,
-    };
-  });
-}
-
-function makeAssignmentData(totalAsn: number, submittedAsn: number) {
-  if (totalAsn === 0) return [];
-  const today = new Date();
-  return Array.from({ length: totalAsn }, (_, i) => {
-    const due = new Date(today);
-    due.setDate(today.getDate() - (totalAsn - i) * 14);
-    let status: string;
-    if (i < submittedAsn - 1) status = 'Submitted';
-    else if (i === submittedAsn - 1 && submittedAsn > 0) status = submittedAsn < totalAsn ? 'Late Submission' : 'Submitted';
-    else status = 'Pending';
-    return {
-      name: `Assignment ${i + 1}`,
-      due: due.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }),
-      status,
-    };
-  });
-}
-
-function makeQuizData(attempted: number, avg: number) {
-  if (attempted === 0) return [];
-  const offsets = [18, -12, 8, -6, 4, -10, 14, -8, 6, -4];
-  return Array.from({ length: attempted }, (_, i) => {
-    const raw = Math.round(avg + (offsets[i % offsets.length] ?? 0));
-    return { name: `Quiz ${i + 1}`, score: Math.min(100, Math.max(0, raw)) };
-  });
-}
-
-/* ─────────────────────────────────────────────────────── */
-
-const fmt = (n: number, d = 1) => Number(n ?? 0).toFixed(d);
-
-interface Props { email: string; onBack: () => void; }
 
 export default function StudentDashboard({ email, onBack }: Props) {
-  const [student, setStudent] = useState<StudentSummary | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [cohortName, setCohortName] = useState('');
-  const [programName, setProgramName] = useState('');
-  const [filter, setFilter] = useState<'week' | 'lastweek' | '30days' | 'all'>('all');
-  const [loading, setLoading] = useState(true);
+  const { payload } = useUploadedExcel();
+  const mapping = (payload?.mapping ?? {}) as ColumnMapping;
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setNotFound(false);
-      const { data: stu } = await supabase
-        .from('student_performance_summary')
-        .select('*')
-        .eq('email', email)
-        .single();
-      if (!stu) { setNotFound(true); setLoading(false); return; }
-      setStudent(stu as StudentSummary);
+  const lookup = useMemo(() => lookupStudentByEmail(payload, email), [payload, email]);
 
-      const [cohortRes, programRes] = await Promise.all([
-        stu.current_cohort_id
-          ? supabase.from('cohorts').select('name').eq('id', stu.current_cohort_id).single()
-          : Promise.resolve({ data: null }),
-        stu.current_program_id
-          ? supabase.from('programs').select('name').eq('id', stu.current_program_id).single()
-          : Promise.resolve({ data: null }),
-      ]);
-      setCohortName((cohortRes as any).data?.name ?? '');
-      setProgramName((programRes as any).data?.name ?? '');
-      setLoading(false);
-    };
-    load();
-  }, [email]);
+  const matched = useMemo(() => {
+    if (!lookup) return null;
+    return lookup.rawRow ?? studentToDisplayRow(lookup.student);
+  }, [lookup]);
 
-  /* ── derived values from summary ── */
-  const attendancePct   = student?.attendance_percentage ?? 0;
-  const attendedSessions = student?.attended_sessions ?? 0;
-  const totalSessions   = student?.total_sessions ?? 0;
-  const missedSessions  = Math.max(totalSessions - attendedSessions, 0);
+  if (!payload || !matched || !lookup) {
+    return (
+      <div className="student-page">
+        <div className="student-shell student-empty">
+          <p>No student found with this email ID.</p>
+          <button type="button" className="student-back-btn" onClick={onBack}>
+            Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  const asnPct         = student?.assignment_completion_pct ?? 0;
-  const submittedAsn   = student?.submitted_assignments ?? 0;
-  const totalAsn       = student?.total_assignments ?? 0;
-  const pendingAsn     = Math.max(totalAsn - submittedAsn, 0);
+  const student = lookup.student;
+  const classWise = getClassWiseAttendanceForStudent(payload, email);
 
-  const avgQuiz  = student?.average_quiz_score ?? 0;
-  const attempted = student?.attempted_quizzes ?? 0;
-
-  /* ── synthetic chart data ── */
-  const allTrendData   = makeTrendData(totalSessions, attendedSessions);
-  const assignmentRows = makeAssignmentData(totalAsn, submittedAsn);
-  const quizChartData  = makeQuizData(attempted, avgQuiz);
-  const highQuiz       = quizChartData.length > 0 ? Math.max(...quizChartData.map(q => q.score)) : 0;
-
-  const lateAsn = assignmentRows.filter(a => a.status === 'Late Submission').length;
-
-  /* ── filter trend by actual timestamp ── */
-  const nowMs = Date.now();
-  const D7  = 7  * 86_400_000;
-  const D14 = 14 * 86_400_000;
-  const D30 = 30 * 86_400_000;
-  const trendData = allTrendData.filter(r => {
-    const age = nowMs - (r as any).timestamp;
-    if (filter === 'week')     return age <= D7;
-    if (filter === 'lastweek') return age > D7 && age <= D14;
-    if (filter === '30days')   return age <= D30;
-    return true;
+  const attendanceCols = getMappedColumns(mapping, (entry, col) => entry.mappedRole === 'attendance' || col.toLowerCase().includes('attendance'));
+  const mappedAssignmentCols = getMappedColumns(mapping, (entry, col) => entry.mappedRole === 'assignment' || col.toLowerCase().includes('assignment'));
+  const rowAssignmentCols = Object.keys(matched).filter(col => {
+    const l = col.toLowerCase();
+    return l.includes('assignment') || ['swot', 'resume', 'career exploration', 'career planner', 'vision board', 'endline'].some(k => l.includes(k));
   });
+  const assignmentCols = Array.from(new Set([...mappedAssignmentCols, ...rowAssignmentCols]));
+  const mappedQuizCols = getMappedColumns(mapping, (entry, col) => entry.mappedRole === 'assessment' || col.toLowerCase().includes('quiz'));
+  const rowQuizCols = Object.keys(matched).filter(col => col.toLowerCase().includes('quiz'));
+  const quizCols = Array.from(new Set([...mappedQuizCols, ...rowQuizCols]));
 
-  const pieData = [
-    { name: 'Attended', value: attendedSessions },
-    { name: 'Missed',   value: missedSessions },
-  ];
+  const rowAttendancePctCols = Object.keys(matched).filter(col => {
+    const l = col.toLowerCase();
+    return (l.includes('attendance') && l.includes('%')) || l.includes('attendance percent') || l.includes('attendance percentage');
+  });
+  const attendancePctCol = rowAttendancePctCols[0]
+    ?? attendanceCols.find(col => col.toLowerCase().includes('%'))
+    ?? attendanceCols[0];
 
-  const headerSubtitle = [programName, cohortName].filter(Boolean).join(' – ');
+  const classesAttendedRaw = getByKeywords(matched, ['no. of classes attended', 'classes attended', 'no of classes attended']);
+  const totalClassesRaw = getByKeywords(matched, ['program hours', 'total classes', 'no. of classes', 'sessions']);
+  const programHoursFromRow = getByKeywords(matched, ['program hours', 'programme hours', 'total hours']);
+  const programHoursParsed = parseProgramHours(programHoursFromRow);
+  const sessionSlotCount = classWise?.sessions.length ?? 0;
+  const totalProgramHours =
+    programHoursParsed && sessionSlotCount > 0
+      ? Math.max(programHoursParsed, sessionSlotCount)
+      : programHoursParsed ?? (sessionSlotCount > 0 ? sessionSlotCount : null);
 
-  /* ── loading / not-found ── */
-  if (loading) return (
-    <Screen>
-      <img src="/favicon.svg" width="48" height="48" alt="" />
-      <p style={{ color: '#1e2d45', marginTop: 16, fontWeight: 600 }}>Loading dashboard…</p>
-    </Screen>
-  );
+  const sessions = classWise
+    ? classWise.sessions.length
+    : Math.max(0, parseInt(classesAttendedRaw, 10) || parseInt(totalClassesRaw, 10) || 0);
+  const attendedSessionCount = classWise
+    ? countAttendedSessions(classWise)
+    : Math.max(0, parseInt(classesAttendedRaw, 10) || 0);
+  const missedSessionCount = classWise
+    ? countMissedSessions(classWise)
+    : Math.max(0, sessions - attendedSessionCount);
 
-  if (notFound) return (
-    <Screen>
-      <img src="/favicon.svg" width="48" height="48" alt="" />
-      <p style={{ color: '#dc2626', marginTop: 16, fontWeight: 600, fontSize: 16 }}>No student found for <em>{email}</em></p>
-      <p style={{ color: '#6b7280', fontSize: 14, margin: '6px 0 24px' }}>Please check the email and try again.</p>
-      <button onClick={onBack} style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: '#1e2d45', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
-        ← Back to Home
-      </button>
-    </Screen>
-  );
+  const hoursAttendance = classWise
+    ? computeHoursBasedAttendance(classWise, totalProgramHours)
+    : null;
+
+  const attendedHours = hoursAttendance?.attendedHours ?? 0;
+  const totalHours = hoursAttendance?.totalHours ?? totalProgramHours ?? sessions;
+
+  const attendancePct = hoursAttendance
+    ? hoursAttendance.attendedPct
+    : student.imported_attendance_pct != null
+      ? Math.round(student.imported_attendance_pct * 100) / 100
+      : attendancePctCol
+        ? parsePct(matched[attendancePctCol])
+        : totalHours > 0
+          ? Math.round((attendedHours / totalHours) * 10000) / 100
+          : sessions > 0
+            ? Math.round((attendedSessionCount / sessions) * 100)
+            : 0;
+
+  const missedAttendancePct = hoursAttendance
+    ? hoursAttendance.missedPct
+    : Math.max(0, Math.round((100 - attendancePct) * 100) / 100);
+  const assignmentPct = assignmentCols.length
+    ? Math.round((assignmentCols.filter(col => isAccepted(stringifyCellValue(matched[col]))).length / assignmentCols.length) * 100) || 0
+    : (() => {
+        const rows = (payload.assignments ?? []).filter(a => a.student_email.toLowerCase() === student.email.toLowerCase());
+        if (!rows.length) return 0;
+        const done = rows.filter(a => isAccepted(a.status)).length;
+        return Math.round((done / rows.length) * 100);
+      })();
+  const finalScoreCols = quizCols.filter(col => col.toLowerCase().includes('final score'));
+  const quizScoreCols = quizCols.filter(col => !col.toLowerCase().includes('final score'));
+  const quizScores = quizScoreCols.map(col => parsePct(matched[col])).filter(v => v > 0);
+  const avgQuiz = quizScores.length ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length) : 0;
+  const finalScore = finalScoreCols.length ? parsePct(matched[finalScoreCols[0]]) : 0;
+
+  const programHoursLabel =
+    attendedHours > 0 && totalHours > 0
+      ? `${attendedHours.toFixed(2)} / ${totalHours} hrs`
+      : programHoursFromRow !== '—'
+        ? programHoursFromRow
+        : '—';
+
+  // Weighted engagement score: Attendance 40%, Assignments 40%, Quiz 20%
+  const avgEngagement = Math.round(attendancePct * 0.4 + assignmentPct * 0.4 + avgQuiz * 0.2);
+  const engagementLabel = avgEngagement >= 70 ? 'High Engagement' : avgEngagement >= 40 ? 'Medium Engagement' : 'Low Engagement';
+
+  const assignmentRows = assignmentCols.length
+    ? assignmentCols.slice(0, 8).map(col => {
+        const status = stringifyCellValue(matched[col]) || 'Pending';
+        return { name: col.replace(/_/g, ' '), date: '—', status };
+      })
+    : (payload.assignments ?? [])
+        .filter(a => a.student_email.toLowerCase() === student.email.toLowerCase())
+        .slice(0, 8)
+        .map(a => ({
+          name: a.assignment_name,
+          date: a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : '—',
+          status: a.status,
+        }));
+
+  const quizBarData = quizScoreCols
+    .map(col => ({
+      name: col.replace(/_/g, ' ').trim() || 'Quiz',
+      score: parsePct(matched[col]),
+    }));
+  const quizData = quizBarData.length ? quizBarData : [{ name: 'Quiz', score: avgQuiz }];
+  const quizHighest = quizData.reduce((max, x) => Math.max(max, x.score), 0);
+
+  const attendanceDonut = hoursAttendance
+    ? buildAttendanceDonutFromHours(hoursAttendance.attendedPct, hoursAttendance.missedPct)
+    : attendedSessionCount > 0 || missedSessionCount > 0
+      ? buildAttendanceDonutFromHours(
+          totalHours > 0 ? Math.round((attendedSessionCount / totalHours) * 10000) / 100 : attendancePct,
+          missedAttendancePct,
+        )
+      : attendancePct > 0
+        ? buildAttendanceDonutFromHours(attendancePct, missedAttendancePct)
+        : buildAttendanceDonutFromHours(0, 0);
+
+  const sessionTrend = classWise ? buildSessionTrendFromClassWise(classWise) : [];
+  const sessionTrendMax = sessionTrend.length
+    ? Math.max(1, ...sessionTrend.map(p => p.value))
+    : 1;
+
+  const studentName = resolveField(matched, student.name, ['full name', 'name', 'student name']);
+  const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
+  const studentEmail = resolveField(matched, student.email, ['email']);
+  const phone = resolveField(matched, undefined, ['phone', 'mobile', 'contact']);
+
+  const cohort = resolveField(matched, student.cohort || payload.cohortName, ['cohort', 'batch', 'program cohort']);
+  const college = resolveField(matched, student.college, ['college', 'university', 'institution']);
+  const studentCategory = resolveField(matched, undefined, ['student_cat', 'student category', 'college category', 'institution category']);
+  const partnerOrg = resolveField(matched, undefined, ['partner organisation', 'partner organization', 'partner org', 'partner']);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f4f6f9', fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
-
-      {/* ── Top white nav ── */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '10px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src="/favicon.svg" width="34" height="34" alt="VigyanShaala" style={{ display: 'block' }} />
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', lineHeight: 1.2 }}>VigyanShaala</div>
-            <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.2 }}>{headerSubtitle || 'Student Dashboard'}</div>
+    <div className="student-page">
+      <section className="student-shell">
+        <header className="student-header">
+          <div className="student-header-top">
+            <h1 className="student-name">{studentName}</h1>
+            <span className="engagement-badge">{engagementLabel}</span>
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: 20 }}>
-          <span style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>Student</span>
-          <button onClick={onBack} style={{ background: 'none', border: 'none', fontSize: 14, color: '#6b7280', cursor: 'pointer', padding: 0 }}>Admin</button>
-        </div>
-      </div>
-
-      {/* ── Hero card ── */}
-      <div style={{ background: '#1e2d45', margin: '20px 24px', borderRadius: 16, padding: '22px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.8, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', marginBottom: 6 }}>Welcome back</div>
-          <h1 style={{ color: '#fff', fontSize: 28, fontWeight: 800, margin: '0 0 6px', letterSpacing: -0.3 }}>{student?.name}</h1>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, margin: 0 }}>
-            {headerSubtitle}{student?.email ? ` · ${student.email}` : ''}
-          </p>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.8, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', marginBottom: 6 }}>Engagement</div>
-          <div style={{ background: '#2d3f5a', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 24px', color: '#fff', fontSize: 20, fontWeight: 800 }}>
-            {student?.category ?? '—'}
+          <div className="student-meta">
+            <span>ID: {studentId}</span>
+            <span>Email: {studentEmail}</span>
+            <span>Phone: {phone}</span>
           </div>
-        </div>
-      </div>
+          <div className="header-profile-grid">
+            <div className="header-field">
+              <div className="header-label">Cohort</div>
+              <div className="header-value">{cohort}</div>
+            </div>
+            <div className="header-field">
+              <div className="header-label">College/University</div>
+              <div className="header-value">{college}</div>
+            </div>
+            <div className="header-field">
+              <div className="header-label">Student Category</div>
+              <div className="header-value">{studentCategory}</div>
+            </div>
+            <div className="header-field">
+              <div className="header-label">Partner Organisation</div>
+              <div className="header-value">{partnerOrg}</div>
+            </div>
+          </div>
+        </header>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px 36px' }}>
+        <div className="section-body">
+          <div className="stat-row">
+            <StatCard label="Attendance" value={`${attendancePct.toFixed(1)}%`} subtitle={`${programHoursLabel} · ${attendedSessionCount}/${sessions || classWise?.sessions.length || 0} sessions`} warn={attendancePct === 0} />
+            <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={`${assignmentRows.length} tracked items`} warn={assignmentPct === 0} />
+            <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizScores.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
+            <StatCard label="Sessions" value={String(sessions || attendedSessionCount + missedSessionCount)} subtitle="Total sessions" warn={sessions === 0} />
+          </div>
+          <div className="final-score-strip">Final Score (separate): <strong>{finalScore}%</strong></div>
 
-        {/* ── Row 1: 4 stat cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
-          <StatCard label="Attendance"     value={`${fmt(attendancePct)}%`}       sub={`${attendedSessions} / ${totalSessions} sessions`}                            accent="#16a34a" accentBg="#f0fdf4" border="#bbf7d0" />
-          <StatCard label="Assignments"    value={`${fmt(asnPct, 0)}%`}           sub={`${submittedAsn} submitted, ${pendingAsn} pending, ${lateAsn} late`}         accent="#0891b2" accentBg="#f0f9ff" border="#bae6fd" />
-          <StatCard label="Avg Quiz Score" value={`${fmt(avgQuiz, 0)}%`}          sub={`Highest: ${fmt(highQuiz, 0)}%`}                                             accent="#d97706" accentBg="#fffbeb" border="#fde68a" />
-          <StatCard label="Sessions"       value={String(totalSessions)}           sub="Total recorded"                                                               accent="#6b7280" accentBg="#f9fafb" border="#e5e7eb" />
-        </div>
-
-        {/* ── Row 2: Donut + Trend ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 14, marginBottom: 18 }}>
-
-          <div style={card}>
-            <p style={sectionTitle}>Attendance breakdown</p>
-            <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '4px 0' }}>
-              <ResponsiveContainer width="100%" height={210}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={68} outerRadius={96} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
-                    <Cell fill="#1e2d45" />
-                    <Cell fill="#e8a820" />
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ position: 'absolute', textAlign: 'center', pointerEvents: 'none' }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#111827', lineHeight: 1 }}>{fmt(attendancePct, 0)}%</div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>attendance</div>
+          <div className="charts-grid">
+            <article className="panel-card panel-large">
+              <h3>Attendance breakdown</h3>
+              <div className="panel-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={attendanceDonut} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92}>
+                      <Cell fill="var(--sd-success)" />
+                      <Cell fill="var(--sd-amber)" />
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, name) => [`${Number(value ?? 0).toFixed(1)}%`, String(name ?? '')]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 28, fontSize: 13, color: '#6b7280', marginTop: 10 }}>
-              <LegendDot color="#1e2d45" label="Attended" />
-              <LegendDot color="#e8a820" label="Missed" />
-            </div>
-          </div>
+              <div className="legend-row">
+                <span><i className="legend-dot attended" />Attended ({attendancePct.toFixed(1)}%)</span>
+                <span><i className="legend-dot missed" />Missed ({missedAttendancePct.toFixed(1)}%)</span>
+              </div>
+            </article>
 
-          <div style={card}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <p style={{ ...sectionTitle, marginBottom: 0 }}>Session-wise trend</p>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {(['week', 'lastweek', '30days', 'all'] as const).map(v => {
-                  const label = v === 'week' ? 'This week' : v === 'lastweek' ? 'Last week' : v === '30days' ? 'Last 30d' : 'All';
-                  const active = filter === v;
+            <article className="panel-card panel-large">
+              <h3>Quiz performance</h3>
+              <div className="panel-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={quizData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                    <XAxis
+                      dataKey="name"
+                      stroke="var(--sd-text-muted)"
+                      fontSize={11}
+                      interval={0}
+                      tickFormatter={value => {
+                        const text = String(value ?? '');
+                        return text.length > 26 ? `${text.slice(0, 26)}...` : text;
+                      }}
+                    />
+                    <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} />
+                    <Tooltip />
+                    <Bar dataKey="score" radius={[6, 6, 0, 0]}>
+                      {quizData.map((entry, idx) => (
+                        <Cell key={`${entry.name}-${idx}`} fill={entry.score >= 100 ? 'var(--sd-light-green)' : 'var(--sd-accent)'} />
+                      ))}
+                      <LabelList dataKey="score" position="top" fontSize={11} fill="var(--sd-text)" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="quiz-summary">
+                <MiniStat label="Average" value={`${avgQuiz}%`} />
+                <MiniStat label="Highest" value={`${quizHighest}%`} />
+                <MiniStat label="Count" value={String(quizData.length)} />
+              </div>
+            </article>
+
+            <article className="panel-card panel-large">
+              <h3>Assignments</h3>
+              <div className="assignment-list">
+                {assignmentRows.map(item => {
+                  const pending = isPending(item.status);
+                  const accepted = isAccepted(item.status);
                   return (
-                    <button key={v} onClick={() => setFilter(v)} style={{
-                      padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                      border: `1px solid ${active ? '#1e2d45' : '#e5e7eb'}`,
-                      background: active ? '#1e2d45' : 'transparent',
-                      color: active ? '#fff' : '#6b7280',
-                      fontWeight: active ? 600 : 400,
-                    }}>{label}</button>
+                    <div className="assignment-row" key={item.name}>
+                      <div>
+                        <div className="assignment-name">{item.name}</div>
+                        <div className="assignment-date">{item.date}</div>
+                      </div>
+                      <span className={`status-pill ${accepted ? 'accepted' : pending ? 'pending' : ''}`}>
+                        {item.status}
+                      </span>
+                    </div>
                   );
                 })}
               </div>
-            </div>
-            <ResponsiveContainer width="100%" height={215}>
-              <LineChart data={trendData} margin={{ top: 8, right: 12, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  axisLine={false} tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  domain={[0, 2]}
-                  ticks={[0, 0.5, 1, 1.5, 2]}
-                  tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  axisLine={false} tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
-                  formatter={(v) => [`${v} hrs`, 'Hours attended']}
-                />
-                <Line
-                  type="linear"
-                  dataKey="hours"
-                  stroke="#1e2d45"
-                  strokeWidth={2}
-                  dot={{ r: 5, fill: '#ffffff', stroke: '#1e2d45', strokeWidth: 2 }}
-                  activeDot={{ r: 6, fill: '#1e2d45', stroke: '#fff', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+            </article>
 
-        {/* ── Row 3: Assignments + Quiz ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-
-          <div style={card}>
-            <p style={sectionTitle}>Assignments</p>
-            {assignmentRows.length === 0
-              ? <p style={{ color: '#9ca3af', fontSize: 13 }}>No assignments recorded.</p>
-              : assignmentRows.map((a, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '13px 0',
-                  borderBottom: i < assignmentRows.length - 1 ? '1px solid #f3f4f6' : 'none',
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{a.name}</div>
-                    <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{a.due}</div>
-                  </div>
-                  <StatusBadge status={a.status} />
+            <article className="panel-card panel-large">
+              <h3>Session-wise trend</h3>
+              {sessionTrend.length > 0 ? (
+                <div className="panel-chart">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={sessionTrend}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                      <XAxis
+                        dataKey="name"
+                        stroke="var(--sd-text-muted)"
+                        fontSize={10}
+                        interval={0}
+                        angle={-25}
+                        textAnchor="end"
+                        height={56}
+                      />
+                      <YAxis
+                        domain={[0, Math.ceil(sessionTrendMax * 1.15 * 10) / 10]}
+                        stroke="var(--sd-text-muted)"
+                        fontSize={11}
+                        label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                      />
+                      <Tooltip formatter={(value) => [`${Number(value ?? 0)} hrs`, 'Attended']} />
+                      <Line type="monotone" dataKey="value" stroke="var(--sd-primary)" strokeWidth={2.5} dot={{ r: 3 }}>
+                        <LabelList dataKey="value" position="top" fontSize={10} fill="var(--sd-text-muted)" />
+                      </Line>
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
-              ))
-            }
+              ) : (
+                <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
+                  No class-wise attendance data for this student. Re-upload the workbook and ensure it includes a
+                  {' '}&quot;Class-wise Attendance&quot; sheet with session columns (e.g. WK0_SUK, WK1_WS).
+                </p>
+              )}
+            </article>
           </div>
 
-          <div style={card}>
-            <p style={sectionTitle}>Quiz performance</p>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={quizChartData} barSize={44} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} formatter={v => [`${v}%`, 'Score']} />
-                <Bar dataKey="score" fill="#e8a820" radius={[5, 5, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 16 }}>
-              <QuizStat label="Average"  value={`${fmt(avgQuiz, 0)}%`} />
-              <QuizStat label="Highest"  value={`${fmt(highQuiz, 0)}%`} highlight />
-              <QuizStat label="Quizzes"  value={String(attempted)} />
-            </div>
+          <div className="bottom-info-row">
+            facing any issue with data? write to us here :
+            {' '}
+            <a href="https://wkf.ms/4aUNfBD" target="_blank" rel="noreferrer">https://wkf.ms/4aUNfBD</a>
           </div>
 
+          <div className="back-row">
+            <button type="button" className="student-back-btn" onClick={onBack}>Back</button>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
 
-/* ── Shared style objects ── */
-const card: React.CSSProperties = {
-  background: '#fff', borderRadius: 14, padding: '20px 22px',
-  boxShadow: '0 1px 4px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb',
-};
-const sectionTitle: React.CSSProperties = {
-  margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: '#111827',
-};
-
-/* ── Sub-components ── */
-
-function Screen({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ minHeight: '100vh', background: '#f4f6f9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, system-ui, sans-serif', textAlign: 'center', padding: 32 }}>
-      {children}
-    </div>
-  );
-}
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-      <span style={{ width: 11, height: 11, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
-      {label}
-    </span>
-  );
-}
-
-function StatCard({ label, value, sub, accent, accentBg, border }: {
-  label: string; value: string; sub: string; accent: string; accentBg: string; border: string;
+function StatCard({
+  label,
+  value,
+  subtitle,
+  warn,
+}: {
+  label: string;
+  value: string;
+  subtitle: string;
+  warn?: boolean;
 }) {
   return (
-    <div style={{ background: accentBg, borderRadius: 14, padding: '18px 20px', border: `1px solid ${border}` }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.3, textTransform: 'uppercase', color: accent, marginBottom: 10 }}>{label}</div>
-      <div style={{ fontSize: 32, fontWeight: 800, color: '#111827', lineHeight: 1, marginBottom: 8 }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>{sub}</div>
+    <article className="stat-card">
+      <div className="stat-label">{label}</div>
+      <div className={`stat-value ${warn ? 'warn' : ''}`}>{value}</div>
+      <div className="stat-subtitle">{subtitle}</div>
+    </article>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="mini-stat">
+      <div className="mini-label">{label}</div>
+      <div className="mini-value">{value}</div>
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const s: React.CSSProperties =
-    status === 'Submitted'        ? { color: '#16a34a', border: '1.5px solid #86efac' } :
-    status === 'Late Submission'  ? { color: '#dc2626', border: '1.5px solid #fca5a5' } :
-                                    { color: '#6b7280', border: '1.5px solid #e5e7eb' };
-  return (
-    <span style={{ ...s, padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', background: '#fff' }}>
-      {status}
-    </span>
-  );
-}
-
-function QuizStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '10px 6px', background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb' }}>
-      <div style={{ fontSize: 20, fontWeight: 800, color: highlight ? '#16a34a' : '#111827' }}>{value}</div>
-      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>{label}</div>
-    </div>
-  );
-}

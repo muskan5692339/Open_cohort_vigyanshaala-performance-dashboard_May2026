@@ -1,3 +1,20 @@
+# VigyanShaala Performance Dashboard
+
+React + Vite admin dashboard with Excel import and Supabase-backed analytics.
+
+## Quick start
+
+```bash
+npm install
+npm run dev
+```
+
+Open the admin console → **Data Sources** → upload `.xlsx` → **View on Dashboard**. Data stays in the browser (sessionStorage); no Supabase upload required for the admin dashboard.
+
+Optional: `npm run dev:api` if you use OneDrive sync or legacy `/api/upload-sync` flows. See [ENV_SETUP.md](ENV_SETUP.md).
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

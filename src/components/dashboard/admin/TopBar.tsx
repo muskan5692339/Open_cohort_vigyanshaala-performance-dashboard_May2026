@@ -1,0 +1,133 @@
+import { RefreshCw, LogOut } from 'lucide-react';
+import type { SidebarSection } from '../../../types/adminTypes';
+import { BRAND } from '../../../types/adminTypes';
+import { useAuth } from '../../../context/AuthContext';
+
+interface TopBarProps {
+  section: SidebarSection;
+  lastSync: string;
+  onSync: () => void;
+  syncing: boolean;
+}
+
+const TITLES: Record<SidebarSection, { title: string; subtitle: string }> = {
+  dashboard: { title: 'Dashboard', subtitle: 'Program-wide performance at a glance' },
+  'cohort-overview': { title: 'Cohort Overview', subtitle: 'Snapshot of every active cohort' },
+  students: { title: 'Students', subtitle: 'Search, sort and export all enrolled students' },
+  attendance: { title: 'Attendance Analytics', subtitle: 'Attendance trends, distribution and breakdowns' },
+  assignments: { title: 'Assignment Analytics', subtitle: 'Submission status, trends and cohort comparisons' },
+  quizzes: { title: 'Quiz Analytics', subtitle: 'Score distribution, trends and participation' },
+  risk: { title: 'Risk Intelligence', subtitle: 'Identify and triage students that need help' },
+  'weekly-ops': { title: 'Weekly Operations', subtitle: 'What changed this week and who to follow up with' },
+  'cohort-comparison': { title: 'Cohort Comparison', subtitle: 'Compare metrics across all batches' },
+  'data-source': { title: 'Data Sources', subtitle: 'Import data via Excel upload or demo dataset' },
+  'help-center': { title: 'Help Center', subtitle: 'Guides for uploads, mapping, risk, and exports' },
+  'system-health': { title: 'System Health', subtitle: 'Diagnostics, audit log, and quality report' },
+  sync: { title: 'Sync Monitoring', subtitle: 'Last run, history and reliability of OneDrive sync' },
+  settings: { title: 'Settings', subtitle: 'Configure admin console preferences' },
+};
+
+export default function TopBar({ section, lastSync, onSync, syncing }: TopBarProps) {
+  const meta = TITLES[section];
+  const { profile, role, cloudEnabled, signOut } = useAuth();
+  const initials = (profile?.displayName ?? profile?.email ?? 'AD').slice(0, 2).toUpperCase();
+  const roleLabel = role ?? (cloudEnabled ? 'guest' : 'local');
+  return (
+    <div
+      style={{
+        background: BRAND.card,
+        borderBottom: `1px solid ${BRAND.border}`,
+        padding: '16px 28px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+      }}
+    >
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: BRAND.text, lineHeight: 1.1 }}>
+          {meta.title}
+        </div>
+        <div style={{ fontSize: 13, color: BRAND.textLight, marginTop: 4 }}>{meta.subtitle}</div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 11, color: BRAND.textLight, letterSpacing: 0.4, textTransform: 'uppercase' }}>
+            Last Sync
+          </div>
+          <div style={{ fontSize: 12, color: BRAND.text, fontWeight: 600 }}>{lastSync}</div>
+        </div>
+
+        <button
+          onClick={onSync}
+          disabled={syncing}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            background: BRAND.yellow,
+            color: BRAND.navy,
+            border: 'none',
+            padding: '10px 16px',
+            borderRadius: 8,
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: syncing ? 'progress' : 'pointer',
+            opacity: syncing ? 0.7 : 1,
+            fontFamily: 'inherit',
+          }}
+        >
+          <RefreshCw size={15} style={syncing ? { animation: 'vs-spin 1s linear infinite' } : undefined} />
+          {syncing ? 'Syncing...' : 'Sync Now'}
+        </button>
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            paddingLeft: 14,
+            borderLeft: `1px solid ${BRAND.border}`,
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: BRAND.navy,
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            {initials}
+          </div>
+          <div style={{ lineHeight: 1.1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.text }}>{profile?.displayName ?? 'Admin'}</div>
+            <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2, textTransform: 'capitalize' }}>{roleLabel}</div>
+          </div>
+          {cloudEnabled && profile && (
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              title="Sign out"
+              style={{ marginLeft: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: BRAND.textLight, display: 'flex' }}
+            >
+              <LogOut size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <style>{`@keyframes vs-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}

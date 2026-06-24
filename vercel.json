@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/sync",
+      "schedule": "0 2 * * 1"
+    }
+  ],
+  "functions": {
+    "api/sync.ts": {
+      "maxDuration": 60
+    }
+  }
+}
