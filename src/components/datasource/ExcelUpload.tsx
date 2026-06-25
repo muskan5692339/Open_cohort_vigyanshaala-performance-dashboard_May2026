@@ -30,6 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSyncContext } from '../../hooks/useSyncContext';
 import { persistSchemaProfileToCloud, persistUploadToCloud } from '../../services/cloud/uploadPersistence';
 import { getActiveOrganizationId, isCloudPersistenceEnabled } from '../../services/cloud/cloudConfig';
+import { useAdminSignIn } from '../../context/AdminSignInContext';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -109,6 +110,7 @@ function PreviewTable({ rows, cols }: { rows: Record<string, unknown>[]; cols: s
 export default function ExcelUpload({ onDataImported }: Props) {
   const { loadFromParsed } = useUploadedExcel();
   const { session, user, organization, cloudEnabled } = useAuth();
+  const { openSignIn } = useAdminSignIn();
   const syncCtx = useSyncContext();
   const [dragging, setDragging] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -723,11 +725,51 @@ export default function ExcelUpload({ onDataImported }: Props) {
                   }}
                 >
                   {cloudPublishStatus.text}
+                  {cloudPublishStatus.tone === 'warn' && cloudEnabled && !session && (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        onClick={openSignIn}
+                        style={{
+                          marginLeft: 6,
+                          padding: '4px 10px',
+                          borderRadius: 6,
+                          border: `1px solid ${BRAND.yellowBorder}`,
+                          background: '#fff',
+                          color: BRAND.navy,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        Sign in now
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
-              {cloudEnabled && !session && (
-                <div style={{ flex: '1 1 100%', fontSize: 12, color: BRAND.yellow }}>
-                  Sign in (top right in Admin) before Apply Mapping so the roster is saved for all students.
+              {cloudEnabled && !session && !cloudPublishStatus && (
+                <div style={{ flex: '1 1 100%', fontSize: 12, color: BRAND.yellow, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span>Sign in before Apply Mapping so the roster is saved for all students.</span>
+                  <button
+                    type="button"
+                    onClick={openSignIn}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: BRAND.navy,
+                      color: '#fff',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    Sign in
+                  </button>
                 </div>
               )}
             </div>

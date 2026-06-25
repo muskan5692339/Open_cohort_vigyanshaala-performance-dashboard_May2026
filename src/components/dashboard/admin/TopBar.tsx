@@ -2,6 +2,7 @@ import { RefreshCw, LogOut } from 'lucide-react';
 import type { SidebarSection } from '../../../types/adminTypes';
 import { BRAND } from '../../../types/adminTypes';
 import { useAuth } from '../../../context/AuthContext';
+import { useAdminSignIn } from '../../../context/AdminSignInContext';
 
 interface TopBarProps {
   section: SidebarSection;
@@ -29,9 +30,11 @@ const TITLES: Record<SidebarSection, { title: string; subtitle: string }> = {
 
 export default function TopBar({ section, lastSync, onSync, syncing }: TopBarProps) {
   const meta = TITLES[section];
-  const { profile, role, cloudEnabled, signOut } = useAuth();
+  const { user, profile, role, cloudEnabled, signOut } = useAuth();
+  const { openSignIn } = useAdminSignIn();
   const initials = (profile?.displayName ?? profile?.email ?? 'AD').slice(0, 2).toUpperCase();
   const roleLabel = role ?? (cloudEnabled ? 'guest' : 'local');
+  const signedIn = Boolean(user);
   return (
     <div
       style={{
@@ -94,6 +97,26 @@ export default function TopBar({ section, lastSync, onSync, syncing }: TopBarPro
             borderLeft: `1px solid ${BRAND.border}`,
           }}
         >
+          {cloudEnabled && !signedIn && (
+            <button
+              type="button"
+              onClick={openSignIn}
+              style={{
+                padding: '10px 16px',
+                borderRadius: 8,
+                border: 'none',
+                background: BRAND.navy,
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Sign in
+            </button>
+          )}
           <div
             style={{
               width: 36,
@@ -111,10 +134,12 @@ export default function TopBar({ section, lastSync, onSync, syncing }: TopBarPro
             {initials}
           </div>
           <div style={{ lineHeight: 1.1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.text }}>{profile?.displayName ?? 'Admin'}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.text }}>
+              {profile?.displayName ?? (signedIn ? 'Admin' : 'Admin Guest')}
+            </div>
             <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2, textTransform: 'capitalize' }}>{roleLabel}</div>
           </div>
-          {cloudEnabled && profile && (
+          {cloudEnabled && signedIn && (
             <button
               type="button"
               onClick={() => void signOut()}

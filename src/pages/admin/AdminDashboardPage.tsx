@@ -10,6 +10,7 @@ import { useAdminData } from '../../hooks/useAdminData';
 import { useOperationalDashboard } from '../../hooks/useOperationalDashboard';
 import { useProgramIntelligence } from '../../hooks/useProgramIntelligence';
 import { useUploadedExcel } from '../../context/UploadedExcelContext';
+import { AdminSignInProvider } from '../../context/AdminSignInContext';
 import { activeFilterChips } from '../../services/globalFilters';
 
 const DataSourcePage = lazy(() => import('./DataSourcePage'));
@@ -598,6 +599,7 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
   };
 
   return (
+    <AdminSignInProvider>
     <div
       style={{
         minHeight: '100vh',
@@ -625,6 +627,7 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
         </div>
       </main>
     </div>
+    </AdminSignInProvider>
   );
 }
 
