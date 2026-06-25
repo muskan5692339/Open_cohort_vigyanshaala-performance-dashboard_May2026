@@ -2,6 +2,7 @@ import type { PersistUploadPayload } from '../../types/cloudTypes';
 import type { ParsedExcelPayload } from '../loadMetricsFromParsedExcel';
 import type { ColumnMapping, DiscoveredColumn } from '../../types/dynamicSchema';
 import { enqueueSyncItem, getActiveOrganizationId, isCloudPersistenceEnabled } from './cloudConfig';
+import { publishRosterDirectToStorage } from './directRosterPublish';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '');
@@ -120,6 +121,34 @@ export async function persistUploadToCloud(
     syncRunId: input.syncRunId,
   };
 
+  if (accessToken && body.rawRows?.length && body.headers?.length) {
+    const direct = await publishRosterDirectToStorage({
+      organizationId: body.organizationId,
+      cohortName: body.cohortName,
+      fileName: body.fileName,
+      headers: body.headers,
+      rawRows: body.rawRows,
+      mapping: body.mapping as ColumnMapping | undefined,
+      discoveredColumns: body.discoveredColumns as DiscoveredColumn[] | undefined,
+    });
+    if (direct.ok) {
+      try {
+        const api = await postPersistUpload(body, accessToken);
+        if (api.ok) return api;
+      } catch {
+        // Student roster is already in public storage; API metadata is optional.
+      }
+      return { ok: true };
+    }
+  }
+
+  return postPersistUpload(body, accessToken);
+}
+
+async function postPersistUpload(
+  body: PersistUploadPayload,
+  accessToken?: string,
+): Promise<PersistUploadResult> {
   try {
     const res = await fetch(`${API_BASE}/api/persist-upload`, {
       method: 'POST',
