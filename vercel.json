@@ -9,7 +9,7 @@
     }
   ],
   "functions": {
-    "api/**/*.ts": {
+    "api/sync.ts": {
       "maxDuration": 60
     }
   }

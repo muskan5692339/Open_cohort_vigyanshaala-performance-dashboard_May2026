@@ -163,7 +163,7 @@ export async function fetchLatestCohortPayload(
   const orgId = organizationId ?? getActiveOrganizationId();
   try {
     const res = await fetch(
-      `${API_BASE}/api/latest-cohort-payload?orgId=${encodeURIComponent(orgId)}`,
+      `${API_BASE}/api/list-uploads?orgId=${encodeURIComponent(orgId)}&mode=latest-payload`,
     );
     if (!res.ok) return null;
     return (await res.json()) as {
