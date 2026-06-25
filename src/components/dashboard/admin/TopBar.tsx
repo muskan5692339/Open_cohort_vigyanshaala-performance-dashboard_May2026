@@ -135,7 +135,7 @@ export default function TopBar({ section, lastSync, onSync, syncing }: TopBarPro
           </div>
           <div style={{ lineHeight: 1.1 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.text }}>
-              {profile?.displayName ?? (signedIn ? 'Admin' : 'Admin Guest')}
+              {profile?.displayName ?? user?.email?.split('@')[0] ?? (signedIn ? 'Admin' : 'Admin Guest')}
             </div>
             <div style={{ fontSize: 11, color: BRAND.textLight, marginTop: 2, textTransform: 'capitalize' }}>{roleLabel}</div>
           </div>

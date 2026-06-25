@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function AdminSignInModal({ open, onClose }: Props) {
-  const { signInWithPassword, signInWithMagicLink, loading: authLoading } = useAuth();
+  const { signInWithPassword, signInWithMagicLink, loading: authLoading, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'password' | 'magic'>('password');
@@ -45,9 +45,13 @@ export default function AdminSignInModal({ open, onClose }: Props) {
         setError('Enter your password.');
         return;
       }
-      const { error: err } = await signInWithPassword(trimmed, password);
+      const { error: err, session } = await signInWithPassword(trimmed, password);
       if (err) {
         setError(err);
+        return;
+      }
+      if (!session?.user) {
+        setError('Sign-in succeeded but no session was saved. Try again in a normal browser tab (not private mode) or check Supabase URL settings.');
         return;
       }
       onClose();
@@ -71,7 +75,9 @@ export default function AdminSignInModal({ open, onClose }: Props) {
         justifyContent: 'center',
         padding: 20,
       }}
-      onClick={onClose}
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         style={{
@@ -190,6 +196,11 @@ export default function AdminSignInModal({ open, onClose }: Props) {
             </>
           )}
 
+          {user && (
+            <div style={{ fontSize: 12, color: BRAND.green, marginBottom: 12 }}>
+              Signed in as {user.email}
+            </div>
+          )}
           {error && (
             <div style={{ fontSize: 12, color: BRAND.red, marginBottom: 12, lineHeight: 1.5 }}>{error}</div>
           )}

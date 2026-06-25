@@ -17,7 +17,7 @@ interface AuthContextValue {
   role: AppRole | null;
   loading: boolean;
   cloudEnabled: boolean;
-  signInWithPassword: (email: string, password: string) => Promise<{ error?: string }>;
+  signInWithPassword: (email: string, password: string) => Promise<{ error?: string; session?: Session }>;
   signInWithMagicLink: (email: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   can: (permission: Parameters<typeof roleCan>[1]) => boolean;
@@ -163,9 +163,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [cloudEnabled]);
 
   const signInWithPassword = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message };
-  }, []);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    if (!data.session) {
+      return { error: 'Sign-in did not return a session. Confirm the user in Supabase Auth (Auto Confirm User).' };
+    }
+    await hydrate(data.session);
+    return { error: undefined, session: data.session };
+  }, [hydrate]);
 
   const signInWithMagicLink = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
