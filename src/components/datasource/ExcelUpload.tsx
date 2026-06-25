@@ -29,6 +29,7 @@ import type { ClassWiseAttendanceEntry } from '../../services/classWiseAttendanc
 import { useAuth } from '../../context/AuthContext';
 import { useSyncContext } from '../../hooks/useSyncContext';
 import { persistSchemaProfileToCloud, persistUploadToCloud } from '../../services/cloud/uploadPersistence';
+import { getActiveOrganizationId, isCloudPersistenceEnabled } from '../../services/cloud/cloudConfig';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -107,7 +108,7 @@ function PreviewTable({ rows, cols }: { rows: Record<string, unknown>[]; cols: s
 
 export default function ExcelUpload({ onDataImported }: Props) {
   const { loadFromParsed } = useUploadedExcel();
-  const { session, user, organization } = useAuth();
+  const { session, user, organization, cloudEnabled } = useAuth();
   const syncCtx = useSyncContext();
   const [dragging, setDragging] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -129,6 +130,7 @@ export default function ExcelUpload({ onDataImported }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [cloudPublishStatus, setCloudPublishStatus] = useState<{ tone: 'ok' | 'warn' | 'err'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cfg = loadSyncConfig();
@@ -152,10 +154,10 @@ export default function ExcelUpload({ onDataImported }: Props) {
       mapping?: ColumnMapping;
       discoveredColumns?: DiscoveredColumn[];
     }) => {
-      if (!canUpload) return;
-      await persistUploadToCloud(
+      if (!canUpload) return { ok: false as const, error: 'Upload disabled' };
+      return persistUploadToCloud(
         {
-          organizationId: organization?.id,
+          organizationId: organization?.id ?? getActiveOrganizationId(),
           userId: cloudUserId,
           fileName: input.fileName,
           cohortName: input.cohortName,
@@ -411,19 +413,39 @@ export default function ExcelUpload({ onDataImported }: Props) {
       }, syncCtx);
       setMappingApplied(true);
 
-      void syncToCloud({
-        fileName,
-        cohortName: cohortName.trim(),
-        source: 'excel',
-        schemaSignature: parsed.fileSignature,
-        sheetName: selectedSheet || Object.values(parsed._sheetMapping)[0],
-        rowCount: parsed.rawRows?.length ?? 0,
-        changedColumns: schemaMigration?.changes ?? [],
-        headers: parsed.headers,
-        rawRows: parsed.rawRows,
-        mapping,
-        discoveredColumns: schemaColumns,
-      });
+      if (isCloudPersistenceEnabled()) {
+        if (!cloudToken) {
+          setCloudPublishStatus({
+            tone: 'warn',
+            text: 'Saved in this browser only. Sign in to your admin account, then click Apply Mapping again to publish the roster for students.',
+          });
+        } else {
+          const publish = await syncToCloud({
+            fileName,
+            cohortName: cohortName.trim(),
+            source: 'excel',
+            schemaSignature: parsed.fileSignature,
+            sheetName: selectedSheet || Object.values(parsed._sheetMapping)[0],
+            rowCount: parsed.rawRows?.length ?? 0,
+            changedColumns: schemaMigration?.changes ?? [],
+            headers: parsed.headers,
+            rawRows: parsed.rawRows,
+            mapping,
+            discoveredColumns: schemaColumns,
+          });
+          if (publish?.ok) {
+            setCloudPublishStatus({
+              tone: 'ok',
+              text: `Roster published for students (${parsed.rawRows?.length ?? 0} rows). They can open the student page without uploading again.`,
+            });
+          } else {
+            setCloudPublishStatus({
+              tone: 'err',
+              text: `Cloud publish failed${publish?.error ? `: ${publish.error}` : ''}. Students will not see this upload until publish succeeds.`,
+            });
+          }
+        }
+      }
     } catch (e) {
       recordMappingAttempt(false);
       setError(`Mapping failed: ${(e as Error).message}`);
@@ -687,6 +709,26 @@ export default function ExcelUpload({ onDataImported }: Props) {
                 <span style={{ alignSelf: 'center', fontSize: 12, color: BRAND.green }}>
                   Mapping applied
                 </span>
+              )}
+              {cloudPublishStatus && (
+                <div
+                  style={{
+                    flex: '1 1 100%',
+                    fontSize: 12,
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    background: cloudPublishStatus.tone === 'ok' ? BRAND.greenBg : cloudPublishStatus.tone === 'warn' ? BRAND.yellowBg : BRAND.redBg,
+                    border: `1px solid ${cloudPublishStatus.tone === 'ok' ? BRAND.greenBorder : cloudPublishStatus.tone === 'warn' ? BRAND.yellowBorder : BRAND.redBorder}`,
+                    color: cloudPublishStatus.tone === 'ok' ? BRAND.green : cloudPublishStatus.tone === 'warn' ? BRAND.yellow : BRAND.red,
+                  }}
+                >
+                  {cloudPublishStatus.text}
+                </div>
+              )}
+              {cloudEnabled && !session && (
+                <div style={{ flex: '1 1 100%', fontSize: 12, color: BRAND.yellow }}>
+                  Sign in (top right in Admin) before Apply Mapping so the roster is saved for all students.
+                </div>
               )}
             </div>
           </div>

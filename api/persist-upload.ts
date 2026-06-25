@@ -135,6 +135,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         upsert: true,
       });
 
+      const publicPaths = [
+        `${body.organizationId}/latest.json.gz`,
+        'latest.json.gz',
+      ];
+      for (const publicPath of publicPaths) {
+        const { error: pubErr } = await serviceDb.storage
+          .from('student-roster-public')
+          .upload(publicPath, compressed, { contentType: 'application/gzip', upsert: true });
+        if (pubErr) {
+          console.warn('[persist-upload] public roster mirror', publicPath, pubErr.message);
+        }
+      }
+
       const { data: version, error: versionErr } = await serviceDb
         .from('upload_versions')
         .insert({

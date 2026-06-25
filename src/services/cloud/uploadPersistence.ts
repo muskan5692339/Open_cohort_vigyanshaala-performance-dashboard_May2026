@@ -1,8 +1,85 @@
 import type { PersistUploadPayload } from '../../types/cloudTypes';
 import type { ParsedExcelPayload } from '../loadMetricsFromParsedExcel';
+import type { ColumnMapping, DiscoveredColumn } from '../../types/dynamicSchema';
 import { enqueueSyncItem, getActiveOrganizationId, isCloudPersistenceEnabled } from './cloudConfig';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '');
+
+async function gunzipJson(blob: Blob): Promise<unknown> {
+  if (typeof DecompressionStream !== 'undefined') {
+    const stream = blob.stream().pipeThrough(new DecompressionStream('gzip'));
+    const text = await new Response(stream).text();
+    return JSON.parse(text);
+  }
+  const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  if (bytes[0] !== 0x1f) {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+  return null;
+}
+
+type CohortFetchResult = {
+  payload: ParsedExcelPayload;
+  meta: { fileName: string; cohortName: string; loadedAt: string; studentCount: number };
+};
+
+function parseStoredCohort(stored: {
+  headers?: string[];
+  rawRows?: Record<string, string>[];
+  mapping?: Record<string, unknown>;
+  discoveredColumns?: unknown[];
+  cohortName?: string;
+  fileName?: string;
+}): CohortFetchResult | null {
+  if (!stored.rawRows?.length) return null;
+  const fileName = stored.fileName ?? 'workbook.xlsx';
+  const cohortName = stored.cohortName ?? 'Cohort';
+  return {
+    payload: {
+      cohortName,
+      fileName,
+      students: [],
+      attendance: [],
+      assignments: [],
+      quiz: [],
+      rawRows: stored.rawRows,
+      headers: stored.headers ?? [],
+      discoveredColumns: stored.discoveredColumns as DiscoveredColumn[] | undefined,
+      mapping: (stored.mapping ?? {}) as ColumnMapping,
+    },
+    meta: {
+      fileName,
+      cohortName,
+      loadedAt: new Date().toISOString(),
+      studentCount: stored.rawRows.length,
+    },
+  };
+}
+
+/** Direct public Supabase Storage read — works on student phones when API routes fail. */
+async function fetchPublicCohortPayload(orgId: string): Promise<CohortFetchResult | null> {
+  if (!SUPABASE_URL?.startsWith('http')) return null;
+
+  const paths = [`${orgId}/latest.json.gz`, 'latest.json.gz'];
+  for (const path of paths) {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/public/student-roster-public/${path}`,
+        { cache: 'no-store' },
+      );
+      if (!res.ok) continue;
+      const parsed = await gunzipJson(await res.blob());
+      if (!parsed || typeof parsed !== 'object') continue;
+      const result = parseStoredCohort(parsed as Parameters<typeof parseStoredCohort>[0]);
+      if (result) return result;
+    } catch {
+      // try next path
+    }
+  }
+  return null;
+}
 
 export interface PersistUploadResult {
   ok: boolean;
@@ -161,16 +238,31 @@ export async function fetchLatestCohortPayload(
   if (!isCloudPersistenceEnabled()) return null;
 
   const orgId = organizationId ?? getActiveOrganizationId();
-  try {
-    const res = await fetch(
-      `${API_BASE}/api/list-uploads?orgId=${encodeURIComponent(orgId)}&mode=latest-payload`,
-    );
+  const base = `${API_BASE}/api/list-uploads?orgId=${encodeURIComponent(orgId)}&mode=latest-payload`;
+
+  const tryUrl = async (url: string) => {
+    const res = await fetch(url);
+    if (res.status === 503) return { misconfigured: true as const };
     if (!res.ok) return null;
-    return (await res.json()) as {
-      payload: ParsedExcelPayload;
-      meta: { fileName: string; cohortName: string; loadedAt: string; studentCount: number };
-    };
-  } catch {
-    return null;
+    return (await res.json()) as CohortFetchResult;
+  };
+
+  try {
+    let result = await tryUrl(base);
+    if (result && 'misconfigured' in result) {
+      throw new Error('cloud_misconfigured');
+    }
+    if (!result) {
+      result = await tryUrl(`${base}&fallback=any`);
+      if (result && 'misconfigured' in result) {
+        throw new Error('cloud_misconfigured');
+      }
+    }
+    if (result) return result;
+
+    return await fetchPublicCohortPayload(orgId);
+  } catch (e) {
+    if ((e as Error).message === 'cloud_misconfigured') throw e;
+    return fetchPublicCohortPayload(orgId);
   }
 }

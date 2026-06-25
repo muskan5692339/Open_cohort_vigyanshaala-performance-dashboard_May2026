@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './_lib/assertOrgAccess';
 import { createServiceClient } from './_lib/serviceClient';
-import { fetchLatestCohortPayloadForOrg } from './_lib/latestCohortPayload';
+import { fetchLatestCohortPayloadForOrg, fetchLatestCohortPayloadAny } from './_lib/latestCohortPayload';
 
 const ROUTE = '/api/list-uploads';
 
@@ -17,15 +17,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (mode === 'latest-payload') {
     try {
       const serviceDb = createServiceClient();
-      const result = await fetchLatestCohortPayloadForOrg(serviceDb, orgId);
+      const fallback = String(req.query.fallback ?? '') === 'any';
+      let result = await fetchLatestCohortPayloadForOrg(serviceDb, orgId);
+      if (!result && fallback) {
+        result = await fetchLatestCohortPayloadAny(serviceDb);
+      }
       if (!result) {
         return res.status(404).json({ error: 'No active upload with stored payload', code: 'not_found' });
       }
       res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       return res.status(200).json(result);
     } catch (e) {
+      const message = (e as Error).message;
       console.error(`[${ROUTE}?mode=latest-payload]`, e);
-      return res.status(500).json({ error: (e as Error).message });
+      if (message.includes('Missing Supabase')) {
+        return res.status(503).json({
+          error: 'Cloud storage is not configured on the server. Set SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL in Vercel.',
+          code: 'misconfigured',
+        });
+      }
+      return res.status(500).json({ error: message });
     }
   }
 

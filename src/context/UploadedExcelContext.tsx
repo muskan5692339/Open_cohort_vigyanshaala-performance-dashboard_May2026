@@ -293,15 +293,24 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
         }
 
         for (let attempt = 0; attempt < 3; attempt++) {
-          const result = await fetchLatestCohortPayload();
-          if (result?.payload && getStudentLookupCount(result.payload) > 0) {
-            const applied = applyLoadedState(result.payload, {
-              ...result.meta,
-              source: 'cloud',
-            });
-            writeStored(applied.payload, applied.meta);
-            setState(applied);
-            return;
+          try {
+            const result = await fetchLatestCohortPayload();
+            if (result?.payload && getStudentLookupCount(result.payload) > 0) {
+              const applied = applyLoadedState(result.payload, {
+                ...result.meta,
+                source: 'cloud',
+              });
+              writeStored(applied.payload, applied.meta);
+              setState(applied);
+              return;
+            }
+          } catch (e) {
+            if ((e as Error).message === 'cloud_misconfigured') {
+              setDatasetError(
+                'Student roster cloud is not configured on the server. Admin: add SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL in Vercel, redeploy, then Apply mapping again.',
+              );
+              return;
+            }
           }
           if (attempt < 2) {
             await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
@@ -309,7 +318,7 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
         }
 
         setDatasetError(
-          'Cohort roster not found in the cloud yet. Admin: open Admin → Data Source, upload the Excel file, and click Apply mapping (once). Students can then return here — no daily upload needed.',
+          'Cohort roster not found in the cloud yet. Admin: sign in, open Admin → Data Source, upload the Excel file, and click Apply mapping (once). Students can then return here — no daily upload needed.',
         );
       } finally {
         setDatasetLoading(false);
