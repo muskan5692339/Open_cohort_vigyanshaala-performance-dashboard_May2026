@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { BRAND } from '../../types/adminTypes';
+import { isChunkLoadError } from '../../utils/lazyWithRetry';
 
 interface Props {
   children: ReactNode;
@@ -23,6 +24,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
+      const chunkError = isChunkLoadError(this.state.error);
       return (
         <div style={{ padding: 24, fontFamily: 'Inter, system-ui, sans-serif' }}>
           <div style={{ background: '#fff', border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 20, maxWidth: 640 }}>
@@ -30,17 +32,25 @@ export default class ErrorBoundary extends Component<Props, State> {
               {this.props.title ?? 'Something went wrong'}
             </div>
             <div style={{ fontSize: 13, color: BRAND.textLight, marginBottom: 12 }}>
-              The dashboard recovered gracefully. You can reload or continue with local data.
+              {chunkError
+                ? 'A new version of the app was deployed. Reload the page to fetch the latest files.'
+                : 'The dashboard recovered gracefully. You can reload or continue with local data.'}
             </div>
             <pre style={{ fontSize: 11, background: BRAND.bg, padding: 12, borderRadius: 8, overflow: 'auto' }}>
               {this.state.error.message}
             </pre>
             <button
               type="button"
-              onClick={() => this.setState({ error: null })}
+              onClick={() => {
+                if (chunkError) {
+                  window.location.reload();
+                  return;
+                }
+                this.setState({ error: null });
+              }}
               style={{ marginTop: 12, padding: '8px 14px', borderRadius: 8, border: 'none', background: BRAND.navy, color: '#fff', cursor: 'pointer' }}
             >
-              Try again
+              {chunkError ? 'Reload page' : 'Try again'}
             </button>
           </div>
         </div>

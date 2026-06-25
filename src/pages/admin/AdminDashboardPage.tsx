@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import Sidebar from '../../components/dashboard/admin/Sidebar';
 import TopBar from '../../components/dashboard/admin/TopBar';
 import GlobalFilterBar from '../../components/dashboard/admin/GlobalFilterBar';
@@ -12,31 +12,32 @@ import { useProgramIntelligence } from '../../hooks/useProgramIntelligence';
 import { useUploadedExcel } from '../../context/UploadedExcelContext';
 import { AdminSignInProvider } from '../../context/AdminSignInContext';
 import { activeFilterChips } from '../../services/globalFilters';
+import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const DataSourcePage = lazy(() => import('./DataSourcePage'));
-const HelpCenterPage = lazy(() => import('./HelpCenterPage'));
-const TestingQualityReportPage = lazy(() => import('./TestingQualityReportPage'));
-const DashboardHealthPanel = lazy(() => import('../../components/dashboard/admin/DashboardHealthPanel'));
-const AuditLogPanel = lazy(() => import('../../components/dashboard/admin/AuditLogPanel'));
-const TelemetryPanel = lazy(() => import('../../components/system/TelemetryPanel'));
-const ProgramIntelligenceHub = lazy(() => import('../../components/dashboard/admin/intelligence/ProgramIntelligenceHub'));
-const SavedFilterViewsPanel = lazy(() => import('../../components/dashboard/admin/SavedFilterViewsPanel'));
-const ExportPanel = lazy(() => import('../../components/dashboard/admin/ExportPanel'));
-const RiskActionCenter = lazy(() => import('../../components/dashboard/admin/RiskActionCenter'));
-const DashboardSnapshot = lazy(() => import('../../components/dashboard/admin/DashboardSnapshot'));
-const PercentageDistributionChart = lazy(() =>
+const DataSourcePage = lazyWithRetry(() => import('./DataSourcePage'));
+const HelpCenterPage = lazyWithRetry(() => import('./HelpCenterPage'));
+const TestingQualityReportPage = lazyWithRetry(() => import('./TestingQualityReportPage'));
+const DashboardHealthPanel = lazyWithRetry(() => import('../../components/dashboard/admin/DashboardHealthPanel'));
+const AuditLogPanel = lazyWithRetry(() => import('../../components/dashboard/admin/AuditLogPanel'));
+const TelemetryPanel = lazyWithRetry(() => import('../../components/system/TelemetryPanel'));
+const ProgramIntelligenceHub = lazyWithRetry(() => import('../../components/dashboard/admin/intelligence/ProgramIntelligenceHub'));
+const SavedFilterViewsPanel = lazyWithRetry(() => import('../../components/dashboard/admin/SavedFilterViewsPanel'));
+const ExportPanel = lazyWithRetry(() => import('../../components/dashboard/admin/ExportPanel'));
+const RiskActionCenter = lazyWithRetry(() => import('../../components/dashboard/admin/RiskActionCenter'));
+const DashboardSnapshot = lazyWithRetry(() => import('../../components/dashboard/admin/DashboardSnapshot'));
+const PercentageDistributionChart = lazyWithRetry(() =>
   import('../../components/dashboard/admin/AdminDashboardCharts').then(m => ({ default: m.PercentageDistributionChart })),
 );
-const NumericDistributionChart = lazy(() =>
+const NumericDistributionChart = lazyWithRetry(() =>
   import('../../components/dashboard/admin/AdminDashboardCharts').then(m => ({ default: m.NumericDistributionChart })),
 );
-const StatusBreakdownChart = lazy(() =>
+const StatusBreakdownChart = lazyWithRetry(() =>
   import('../../components/dashboard/admin/AdminDashboardCharts').then(m => ({ default: m.StatusBreakdownChart })),
 );
-const CategoryBarChart = lazy(() =>
+const CategoryBarChart = lazyWithRetry(() =>
   import('../../components/dashboard/admin/AdminDashboardCharts').then(m => ({ default: m.CategoryBarChart })),
 );
-const RiskCountChart = lazy(() =>
+const RiskCountChart = lazyWithRetry(() =>
   import('../../components/dashboard/admin/AdminDashboardCharts').then(m => ({ default: m.RiskCountChart })),
 );
 

@@ -1,12 +1,13 @@
-import { lazy, Suspense, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { CloudUpload, FileSpreadsheet, Clock } from 'lucide-react';
 import { BRAND } from '../../types/adminTypes';
+import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const ExcelUpload = lazy(() => import('../../components/datasource/ExcelUpload'));
-const OneDriveSync = lazy(() => import('../../components/datasource/OneDriveSync'));
-const SyncHistory = lazy(() => import('../../components/datasource/SyncHistory'));
-const SyncRunsPanel = lazy(() => import('../../components/datasource/SyncRunsPanel'));
-const UploadHistoryPanel = lazy(() => import('../../components/dashboard/admin/UploadHistoryPanel'));
+const ExcelUpload = lazyWithRetry(() => import('../../components/datasource/ExcelUpload'));
+const OneDriveSync = lazyWithRetry(() => import('../../components/datasource/OneDriveSync'));
+const SyncHistory = lazyWithRetry(() => import('../../components/datasource/SyncHistory'));
+const SyncRunsPanel = lazyWithRetry(() => import('../../components/datasource/SyncRunsPanel'));
+const UploadHistoryPanel = lazyWithRetry(() => import('../../components/dashboard/admin/UploadHistoryPanel'));
 
 type Tab = 'excel' | 'onedrive' | 'history';
 
