@@ -28,13 +28,14 @@ interface HomePageProps {
 }
 
 export default function HomePage({ onViewDashboard, onAdminView, showAdminNav = true }: HomePageProps) {
-  const { payload: excelPayload } = useUploadedExcel();
+  const { payload: excelPayload, meta, datasetLoading, datasetError } = useUploadedExcel();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputWrapRef = useRef<HTMLDivElement>(null);
 
   const datasetEmails = useMemo(() => getAllStudentEmails(excelPayload), [excelPayload]);
+  const lookupCount = datasetEmails.length;
 
   const suggestions = useMemo(
     () => searchStudentEmails(excelPayload, email, 5),
@@ -47,16 +48,21 @@ export default function HomePage({ onViewDashboard, onAdminView, showAdminNav = 
     return hasStudentEmail(excelPayload, trimmed);
   }, [email, excelPayload]);
 
+  const canSubmitEmail = useMemo(() => {
+    const trimmed = normalizeStudentEmail(email);
+    return trimmed.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  }, [email]);
+
   useEffect(() => {
     if (import.meta.env.DEV) {
-      console.debug('[StudentLookup] records available:', getStudentLookupCount(excelPayload));
+      console.debug('[StudentLookup] records available:', lookupCount);
     }
-  }, [excelPayload, datasetEmails.length]);
+  }, [excelPayload, lookupCount]);
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
     setError('');
-    setShowSuggestions(value.trim().length > 0);
+    setShowSuggestions(value.trim().length >= 1);
   };
 
   const selectSuggestion = (suggestion: string) => {
@@ -78,7 +84,11 @@ export default function HomePage({ onViewDashboard, onAdminView, showAdminNav = 
     }
 
     if (getStudentLookupCount(excelPayload) === 0) {
-      setError('No student dataset loaded. Ask your admin to upload the cohort workbook first.');
+      setError(
+        datasetLoading
+          ? 'Loading student roster…'
+          : 'No student dataset loaded. Ask your admin to upload the cohort workbook first.',
+      );
       return;
     }
 
@@ -133,6 +143,20 @@ export default function HomePage({ onViewDashboard, onAdminView, showAdminNav = 
             </label>
             <p style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.6, margin: '0 0 12px', maxWidth: 440 }}>
               Enter your She for STEM registered email ID to view your performance dashboard.
+              {datasetLoading && (
+                <span style={{ display: 'block', marginTop: 6, color: BRAND.purple }}>Loading cohort roster…</span>
+              )}
+              {!datasetLoading && lookupCount > 0 && (
+                <span style={{ display: 'block', marginTop: 6, color: '#15803d' }}>
+                  {lookupCount} registered email{lookupCount === 1 ? '' : 's'} ready
+                  {meta?.loadedAt ? ` (updated ${new Date(meta.loadedAt).toLocaleDateString()})` : ''}.
+                </span>
+              )}
+              {!datasetLoading && lookupCount === 0 && (
+                <span style={{ display: 'block', marginTop: 6, color: '#b45309' }}>
+                  {datasetError ?? 'No cohort roster loaded on this device yet.'}
+                </span>
+              )}
             </p>
 
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
@@ -166,7 +190,7 @@ export default function HomePage({ onViewDashboard, onAdminView, showAdminNav = 
                   onBlurCapture={e => { e.currentTarget.style.borderColor = error ? '#ef4444' : BRAND.border; }}
                 />
 
-                {showSuggestions && suggestions.length > 0 && (
+                {showSuggestions && email.trim().length > 0 && suggestions.length > 0 && (
                   <ul
                     role="listbox"
                     style={{
@@ -213,29 +237,51 @@ export default function HomePage({ onViewDashboard, onAdminView, showAdminNav = 
                     ))}
                   </ul>
                 )}
+
+                {showSuggestions && email.trim().length > 0 && suggestions.length === 0 && lookupCount > 0 && (
+                  <p style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: 0,
+                    right: 0,
+                    margin: 0,
+                    padding: '10px 18px',
+                    fontSize: 13,
+                    color: BRAND.textLight,
+                    background: BRAND.white,
+                    border: `1px solid ${BRAND.border}`,
+                    borderRadius: 12,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+                    zIndex: 20,
+                  }}>
+                    No matching email in the cohort roster.
+                  </p>
+                )}
               </div>
 
               <button
                 type="submit"
-                disabled={!canViewDashboard}
+                disabled={!canSubmitEmail || datasetLoading}
                 style={{
                   padding: '13px 28px',
                   borderRadius: 50,
                   border: 'none',
-                  background: canViewDashboard ? BRAND.navy : '#9ca3af',
+                  background: canViewDashboard ? BRAND.navy : canSubmitEmail ? BRAND.purple : '#9ca3af',
                   color: BRAND.white,
                   fontWeight: 700,
                   fontSize: 15,
-                  cursor: canViewDashboard ? 'pointer' : 'not-allowed',
+                  cursor: canSubmitEmail && !datasetLoading ? 'pointer' : 'not-allowed',
                   whiteSpace: 'nowrap',
                   fontFamily: 'inherit',
                   transition: 'background 0.15s',
                 }}
                 onMouseEnter={e => {
                   if (canViewDashboard) (e.target as HTMLButtonElement).style.background = BRAND.navyLight;
+                  else if (canSubmitEmail) (e.target as HTMLButtonElement).style.background = BRAND.purpleDark;
                 }}
                 onMouseLeave={e => {
                   if (canViewDashboard) (e.target as HTMLButtonElement).style.background = BRAND.navy;
+                  else if (canSubmitEmail) (e.target as HTMLButtonElement).style.background = BRAND.purple;
                 }}
               >
                 View Dashboard

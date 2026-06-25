@@ -153,3 +153,24 @@ export async function listUploadVersions(
     return [];
   }
 }
+
+/** Load latest cloud-persisted cohort for student email lookup (no auth). */
+export async function fetchLatestCohortPayload(
+  organizationId?: string,
+): Promise<{ payload: ParsedExcelPayload; meta: { fileName: string; cohortName: string; loadedAt: string; studentCount: number } } | null> {
+  if (!isCloudPersistenceEnabled()) return null;
+
+  const orgId = organizationId ?? getActiveOrganizationId();
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/latest-cohort-payload?orgId=${encodeURIComponent(orgId)}`,
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as {
+      payload: ParsedExcelPayload;
+      meta: { fileName: string; cohortName: string; loadedAt: string; studentCount: number };
+    };
+  } catch {
+    return null;
+  }
+}

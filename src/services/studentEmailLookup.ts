@@ -3,7 +3,7 @@ import type { ParsedStudent } from '../types/syncTypes';
 import type { ColumnMapping } from '../types/dynamicSchema';
 
 export function normalizeStudentEmail(email: string): string {
-  return email.trim().toLowerCase();
+  return email.trim().toLowerCase().replace(/^mailto:/i, '').trim();
 }
 
 function isValidStudentEmail(email: string): boolean {
@@ -13,14 +13,20 @@ function isValidStudentEmail(email: string): boolean {
 
 function cellText(v: unknown): string {
   if (v == null) return '';
-  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v).trim();
+  if (typeof v === 'string') return normalizeStudentEmail(v) || v.trim();
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v).trim();
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === 'object') {
     const obj = v as Record<string, unknown>;
-    if (typeof obj.text === 'string') return obj.text.trim();
+    if (typeof obj.text === 'string' && obj.text.trim()) return normalizeStudentEmail(obj.text) || obj.text.trim();
+    if (typeof obj.hyperlink === 'string') {
+      const link = normalizeStudentEmail(obj.hyperlink);
+      if (link) return link;
+    }
     if (typeof obj.result === 'string' || typeof obj.result === 'number') return String(obj.result).trim();
   }
-  return String(v).trim();
+  const raw = String(v).trim();
+  return normalizeStudentEmail(raw) || raw;
 }
 
 function columnNamesFromPayload(payload: ParsedExcelPayload): string[] {
@@ -29,20 +35,29 @@ function columnNamesFromPayload(payload: ParsedExcelPayload): string[] {
   return [...new Set([...Object.keys(mapping), ...(payload.headers ?? []), ...fromRowKeys])];
 }
 
+function isEmailHeaderName(header: string): boolean {
+  const l = header.toLowerCase().replace(/^\uFEFF/, '').trim();
+  if (!l) return false;
+  if (l === 'email' || l === 'e mail' || l === 'e-mail') return true;
+  if (l.includes('email')) return true;
+  if (l.includes('mail id') || l.includes('mailid')) return true;
+  return false;
+}
+
 /** Prefer a header literally named "email" (any casing), then other email-like columns. */
 export function resolveEmailColumnKey(payload: ParsedExcelPayload): string | null {
   const names = columnNamesFromPayload(payload);
 
-  const exact = names.find(n => n.toLowerCase().trim() === 'email');
+  const exact = names.find(n => n.toLowerCase().replace(/^\uFEFF/, '').trim() === 'email');
   if (exact) return exact;
 
   const mapping = payload.mapping ?? {};
   const fromMapping = names.filter(
-    n => mapping[n]?.mappedType === 'identifier' || n.toLowerCase().includes('email'),
+    n => mapping[n]?.mappedType === 'identifier' || isEmailHeaderName(n),
   );
   if (fromMapping.length) return fromMapping[0];
 
-  const partial = names.find(n => n.toLowerCase().includes('email'));
+  const partial = names.find(n => isEmailHeaderName(n));
   return partial ?? null;
 }
 
@@ -105,6 +120,14 @@ export function getAllStudentEmails(payload: ParsedExcelPayload | null | undefin
     }
   }
 
+  for (const entry of payload.classWiseAttendance ?? []) {
+    const email = cellText(entry.student_email);
+    if (isValidStudentEmail(email)) {
+      const key = normalizeStudentEmail(email);
+      if (!byNormalized.has(key)) byNormalized.set(key, email);
+    }
+  }
+
   return [...byNormalized.values()].sort((a, b) =>
     a.localeCompare(b, undefined, { sensitivity: 'base' }),
   );
@@ -112,6 +135,18 @@ export function getAllStudentEmails(payload: ParsedExcelPayload | null | undefin
 
 export function getStudentLookupCount(payload: ParsedExcelPayload | null | undefined): number {
   return getAllStudentEmails(payload).length;
+}
+
+function emailMatchesQuery(email: string, query: string): boolean {
+  const normalized = normalizeStudentEmail(email);
+  if (normalized.includes(query)) return true;
+  const localPart = normalized.split('@')[0] ?? '';
+  if (localPart && localPart.startsWith(query)) return true;
+  if (!query.includes('@')) {
+    const beforeAt = normalized.split('@')[0] ?? '';
+    if (beforeAt.includes(query)) return true;
+  }
+  return false;
 }
 
 export function searchStudentEmails(
@@ -122,7 +157,7 @@ export function searchStudentEmails(
   const q = normalizeStudentEmail(query);
   if (!q) return [];
   return getAllStudentEmails(payload)
-    .filter(email => normalizeStudentEmail(email).includes(q))
+    .filter(email => emailMatchesQuery(email, q))
     .slice(0, limit);
 }
 
@@ -131,6 +166,57 @@ export function getExampleStudentEmails(
   limit = 5,
 ): string[] {
   return getAllStudentEmails(payload).slice(0, limit);
+}
+
+function extractEmailFromRow(
+  row: Record<string, unknown>,
+  payload: ParsedExcelPayload,
+): string {
+  const col = resolveEmailColumnKey(payload);
+  if (col) {
+    const fromCol = cellText(row[col]);
+    if (isValidStudentEmail(fromCol)) return fromCol;
+  }
+  for (const val of Object.values(row)) {
+    const candidate = cellText(val);
+    if (isValidStudentEmail(candidate)) return candidate;
+  }
+  return '';
+}
+
+/** Ensure students[] and email index are populated from rawRows / class-wise data. */
+export function enrichPayloadForStudentLookup(payload: ParsedExcelPayload): ParsedExcelPayload {
+  const students = [...(payload.students ?? [])];
+  const seen = new Set(students.map(s => normalizeStudentEmail(s.email)).filter(Boolean));
+
+  for (const row of payload.rawRows ?? []) {
+    const email = extractEmailFromRow(row, payload);
+    if (!email) continue;
+    const key = normalizeStudentEmail(email);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    students.push(buildStudentFromRow(row, payload, email));
+  }
+
+  for (const entry of payload.classWiseAttendance ?? []) {
+    const email = cellText(entry.student_email);
+    if (!isValidStudentEmail(email)) continue;
+    const key = normalizeStudentEmail(email);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    students.push({
+      student_id: key,
+      name: entry.student_name?.trim() || 'Unknown',
+      email,
+      college: '',
+      program: '',
+      cohort: payload.cohortName,
+      state: '',
+      status: 'Active',
+    });
+  }
+
+  return { ...payload, students };
 }
 
 function buildStudentFromRow(

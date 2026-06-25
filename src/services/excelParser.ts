@@ -606,11 +606,14 @@ export async function parseUploadedFile(
               return `${year}-${month}-${day}`;
             }
             if (typeof v === 'object') {
-              // hyperlink cell: { text, hyperlink }
-              if ('text' in (v as object)) return String((v as { text: unknown }).text).trim();
-              // rich-text cell: { richText: [{ text, font, ... }] }
-              if ('richText' in (v as object))
-                return ((v as { richText: { text: string }[] }).richText ?? []).map(r => r.text).join('').trim();
+              const cell = v as { text?: unknown; hyperlink?: string; richText?: { text: string }[] };
+              if (typeof cell.text === 'string' && cell.text.trim()) return cell.text.trim();
+              if (typeof cell.hyperlink === 'string') {
+                const link = cell.hyperlink.replace(/^mailto:/i, '').trim();
+                if (link) return link;
+              }
+              if (cell.richText)
+                return (cell.richText ?? []).map(r => r.text).join('').trim();
             }
             return String(v).trim();
           }),

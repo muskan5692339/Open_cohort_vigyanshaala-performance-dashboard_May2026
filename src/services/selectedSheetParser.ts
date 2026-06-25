@@ -20,7 +20,11 @@ function normalizeExcelCell(v: unknown): string {
   if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v).trim();
   if (typeof v === 'object' && v) {
     const cell = v as Record<string, unknown>;
-    if (typeof cell.text === 'string') return cell.text.trim();
+    if (typeof cell.text === 'string' && cell.text.trim()) return cell.text.trim();
+    if (typeof cell.hyperlink === 'string') {
+      const link = cell.hyperlink.replace(/^mailto:/i, '').trim();
+      if (link) return link;
+    }
     if (typeof cell.result === 'string' || typeof cell.result === 'number') return String(cell.result).trim();
     if (Array.isArray(cell.richText)) {
       return (cell.richText as Array<{ text?: unknown }>)
@@ -28,7 +32,6 @@ function normalizeExcelCell(v: unknown): string {
         .join('')
         .trim();
     }
-    if (typeof cell.hyperlink === 'string' && typeof cell.text === 'string') return cell.text.trim();
     try {
       const asJson = JSON.stringify(cell);
       return asJson === '{}' ? '' : asJson;
