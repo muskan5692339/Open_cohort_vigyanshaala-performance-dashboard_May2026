@@ -1,0 +1,175 @@
+.student-home {
+  min-height: 100vh;
+  background: #ffffff;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+.student-home__header {
+  padding: 16px 40px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+}
+
+.student-home__main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 72px 40px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 72px;
+  align-items: center;
+}
+
+.student-home__main--single {
+  grid-template-columns: 1fr;
+  max-width: 560px;
+}
+
+.student-home__title {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.12;
+  color: #111827;
+  margin: 0 0 20px;
+  letter-spacing: -1px;
+}
+
+.student-home__email-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: stretch;
+}
+
+.student-home__input-wrap {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+}
+
+.student-home__email-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 20px;
+  border-radius: 50px;
+  border: 1.5px solid #e5e7eb;
+  font-size: 16px;
+  outline: none;
+  background: #f9fafb;
+  color: #111827;
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.student-home__email-input--error {
+  border-color: #ef4444;
+}
+
+.student-home__email-input:focus {
+  border-color: #863bff;
+}
+
+.student-home__submit-btn {
+  padding: 13px 28px;
+  border-radius: 50px;
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.student-home__suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.student-home__no-match {
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #6b7280;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  line-height: 1.5;
+}
+
+.student-home__error {
+  color: #ef4444;
+  font-size: 13px;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .student-home__main {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 32px 20px 48px;
+  }
+
+  .student-home__title {
+    font-size: 36px;
+    letter-spacing: -0.5px;
+  }
+
+  .student-home__header {
+    padding: 14px 20px;
+  }
+
+  .student-home__promo {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .student-home__main {
+    padding: 24px 16px 40px;
+  }
+
+  .student-home__title {
+    font-size: 28px;
+    line-height: 1.2;
+  }
+
+  .student-home__email-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .student-home__email-input {
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+
+  .student-home__submit-btn {
+    width: 100%;
+    border-radius: 12px;
+    padding: 14px 20px;
+  }
+
+  .student-home__suggestions {
+    position: static;
+    margin-top: 8px;
+    max-height: 180px;
+  }
+}

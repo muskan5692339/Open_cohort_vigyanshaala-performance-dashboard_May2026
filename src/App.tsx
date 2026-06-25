@@ -70,6 +70,7 @@ function AppContent() {
       onViewDashboard={openStudentDashboard}
       onAdminView={isStudentOnlyRoute || STUDENT_ONLY_HOME ? undefined : goAdmin}
       showAdminNav={!isStudentOnlyRoute && !STUDENT_ONLY_HOME}
+      studentOnly={isStudentOnlyRoute}
     />
   );
 }
