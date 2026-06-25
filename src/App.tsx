@@ -15,6 +15,9 @@ const STUDENT_ONLY_HOME = import.meta.env.VITE_STUDENT_ONLY === 'true';
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
+  const isStudentOnlyRoute = location.pathname.startsWith('/student-view');
+  const homePath = isStudentOnlyRoute ? '/student-view' : '/';
+
   const [view, setView] = useState<View>(() =>
     location.pathname.startsWith('/admin') ? 'admin' : 'home',
   );
@@ -26,15 +29,15 @@ function AppContent() {
       setEmail(null);
       return;
     }
-    if (location.pathname === '/' && view === 'admin') {
+    if ((location.pathname === '/' || isStudentOnlyRoute) && view === 'admin') {
       setView('home');
     }
-  }, [location.pathname, view]);
+  }, [location.pathname, view, isStudentOnlyRoute]);
 
   const goHome = () => {
     setEmail(null);
     setView('home');
-    navigate('/');
+    navigate(homePath);
   };
 
   const goAdmin = () => {
@@ -46,7 +49,7 @@ function AppContent() {
   const openStudentDashboard = (studentEmail: string) => {
     setEmail(studentEmail);
     setView('student');
-    navigate('/');
+    navigate(homePath);
   };
 
   if (view === 'admin') {
@@ -65,8 +68,8 @@ function AppContent() {
   return (
     <HomePage
       onViewDashboard={openStudentDashboard}
-      onAdminView={STUDENT_ONLY_HOME ? undefined : goAdmin}
-      showAdminNav={!STUDENT_ONLY_HOME}
+      onAdminView={isStudentOnlyRoute || STUDENT_ONLY_HOME ? undefined : goAdmin}
+      showAdminNav={!isStudentOnlyRoute && !STUDENT_ONLY_HOME}
     />
   );
 }
@@ -79,6 +82,7 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<AppContent />} />
+              <Route path="/student-view" element={<AppContent />} />
               <Route path="/admin/*" element={<AppContent />} />
             </Routes>
           </BrowserRouter>
