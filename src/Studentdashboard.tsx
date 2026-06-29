@@ -369,7 +369,12 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <StatCard label="Attendance" value={`${attendancePct.toFixed(1)}%`} subtitle={`${programHoursLabel} · ${attendedSessionCount}/${sessions || classWise?.sessions.length || 0} sessions`} warn={attendancePct === 0} />
             <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={`${assignmentRows.length} tracked items`} warn={assignmentPct === 0} />
             <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizScores.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
-            <StatCard label="Sessions" value={String(sessions || attendedSessionCount + missedSessionCount)} subtitle="Total sessions" warn={sessions === 0} />
+            <StatCard
+              label="Sessions"
+              value={attendedHours > 0 || totalHours > 0 ? `${attendedHours.toFixed(2)} hrs` : String(sessions || 0)}
+              subtitle={totalHours > 0 ? `${totalHours} program hrs` : `${sessions || 0} total sessions`}
+              warn={attendedHours === 0 && sessions === 0}
+            />
           </div>
 
           <div className="charts-grid">
