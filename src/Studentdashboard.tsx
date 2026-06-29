@@ -24,6 +24,7 @@ import {
   countMissedSessions,
   getClassWiseAttendanceForStudent,
   parseProgramHours,
+  sessionHoursIndicatorColor,
 } from './services/classWiseAttendance';
 import { normalizeExcelCell } from './services/excelCellValue';
 import {
@@ -285,7 +286,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionTrendMax = sessionTrend.length
     ? Math.max(1, ...sessionTrend.map(p => p.value))
     : 1;
-  const sessionHasGap = sessionTrend.some(s => s.value === 0) || missedAttendancePct > 0;
 
   const studentName = resolveField(matched, student.name, ['full name', 'name', 'student name']);
   const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
@@ -450,19 +450,10 @@ export default function StudentDashboard({ email, onBack }: Props) {
               </div>
             </article>
 
-            <article className={`panel-card panel-large metric-alert-wrap ${sessionHasGap ? 'metric-alert-wrap--hot' : ''}`}>
+            <article className="panel-card panel-large">
               <h3>Session-wise trend</h3>
-              <AnimeMetricAlert
-                variant="session"
-                show={sessionHasGap && sessionTrend.length > 0}
-                label="Sessions"
-                message={
-                  sessionTrend.some(s => s.value === 0)
-                    ? 'Some sessions show 0 hrs — join the next class to stay on track!'
-                    : 'You have missed session hours. Catch up in the next live session!'
-                }
-              />
               {sessionTrend.length > 0 ? (
+                <>
                 <div className="panel-chart">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={sessionTrend}>
@@ -477,18 +468,52 @@ export default function StudentDashboard({ email, onBack }: Props) {
                         height={56}
                       />
                       <YAxis
-                        domain={[0, Math.ceil(sessionTrendMax * 1.15 * 10) / 10]}
+                        domain={[0, Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10)]}
                         stroke="var(--sd-text-muted)"
                         fontSize={11}
                         label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
                       />
                       <Tooltip formatter={(value) => [`${Number(value ?? 0)} hrs`, 'Attended']} />
-                      <Line type="monotone" dataKey="value" stroke="var(--sd-primary)" strokeWidth={2.5} dot={{ r: 3 }}>
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke="var(--sd-primary)"
+                        strokeWidth={2.5}
+                        dot={(props) => {
+                          const { cx, cy, payload } = props;
+                          const v = Number((payload as { value?: number })?.value ?? 0);
+                          if (cx == null || cy == null) return null;
+                          if (v >= 1) {
+                            return <circle cx={cx} cy={cy} r={4} fill="#22c55e" stroke="#1e2d45" strokeWidth={1.5} />;
+                          }
+                          const fill = sessionHoursIndicatorColor(v);
+                          return (
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={11}
+                              fill={fill}
+                              stroke="#1e2d45"
+                              strokeWidth={2}
+                            />
+                          );
+                        }}
+                        activeDot={{ r: 13, strokeWidth: 2 }}
+                      >
                         <LabelList dataKey="value" position="top" fontSize={10} fill="var(--sd-text-muted)" />
                       </Line>
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
+                <div className="session-hours-legend">
+                  <span>Partial attendance (&lt;1 hr)</span>
+                  <span className="session-hours-legend__bar" aria-hidden="true" />
+                  <div className="session-hours-legend__labels">
+                    <span>Low (red)</span>
+                    <span>Full (green)</span>
+                  </div>
+                </div>
+                </>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
                   No class-wise attendance data for this student. Re-upload the workbook and ensure it includes a

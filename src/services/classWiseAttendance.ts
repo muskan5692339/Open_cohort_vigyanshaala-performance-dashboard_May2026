@@ -239,6 +239,41 @@ export function buildSessionTrendFromClassWise(
   }));
 }
 
+/** Red (0) → orange → yellow → light green → green (1) for partial session hours. */
+export function sessionHoursIndicatorColor(hours: number): string {
+  const h = Math.max(0, Math.min(1, hours));
+  if (h >= 1) return '#22c55e';
+  const stops: Array<[number, string]> = [
+    [0, '#ef4444'],
+    [0.25, '#f97316'],
+    [0.5, '#eab308'],
+    [0.75, '#a8e063'],
+    [1, '#22c55e'],
+  ];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0, c0] = stops[i];
+    const [t1, c1] = stops[i + 1];
+    if (h >= t0 && h <= t1) {
+      const t = t1 === t0 ? 1 : (h - t0) / (t1 - t0);
+      return mixHexColors(c0, c1, t);
+    }
+  }
+  return '#ef4444';
+}
+
+function mixHexColors(a: string, b: string, t: number): string {
+  const parse = (hex: string) => {
+    const n = hex.replace('#', '');
+    return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
+  };
+  const [r1, g1, b1] = parse(a);
+  const [r2, g2, b2] = parse(b);
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const bl = Math.round(b1 + (b2 - b1) * t);
+  return `rgb(${r}, ${g}, ${bl})`;
+}
+
 export function countAttendedSessions(entry: ClassWiseAttendanceEntry): number {
   return entry.sessions.filter(s => normalizeSessionHours(s.hours) > 0).length;
 }
