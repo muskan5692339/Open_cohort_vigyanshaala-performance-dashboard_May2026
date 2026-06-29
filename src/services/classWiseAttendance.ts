@@ -102,7 +102,13 @@ export function isClassWiseAttendanceHeaders(headers: string[]): boolean {
 
 function parseSessionHours(raw: string): number {
   const n = parseFloat(String(raw ?? '').replace(/,/g, '').trim());
-  return Number.isFinite(n) ? Math.max(0, n) : 0;
+  return normalizeSessionHours(n);
+}
+
+/** Each session slot counts at most 1 hour; values above 1 are treated as full attendance. */
+export function normalizeSessionHours(hours: number): number {
+  if (!Number.isFinite(hours) || hours <= 0) return 0;
+  return Math.min(1, hours);
 }
 
 function normalizeEmail(raw: string): string {
@@ -229,20 +235,22 @@ export function buildSessionTrendFromClassWise(
 ): { name: string; value: number }[] {
   return entry.sessions.map(s => ({
     name: s.key,
-    value: Math.round(s.hours * 100) / 100,
+    value: Math.round(normalizeSessionHours(s.hours) * 100) / 100,
   }));
 }
 
 export function countAttendedSessions(entry: ClassWiseAttendanceEntry): number {
-  return entry.sessions.filter(s => s.hours > 0).length;
+  return entry.sessions.filter(s => normalizeSessionHours(s.hours) > 0).length;
 }
 
 export function countMissedSessions(entry: ClassWiseAttendanceEntry): number {
-  return entry.sessions.filter(s => s.hours <= 0).length;
+  return entry.sessions.filter(s => normalizeSessionHours(s.hours) <= 0).length;
 }
 
 export function totalSessionHours(entry: ClassWiseAttendanceEntry): number {
-  return Math.round(entry.sessions.reduce((sum, s) => sum + s.hours, 0) * 100) / 100;
+  return Math.round(
+    entry.sessions.reduce((sum, s) => sum + normalizeSessionHours(s.hours), 0) * 100,
+  ) / 100;
 }
 
 export function parseProgramHours(raw: string): number | null {
