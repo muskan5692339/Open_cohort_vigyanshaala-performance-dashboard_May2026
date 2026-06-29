@@ -256,10 +256,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const programHoursFromRow = getByKeywords(matched, ['program hours', 'programme hours', 'total hours']);
   const programHoursParsed = parseProgramHours(programHoursFromRow);
   const sessionSlotCount = classWise?.sessions.length ?? 0;
+  // Total program hours = number of class-wise session slots (e.g. 6), not master-sheet decimals.
   const totalProgramHours =
-    programHoursParsed && sessionSlotCount > 0
-      ? Math.max(programHoursParsed, sessionSlotCount)
-      : programHoursParsed ?? (sessionSlotCount > 0 ? sessionSlotCount : null);
+    sessionSlotCount > 0
+      ? sessionSlotCount
+      : programHoursParsed ?? null;
 
   const sessions = classWise
     ? classWise.sessions.length
@@ -307,7 +308,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
   const programHoursLabel =
     attendedHours > 0 && totalHours > 0
-      ? `${attendedHours.toFixed(2)} / ${totalHours} hrs`
+      ? `${attendedHours.toFixed(2)} / ${Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(2)} hrs`
       : programHoursFromRow !== '—'
         ? programHoursFromRow
         : '—';

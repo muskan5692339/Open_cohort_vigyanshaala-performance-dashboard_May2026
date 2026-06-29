@@ -315,7 +315,7 @@ export function computeHoursBasedAttendance(
   missedPct: number;
 } {
   const attendedHours = totalSessionHours(entry);
-  // Total program hours: master-sheet value, or number of class-wise session columns (e.g. 5 slots).
+  // Prefer explicit session-slot count (each slot = up to 1 hr).
   const totalHours =
     totalProgramHours && totalProgramHours > 0
       ? totalProgramHours
