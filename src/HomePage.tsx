@@ -8,6 +8,7 @@ import {
   searchStudentEmails,
 } from './services/studentEmailLookup';
 import './styles/HomePage.css';
+import RosterSyncStatus from './components/student/RosterSyncStatus';
 
 const BRAND = {
   purple: '#863bff',
@@ -36,7 +37,16 @@ export default function HomePage({
   showAdminNav = true,
   studentOnly = false,
 }: HomePageProps) {
-  const { payload: excelPayload, meta, datasetLoading, datasetError } = useUploadedExcel();
+  const {
+    payload: excelPayload,
+    meta,
+    datasetLoading,
+    datasetError,
+    rosterRefreshing,
+    rosterIsStale,
+    rosterIncomplete,
+    refreshRoster,
+  } = useUploadedExcel();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -150,6 +160,19 @@ export default function HomePage({
           <p style={{ fontSize: 16, color: BRAND.textLight, lineHeight: 1.75, margin: '0 0 32px', maxWidth: 440 }}>
             View your attendance, assignment status, and quiz scores — updated weekly from your cohort&apos;s master workbook.
           </p>
+
+          {studentOnly && (
+            <RosterSyncStatus
+              publishedAt={meta?.publishedAt ?? meta?.loadedAt ?? null}
+              fetchedAt={meta?.fetchedAt ?? null}
+              loading={datasetLoading}
+              refreshing={rosterRefreshing}
+              isStale={rosterIsStale}
+              incomplete={rosterIncomplete}
+              studentCount={lookupCount}
+              onRefresh={() => { void refreshRoster(); }}
+            />
+          )}
 
           <form onSubmit={handleSubmit}>
             <label htmlFor="student-email" style={{ display: 'block', fontSize: 14, fontWeight: 600, color: BRAND.text, marginBottom: 6 }}>

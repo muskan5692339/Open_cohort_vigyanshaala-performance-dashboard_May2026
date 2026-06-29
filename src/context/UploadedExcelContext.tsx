@@ -46,8 +46,12 @@ interface UploadedExcelContextValue {
   meta: UploadedExcelMeta | null;
   loadFromParsed: (payload: ParsedExcelPayload) => void;
   clear: () => void;
+  refreshRoster: () => Promise<void>;
   datasetLoading: boolean;
+  rosterRefreshing: boolean;
   datasetError: string | null;
+  rosterIsStale: boolean;
+  rosterIncomplete: boolean;
 }
 
 const UploadedExcelContext = createContext<UploadedExcelContextValue | null>(null);
@@ -184,6 +188,44 @@ function readStoredSync(): { payload: ParsedExcelPayload; meta: UploadedExcelMet
   };
 }
 
+function clearLocalRosterCaches() {
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(CLASS_WISE_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    localStorage.removeItem(CLASS_WISE_KEY);
+    localStorage.removeItem(ROSTER_INDEX_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function cloudMetaFromFetch(
+  meta: CohortStoredMeta,
+  source: CohortStoredMeta['source'] = 'cloud',
+): CohortStoredMeta {
+  const now = new Date().toISOString();
+  return {
+    ...meta,
+    source,
+    publishedAt: meta.publishedAt ?? meta.loadedAt,
+    fetchedAt: now,
+    loadedAt: meta.publishedAt ?? meta.loadedAt,
+  };
+}
+
+function isRosterStale(meta: UploadedExcelMeta | null): boolean {
+  if (!meta) return false;
+  if (!isStudentPublicRoute()) return false;
+  return meta.source !== 'cloud';
+}
+
+function isRosterIncomplete(payload: ParsedExcelPayload | null, meta: UploadedExcelMeta | null): boolean {
+  if (!payload || !meta || meta.studentCount < 1) return false;
+  if (!isStudentPublicRoute()) return false;
+  return !payload.classWiseAttendance?.length;
+}
+
 function writeStored(payload: ParsedExcelPayload, meta: UploadedExcelMeta) {
   const classWise = payload.classWiseAttendance ?? [];
   const classWiseColumns = payload.classWiseAttendanceColumns ?? [];
@@ -255,8 +297,55 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
     return applied;
   });
   const [datasetLoading, setDatasetLoading] = useState(false);
+  const [rosterRefreshing, setRosterRefreshing] = useState(false);
   const [datasetError, setDatasetError] = useState<string | null>(null);
   const bootstrapAttempted = useRef(false);
+
+  const applyCloudResult = useCallback((result: {
+    payload: ParsedExcelPayload;
+    meta: CohortStoredMeta;
+  }) => {
+    const meta = cloudMetaFromFetch(result.meta, 'cloud');
+    const applied = applyLoadedState(result.payload, meta);
+    writeStored(applied.payload, applied.meta);
+    setState(applied);
+    setDatasetError(null);
+  }, []);
+
+  const refreshRoster = useCallback(async () => {
+    if (!isCloudPersistenceEnabled()) {
+      setDatasetError('Cloud roster is not available. Ask your admin to publish the cohort file.');
+      return;
+    }
+    setRosterRefreshing(true);
+    setDatasetError(null);
+    try {
+      clearLocalRosterCaches();
+      await clearCohortIndexedDb();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const result = await fetchLatestCohortPayload(undefined, { cacheBust: true });
+          if (result?.payload && getStudentLookupCount(result.payload) > 0) {
+            applyCloudResult(result);
+            return;
+          }
+        } catch (e) {
+          if ((e as Error).message === 'cloud_misconfigured') {
+            setDatasetError(
+              'Student roster cloud is not configured on the server. Ask your program team to contact admin.',
+            );
+            return;
+          }
+        }
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+        }
+      }
+      setDatasetError('Could not load the latest roster. Check your internet connection and tap Refresh again.');
+    } finally {
+      setRosterRefreshing(false);
+    }
+  }, [applyCloudResult]);
 
   const loadFromParsed = useCallback((payload: ParsedExcelPayload) => {
     const merged = mergeClassWise(payload);
@@ -296,12 +385,7 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
             try {
               const result = await fetchLatestCohortPayload();
               if (result?.payload && getStudentLookupCount(result.payload) > 0) {
-                const applied = applyLoadedState(result.payload, {
-                  ...result.meta,
-                  source: 'cloud',
-                });
-                writeStored(applied.payload, applied.meta);
-                setState(applied);
+                applyCloudResult(result);
                 return;
               }
             } catch (e) {
@@ -340,12 +424,7 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
           try {
             const result = await fetchLatestCohortPayload();
             if (result?.payload && getStudentLookupCount(result.payload) > 0) {
-              const applied = applyLoadedState(result.payload, {
-                ...result.meta,
-                source: 'cloud',
-              });
-              writeStored(applied.payload, applied.meta);
-              setState(applied);
+              applyCloudResult(result);
               return;
             }
           } catch (e) {
@@ -375,15 +454,7 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
   }, [state.payload]);
 
   const clear = useCallback(() => {
-    try {
-      sessionStorage.removeItem(STORAGE_KEY);
-      sessionStorage.removeItem(CLASS_WISE_KEY);
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
-      localStorage.removeItem(CLASS_WISE_KEY);
-      localStorage.removeItem(ROSTER_INDEX_KEY);
-    } catch {
-      /* ignore */
-    }
+    clearLocalRosterCaches();
     void clearCohortIndexedDb();
     setState({ dataset: null, payload: null, meta: null });
     setDatasetError(null);
@@ -396,10 +467,14 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
       meta: state.meta,
       loadFromParsed,
       clear,
+      refreshRoster,
       datasetLoading,
+      rosterRefreshing,
       datasetError,
+      rosterIsStale: isRosterStale(state.meta),
+      rosterIncomplete: isRosterIncomplete(state.payload, state.meta),
     }),
-    [state.dataset, state.payload, state.meta, loadFromParsed, clear, datasetLoading, datasetError],
+    [state.dataset, state.payload, state.meta, loadFromParsed, clear, refreshRoster, datasetLoading, rosterRefreshing, datasetError],
   );
 
   return (

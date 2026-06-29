@@ -14,6 +14,10 @@ export interface CohortStoredMeta {
   studentCount: number;
   classWiseStudentCount?: number;
   source?: 'excel' | 'cloud' | 'roster' | 'indexeddb';
+  /** When admin published / file timestamp from cloud */
+  publishedAt?: string;
+  /** When this device last downloaded roster */
+  fetchedAt?: string;
 }
 
 interface StoredBundle {

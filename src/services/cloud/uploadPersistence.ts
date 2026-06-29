@@ -75,14 +75,15 @@ function parseStoredCohort(stored: {
 }
 
 /** Direct public Supabase Storage read — works on student phones when API routes fail. */
-async function fetchPublicCohortPayload(orgId: string): Promise<CohortFetchResult | null> {
+async function fetchPublicCohortPayload(orgId: string, cacheBust = false): Promise<CohortFetchResult | null> {
   if (!SUPABASE_URL?.startsWith('http')) return null;
 
+  const bust = cacheBust ? `?v=${Date.now()}` : '';
   const paths = [`${orgId}/latest.json.gz`, 'latest.json.gz'];
   for (const path of paths) {
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/public/student-roster-public/${path}`,
+        `${SUPABASE_URL}/storage/v1/object/public/student-roster-public/${path}${bust}`,
         { cache: 'no-store' },
       );
       if (!res.ok) continue;
@@ -282,14 +283,16 @@ export async function listUploadVersions(
 /** Load latest cloud-persisted cohort for student email lookup (no auth). */
 export async function fetchLatestCohortPayload(
   organizationId?: string,
-): Promise<{ payload: ParsedExcelPayload; meta: { fileName: string; cohortName: string; loadedAt: string; studentCount: number } } | null> {
+  options?: { cacheBust?: boolean },
+): Promise<{ payload: ParsedExcelPayload; meta: { fileName: string; cohortName: string; loadedAt: string; studentCount: number; classWiseStudentCount?: number } } | null> {
   if (!isCloudPersistenceEnabled()) return null;
 
   const orgId = organizationId ?? getActiveOrganizationId();
-  const base = `${API_BASE}/api/list-uploads?orgId=${encodeURIComponent(orgId)}&mode=latest-payload`;
+  const bust = options?.cacheBust ? `&v=${Date.now()}` : '';
+  const base = `${API_BASE}/api/list-uploads?orgId=${encodeURIComponent(orgId)}&mode=latest-payload${bust}`;
 
   const tryUrl = async (url: string) => {
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     if (res.status === 503) return { misconfigured: true as const };
     if (!res.ok) return null;
     return (await res.json()) as CohortFetchResult;
@@ -308,9 +311,9 @@ export async function fetchLatestCohortPayload(
     }
     if (result) return result;
 
-    return await fetchPublicCohortPayload(orgId);
+    return await fetchPublicCohortPayload(orgId, options?.cacheBust);
   } catch (e) {
     if ((e as Error).message === 'cloud_misconfigured') throw e;
-    return fetchPublicCohortPayload(orgId);
+    return fetchPublicCohortPayload(orgId, options?.cacheBust);
   }
 }

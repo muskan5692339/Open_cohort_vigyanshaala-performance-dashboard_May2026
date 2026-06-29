@@ -1,0 +1,98 @@
+.roster-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #14532d;
+}
+
+.roster-sync--warn {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.roster-sync--loading {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #5b21b6;
+  align-items: center;
+}
+
+.roster-sync--compact {
+  margin-bottom: 12px;
+}
+
+.roster-sync:not(.roster-sync--compact) {
+  margin-bottom: 20px;
+}
+
+.roster-sync__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.roster-sync__text strong {
+  font-size: 13px;
+}
+
+.roster-sync__hint {
+  font-size: 11px;
+  opacity: 0.92;
+}
+
+.roster-sync__btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #863bff;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.roster-sync__btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.roster-sync--warn .roster-sync__btn {
+  background: #d97706;
+}
+
+.roster-sync__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #c4b5fd;
+  border-top-color: #863bff;
+  border-radius: 50%;
+  animation: roster-spin 0.7s linear infinite;
+}
+
+@keyframes roster-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .roster-sync {
+    flex-direction: column;
+  }
+
+  .roster-sync__btn {
+    width: 100%;
+    padding: 10px 14px;
+  }
+}
