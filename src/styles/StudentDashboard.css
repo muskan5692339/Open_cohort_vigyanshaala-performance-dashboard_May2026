@@ -207,30 +207,6 @@
   background: var(--sd-amber);
 }
 
-.session-hours-legend {
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--sd-text-muted);
-}
-
-.session-hours-legend__bar {
-  display: block;
-  width: 100%;
-  height: 10px;
-  margin-top: 6px;
-  border-radius: 999px;
-  border: 1px solid var(--sd-border);
-  background: linear-gradient(90deg, #ef4444 0%, #f97316 25%, #eab308 50%, #a8e063 75%, #22c55e 100%);
-}
-
-.session-hours-legend__labels {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-  font-size: 10px;
-  font-weight: 600;
-}
-
 .session-partial-dot__ring {
   transition: r 0.18s ease, stroke-width 0.18s ease, filter 0.18s ease;
 }

@@ -525,14 +525,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="session-hours-legend">
-                  <span>Partial attendance (&lt;1 hr)</span>
-                  <span className="session-hours-legend__bar" aria-hidden="true" />
-                  <div className="session-hours-legend__labels">
-                    <span>Low (red)</span>
-                    <span>Full (green)</span>
-                  </div>
-                </div>
                 </>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
