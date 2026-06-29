@@ -303,8 +303,10 @@ export default function StudentDashboard({ email, onBack }: Props) {
         return Math.round((done / rows.length) * 100);
       })();
   const quizScoreCols = quizCols.filter(col => !col.toLowerCase().includes('final score'));
-  const quizScores = quizScoreCols.map(col => parsePct(matched[col])).filter(v => v > 0);
-  const avgQuiz = quizScores.length ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length) : 0;
+  const quizScores = quizScoreCols.map(col => parsePct(matched[col]));
+  const avgQuiz = quizScoreCols.length
+    ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScoreCols.length)
+    : 0;
 
   const programHoursLabel =
     attendedHours > 0 && totalHours > 0
@@ -436,7 +438,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
               />
             </div>
             <div className={`metric-alert-wrap ${avgQuiz === 0 ? 'metric-alert-wrap--hot' : ''}`}>
-              <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizScores.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
+              <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizScoreCols.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
               <AnimeMetricAlert
                 variant="quiz"
                 show={avgQuiz === 0}
