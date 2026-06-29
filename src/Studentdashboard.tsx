@@ -34,6 +34,7 @@ import {
 import AnimeMetricAlert from './components/student/AnimeMetricAlert';
 import AnimeHelpAssistant from './components/student/AnimeHelpAssistant';
 import RosterSyncStatus from './components/student/RosterSyncStatus';
+import WeeklyUpdateNotice from './components/student/WeeklyUpdateNotice';
 import './components/student/AnimeMetricAlert.css';
 import './styles/StudentDashboard.css';
 
@@ -415,6 +416,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
         </header>
 
         <div className="section-body">
+          <WeeklyUpdateNotice />
           <RosterSyncStatus
             compact
             publishedAt={meta?.publishedAt ?? meta?.loadedAt ?? null}
