@@ -13,6 +13,7 @@ import {
 } from './schemaInference';
 import { readClassWiseAttendanceFromWorkbook } from './classWiseAttendance';
 import type { ClassWiseAttendanceEntry } from './classWiseAttendance';
+import { readExcelRow } from './excelCellValue';
 
 /* ── helpers ──────────────────────────────────────────── */
 
@@ -591,33 +592,10 @@ export async function parseUploadedFile(
   const readSheet = (name: string): string[][] => {
     const ws = wb.getWorksheet(name);
     if (!ws) return [];
+    const colCount = ws.getRow(1).cellCount;
     const out: string[][] = [];
     ws.eachRow(row => {
-      out.push(
-        (row.values as (unknown | undefined)[]).slice(1)
-          .map(v => {
-            if (v === null || v === undefined) return '';
-            // ExcelJS returns date cells as Date objects — convert to yyyy-mm-dd so
-            // isSubmittedVal and parseDate can recognise them
-            if (v instanceof Date) {
-              const year  = v.getUTCFullYear();
-              const month = String(v.getUTCMonth() + 1).padStart(2, '0');
-              const day   = String(v.getUTCDate()).padStart(2, '0');
-              return `${year}-${month}-${day}`;
-            }
-            if (typeof v === 'object') {
-              const cell = v as { text?: unknown; hyperlink?: string; richText?: { text: string }[] };
-              if (typeof cell.text === 'string' && cell.text.trim()) return cell.text.trim();
-              if (typeof cell.hyperlink === 'string') {
-                const link = cell.hyperlink.replace(/^mailto:/i, '').trim();
-                if (link) return link;
-              }
-              if (cell.richText)
-                return (cell.richText ?? []).map(r => r.text).join('').trim();
-            }
-            return String(v).trim();
-          }),
-      );
+      out.push(readExcelRow(row, colCount));
     });
     return out;
   };

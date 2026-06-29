@@ -25,6 +25,7 @@ import {
   getClassWiseAttendanceForStudent,
   parseProgramHours,
 } from './services/classWiseAttendance';
+import { normalizeExcelCell } from './services/excelCellValue';
 import {
   lookupStudentByEmail,
 } from './services/studentEmailLookup';
@@ -39,22 +40,10 @@ type MappingEntry = ColumnMapping[string];
 
 function stringifyCellValue(v: unknown): string {
   if (v == null) return '';
-  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v).trim();
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === 'object') {
-    const obj = v as Record<string, unknown>;
-    if (typeof obj.text === 'string') return obj.text.trim();
-    if (typeof obj.result === 'string' || typeof obj.result === 'number') return String(obj.result).trim();
-    if (Array.isArray(obj.richText)) {
-      return (obj.richText as Array<{ text?: unknown }>).map(p => String(p?.text ?? '')).join('').trim();
-    }
-    try {
-      return JSON.stringify(obj);
-    } catch {
-      return '';
-    }
+  if (typeof v === 'string' && v.trim().startsWith('{"formula"')) {
+    return normalizeExcelCell(JSON.parse(v) as unknown);
   }
-  return String(v).trim();
+  return normalizeExcelCell(v);
 }
 
 function parsePct(raw: unknown): number {

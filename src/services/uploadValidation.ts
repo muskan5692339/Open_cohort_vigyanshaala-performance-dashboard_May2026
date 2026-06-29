@@ -1,4 +1,5 @@
 import type { UploadValidationIssue, UploadValidationResult } from '../types/productionTypes';
+import { excelCellToString, isUncachedFormulaCell } from './excelCellValue';
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_ROWS_WARNING = 10_000;
@@ -77,9 +78,9 @@ export async function validateUploadFile(file: File): Promise<UploadValidationRe
       }
 
       const headerRow = ws.getRow(1);
-      const headers = (headerRow.values as unknown[])
-        .slice(1)
-        .map(v => String(v ?? '').trim());
+      const headers = Array.from({ length: headerRow.cellCount }, (_, i) =>
+        excelCellToString(headerRow.getCell(i + 1)),
+      );
 
       if (headers.every(h => !h)) {
         issues.push(
@@ -138,6 +139,27 @@ export async function validateUploadFile(file: File): Promise<UploadValidationRe
             'warning',
             `Sheet "${ws.name}" may have multiple header rows.`,
             'Confirm row 1 contains the final column names.',
+          ),
+        );
+      }
+
+      let uncachedFormulaCells = 0;
+      const sampleRows = Math.min(rowCount, 51);
+      for (let r = 2; r <= sampleRows; r++) {
+        const row = ws.getRow(r);
+        row.eachCell(cell => {
+          if (isUncachedFormulaCell(cell.value) && !excelCellToString(cell).trim()) {
+            uncachedFormulaCells++;
+          }
+        });
+      }
+      if (uncachedFormulaCells > 0) {
+        issues.push(
+          issue(
+            'FORMULA_NO_CACHE',
+            'warning',
+            `Sheet "${ws.name}" has ${uncachedFormulaCells} formula cell(s) without saved values (e.g. VLOOKUP).`,
+            'Open the workbook in Excel or Google Sheets, let formulas calculate, then download/save as .xlsx before uploading.',
           ),
         );
       }

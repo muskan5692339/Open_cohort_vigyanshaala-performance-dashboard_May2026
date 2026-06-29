@@ -1,6 +1,7 @@
 import type { DiscoveredColumn } from '../types/dynamicSchema';
 import type { ParsedStudent, ParsedAttendance, ParsedAssignment, ParsedQuiz, SyncError } from '../types/syncTypes';
 import type { ClassWiseAttendanceEntry } from './classWiseAttendance';
+import { readExcelRow, type ExcelReadableRow } from './excelCellValue';
 import { parseWideFormatSheet } from './excelParser';
 import {
   inferBusinessRole,
@@ -12,34 +13,6 @@ function hashSignature(input: string): string {
   let h = 5381;
   for (let i = 0; i < input.length; i++) h = ((h << 5) + h) + input.charCodeAt(i);
   return `sig_${(h >>> 0).toString(16)}`;
-}
-
-function normalizeExcelCell(v: unknown): string {
-  if (v === null || v === undefined) return '';
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v).trim();
-  if (typeof v === 'object' && v) {
-    const cell = v as Record<string, unknown>;
-    if (typeof cell.text === 'string' && cell.text.trim()) return cell.text.trim();
-    if (typeof cell.hyperlink === 'string') {
-      const link = cell.hyperlink.replace(/^mailto:/i, '').trim();
-      if (link) return link;
-    }
-    if (typeof cell.result === 'string' || typeof cell.result === 'number') return String(cell.result).trim();
-    if (Array.isArray(cell.richText)) {
-      return (cell.richText as Array<{ text?: unknown }>)
-        .map(part => String(part?.text ?? ''))
-        .join('')
-        .trim();
-    }
-    try {
-      const asJson = JSON.stringify(cell);
-      return asJson === '{}' ? '' : asJson;
-    } catch {
-      return '';
-    }
-  }
-  return String(v).trim();
 }
 
 function discoverColumns(headers: string[], rawRows: string[][]): DiscoveredColumn[] {
@@ -76,12 +49,14 @@ function isWideFormat(headers: string[]): boolean {
   return hasAttendance && (hasAssignment || lower.some(h => h.includes('email')));
 }
 
-function readSheetRows(ws: { eachRow: (cb: (row: { values: unknown }) => void) => void; rowCount?: number }): string[][] {
+function readSheetRows(ws: {
+  eachRow: (cb: (row: ExcelReadableRow) => void) => void;
+  getRow: (n: number) => ExcelReadableRow;
+}): string[][] {
+  const colCount = ws.getRow(1).cellCount;
   const out: string[][] = [];
   ws.eachRow(row => {
-    out.push(
-      (row.values as unknown[]).slice(1).map(v => normalizeExcelCell(v)),
-    );
+    out.push(readExcelRow(row, colCount));
   });
   return out;
 }

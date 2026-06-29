@@ -1,5 +1,6 @@
 import { normalizeStudentEmail } from './studentEmailLookup';
 import type { ParsedExcelPayload } from './loadMetricsFromParsedExcel';
+import { readExcelRow, type ExcelReadableRow } from './excelCellValue';
 
 export interface ClassWiseSession {
   key: string;
@@ -27,29 +28,14 @@ export function normalizeSheetName(name: string): string {
     .replace(/[^\w]/g, '');
 }
 
-function normalizeExcelCell(v: unknown): string {
-  if (v === null || v === undefined) return '';
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v).trim();
-  if (typeof v === 'object' && v) {
-    const cell = v as Record<string, unknown>;
-    if (typeof cell.text === 'string') return cell.text.trim();
-    if (typeof cell.hyperlink === 'string') {
-      const link = cell.hyperlink.replace(/^mailto:/i, '').trim();
-      if (link) return link;
-    }
-    if (typeof cell.result === 'string' || typeof cell.result === 'number') return String(cell.result).trim();
-    if (Array.isArray(cell.richText)) {
-      return (cell.richText as Array<{ text?: unknown }>).map(p => String(p?.text ?? '')).join('').trim();
-    }
-  }
-  return String(v).trim();
-}
-
-function readSheetRows(ws: { eachRow: (cb: (row: { values: unknown }) => void) => void }): string[][] {
+function readSheetRows(ws: {
+  eachRow: (cb: (row: ExcelReadableRow) => void) => void;
+  getRow: (n: number) => ExcelReadableRow;
+}): string[][] {
+  const colCount = ws.getRow(1).cellCount;
   const out: string[][] = [];
   ws.eachRow(row => {
-    out.push((row.values as unknown[]).slice(1).map(v => normalizeExcelCell(v)));
+    out.push(readExcelRow(row, colCount));
   });
   return out;
 }
@@ -183,7 +169,13 @@ export function parseClassWiseAttendanceRows(
 }
 
 export function readClassWiseAttendanceFromWorkbook(
-  wb: { worksheets: { name: string }[]; getWorksheet: (name: string) => { eachRow: (cb: (row: { values: unknown }) => void) => void } | undefined },
+  wb: {
+    worksheets: { name: string }[];
+    getWorksheet: (name: string) => {
+      eachRow: (cb: (row: ExcelReadableRow) => void) => void;
+      getRow: (n: number) => ExcelReadableRow;
+    } | undefined;
+  },
 ): ClassWiseAttendanceData | null {
   const names = wb.worksheets.map(ws => ws.name);
   const preferred = findClassWiseAttendanceSheetName(names);
