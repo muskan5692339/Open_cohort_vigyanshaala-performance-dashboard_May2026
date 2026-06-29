@@ -29,7 +29,9 @@ import { normalizeExcelCell } from './services/excelCellValue';
 import {
   lookupStudentByEmail,
 } from './services/studentEmailLookup';
-import AnimeCoachNudge, { type NudgeItem } from './components/student/AnimeCoachNudge';
+import AnimeMetricAlert from './components/student/AnimeMetricAlert';
+import AnimeHelpAssistant from './components/student/AnimeHelpAssistant';
+import './components/student/AnimeMetricAlert.css';
 import './styles/StudentDashboard.css';
 
 interface Props {
@@ -283,6 +285,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionTrendMax = sessionTrend.length
     ? Math.max(1, ...sessionTrend.map(p => p.value))
     : 1;
+  const sessionHasGap = sessionTrend.some(s => s.value === 0) || missedAttendancePct > 0;
 
   const studentName = resolveField(matched, student.name, ['full name', 'name', 'student name']);
   const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
@@ -309,29 +312,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const cohort = resolveField(matched, student.cohort || payload.cohortName, ['cohort', 'batch', 'program cohort']);
   const college = resolveField(matched, student.college, ['college', 'university', 'institution']);
   const studentCategory = resolveField(matched, undefined, ['student_cat', 'student category', 'college category', 'institution category']);
-
-  const coachNudges: NudgeItem[] = [];
-  if (attendancePct === 0) {
-    coachNudges.push({
-      id: 'attendance',
-      label: 'Attendance',
-      message: 'Your attendance is at 0%. Join the next live session to get started!',
-    });
-  }
-  if (assignmentPct === 0) {
-    coachNudges.push({
-      id: 'assignments',
-      label: 'Assignments',
-      message: 'You have pending assignments. Complete them to boost your progress score!',
-    });
-  }
-  if (avgQuiz === 0) {
-    coachNudges.push({
-      id: 'quiz',
-      label: 'Quizzes',
-      message: 'No quiz scores yet. Attempt your quizzes when they open — they count toward your profile!',
-    });
-  }
 
   return (
     <div className="student-page">
@@ -367,8 +347,24 @@ export default function StudentDashboard({ email, onBack }: Props) {
         <div className="section-body">
           <div className="stat-row">
             <StatCard label="Attendance" value={`${attendancePct.toFixed(1)}%`} subtitle={`${programHoursLabel} · ${attendedSessionCount}/${sessions || classWise?.sessions.length || 0} sessions`} warn={attendancePct === 0} />
-            <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={`${assignmentRows.length} tracked items`} warn={assignmentPct === 0} />
-            <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizScores.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
+            <div className={`metric-alert-wrap ${assignmentPct === 0 ? 'metric-alert-wrap--hot' : ''}`}>
+              <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={`${assignmentRows.length} tracked items`} warn={assignmentPct === 0} />
+              <AnimeMetricAlert
+                variant="assignment"
+                show={assignmentPct === 0}
+                label="Assignments"
+                message="Pending work detected! Complete your assignments to boost your score."
+              />
+            </div>
+            <div className={`metric-alert-wrap ${avgQuiz === 0 ? 'metric-alert-wrap--hot' : ''}`}>
+              <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizScores.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
+              <AnimeMetricAlert
+                variant="quiz"
+                show={avgQuiz === 0}
+                label="Quizzes"
+                message="No quiz scores yet. Attempt quizzes when they open — they count toward your profile!"
+              />
+            </div>
             <StatCard
               label="Sessions"
               value={attendedHours > 0 || totalHours > 0 ? `${attendedHours.toFixed(2)} hrs` : String(sessions || 0)}
@@ -454,8 +450,18 @@ export default function StudentDashboard({ email, onBack }: Props) {
               </div>
             </article>
 
-            <article className="panel-card panel-large">
+            <article className={`panel-card panel-large metric-alert-wrap ${sessionHasGap ? 'metric-alert-wrap--hot' : ''}`}>
               <h3>Session-wise trend</h3>
+              <AnimeMetricAlert
+                variant="session"
+                show={sessionHasGap && sessionTrend.length > 0}
+                label="Sessions"
+                message={
+                  sessionTrend.some(s => s.value === 0)
+                    ? 'Some sessions show 0 hrs — join the next class to stay on track!'
+                    : 'You have missed session hours. Catch up in the next live session!'
+                }
+              />
               {sessionTrend.length > 0 ? (
                 <div className="panel-chart">
                   <ResponsiveContainer width="100%" height="100%">
@@ -492,18 +498,12 @@ export default function StudentDashboard({ email, onBack }: Props) {
             </article>
           </div>
 
-          <div className="bottom-info-row">
-            facing any issue with data? write to us here :
-            {' '}
-            <a href="https://wkf.ms/4aUNfBD" target="_blank" rel="noreferrer">https://wkf.ms/4aUNfBD</a>
-          </div>
-
           <div className="back-row">
             <button type="button" className="student-back-btn" onClick={onBack}>Back</button>
           </div>
         </div>
       </section>
-      <AnimeCoachNudge items={coachNudges} />
+      <AnimeHelpAssistant />
     </div>
   );
 }
