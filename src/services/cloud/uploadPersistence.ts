@@ -42,6 +42,8 @@ function parseStoredCohort(stored: {
   classWiseAttendanceColumns?: string[];
   cohortName?: string;
   fileName?: string;
+  publishedAt?: string;
+  cacheVersion?: number;
 }): CohortFetchResult | null {
   if (!stored.rawRows?.length) return null;
   const fileName = stored.fileName ?? 'workbook.xlsx';
@@ -65,7 +67,7 @@ function parseStoredCohort(stored: {
     meta: {
       fileName,
       cohortName,
-      loadedAt: new Date().toISOString(),
+      loadedAt: stored.publishedAt ?? new Date().toISOString(),
       studentCount: stored.rawRows.length,
       classWiseStudentCount: classWiseAttendance.length || undefined,
     },

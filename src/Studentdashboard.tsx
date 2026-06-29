@@ -29,6 +29,7 @@ import { normalizeExcelCell } from './services/excelCellValue';
 import {
   lookupStudentByEmail,
 } from './services/studentEmailLookup';
+import AnimeCoachNudge, { type NudgeItem } from './components/student/AnimeCoachNudge';
 import './styles/StudentDashboard.css';
 
 interface Props {
@@ -230,11 +231,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
         const done = rows.filter(a => isAccepted(a.status)).length;
         return Math.round((done / rows.length) * 100);
       })();
-  const finalScoreCols = quizCols.filter(col => col.toLowerCase().includes('final score'));
   const quizScoreCols = quizCols.filter(col => !col.toLowerCase().includes('final score'));
   const quizScores = quizScoreCols.map(col => parsePct(matched[col])).filter(v => v > 0);
   const avgQuiz = quizScores.length ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length) : 0;
-  const finalScore = finalScoreCols.length ? parsePct(matched[finalScoreCols[0]]) : 0;
 
   const programHoursLabel =
     attendedHours > 0 && totalHours > 0
@@ -289,11 +288,50 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
   const studentEmail = resolveField(matched, student.email, ['email']);
   const phone = resolveField(matched, undefined, ['phone', 'mobile', 'contact']);
+  const studentCourse = resolveField(matched, student.program, [
+    'course',
+    'program',
+    'programme',
+    'program name',
+    'degree',
+    'currently pursuing degree',
+    'currently_pursuing_degree',
+  ]);
+  const pursuingYear = resolveField(matched, undefined, [
+    'current pursuing year',
+    'pursuing year',
+    'current year',
+    'academic year',
+    'year of study',
+    'year',
+  ]);
 
   const cohort = resolveField(matched, student.cohort || payload.cohortName, ['cohort', 'batch', 'program cohort']);
   const college = resolveField(matched, student.college, ['college', 'university', 'institution']);
   const studentCategory = resolveField(matched, undefined, ['student_cat', 'student category', 'college category', 'institution category']);
-  const partnerOrg = resolveField(matched, undefined, ['partner organisation', 'partner organization', 'partner org', 'partner']);
+
+  const coachNudges: NudgeItem[] = [];
+  if (attendancePct === 0) {
+    coachNudges.push({
+      id: 'attendance',
+      label: 'Attendance',
+      message: 'Your attendance is at 0%. Join the next live session to get started!',
+    });
+  }
+  if (assignmentPct === 0) {
+    coachNudges.push({
+      id: 'assignments',
+      label: 'Assignments',
+      message: 'You have pending assignments. Complete them to boost your progress score!',
+    });
+  }
+  if (avgQuiz === 0) {
+    coachNudges.push({
+      id: 'quiz',
+      label: 'Quizzes',
+      message: 'No quiz scores yet. Attempt your quizzes when they open — they count toward your profile!',
+    });
+  }
 
   return (
     <div className="student-page">
@@ -307,6 +345,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <span>ID: {studentId}</span>
             <span>Email: {studentEmail}</span>
             <span>Phone: {phone}</span>
+            <span>Course: {studentCourse}</span>
+            <span>Year: {pursuingYear}</span>
           </div>
           <div className="header-profile-grid">
             <div className="header-field">
@@ -321,10 +361,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
               <div className="header-label">Student Category</div>
               <div className="header-value">{studentCategory}</div>
             </div>
-            <div className="header-field">
-              <div className="header-label">Partner Organisation</div>
-              <div className="header-value">{partnerOrg}</div>
-            </div>
           </div>
         </header>
 
@@ -335,7 +371,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizScores.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
             <StatCard label="Sessions" value={String(sessions || attendedSessionCount + missedSessionCount)} subtitle="Total sessions" warn={sessions === 0} />
           </div>
-          <div className="final-score-strip">Final Score (separate): <strong>{finalScore}%</strong></div>
 
           <div className="charts-grid">
             <article className="panel-card panel-large">
@@ -463,6 +498,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
           </div>
         </div>
       </section>
+      <AnimeCoachNudge items={coachNudges} />
     </div>
   );
 }

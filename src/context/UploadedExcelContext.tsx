@@ -28,10 +28,15 @@ import {
   type CohortStoredMeta,
 } from '../services/cohortRosterStore';
 
-const STORAGE_KEY = 'vs_uploaded_excel_v2';
-const LOCAL_STORAGE_KEY = 'vs_uploaded_excel_local_v2';
-const CLASS_WISE_KEY = 'vs_class_wise_attendance_v1';
-const ROSTER_INDEX_KEY = 'vs_student_roster_index_v1';
+const STORAGE_KEY = 'vs_uploaded_excel_v3';
+const LOCAL_STORAGE_KEY = 'vs_uploaded_excel_local_v3';
+const CLASS_WISE_KEY = 'vs_class_wise_attendance_v2';
+const ROSTER_INDEX_KEY = 'vs_student_roster_index_v2';
+export const ROSTER_CACHE_VERSION = '3';
+
+function isStudentPublicRoute(): boolean {
+  return typeof window !== 'undefined' && window.location.pathname.startsWith('/student-view');
+}
 
 export type UploadedExcelMeta = CohortStoredMeta;
 
@@ -231,6 +236,13 @@ function applyLoadedState(
 
 export function UploadedExcelProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState(() => {
+    if (isStudentPublicRoute()) {
+      return {
+        dataset: null as MetricsDataset | null,
+        payload: null as ParsedExcelPayload | null,
+        meta: null as UploadedExcelMeta | null,
+      };
+    }
     const stored = readStoredSync();
     if (!stored) {
       return {
@@ -270,12 +282,44 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
     bootstrapAttempted.current = true;
 
     const hydrate = async () => {
-      if (getStudentLookupCount(state.payload) > 0) return;
+      const studentRoute = isStudentPublicRoute();
+      const hasLocal = getStudentLookupCount(state.payload) > 0;
+
+      if (hasLocal && !studentRoute) return;
 
       setDatasetLoading(true);
       setDatasetError(null);
 
       try {
+        if (studentRoute && isCloudPersistenceEnabled()) {
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const result = await fetchLatestCohortPayload();
+              if (result?.payload && getStudentLookupCount(result.payload) > 0) {
+                const applied = applyLoadedState(result.payload, {
+                  ...result.meta,
+                  source: 'cloud',
+                });
+                writeStored(applied.payload, applied.meta);
+                setState(applied);
+                return;
+              }
+            } catch (e) {
+              if ((e as Error).message === 'cloud_misconfigured') {
+                setDatasetError(
+                  'Student roster cloud is not configured on the server. Admin: add SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL in Vercel, redeploy, then Apply mapping again.',
+                );
+                return;
+              }
+            }
+            if (attempt < 2) {
+              await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+            }
+          }
+        }
+
+        if (hasLocal) return;
+
         const fromIdb = await readCohortFromIndexedDb();
         if (fromIdb && getStudentLookupCount(fromIdb.payload) > 0) {
           const applied = applyLoadedState(fromIdb.payload, {
@@ -318,7 +362,9 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
         }
 
         setDatasetError(
-          'Cohort roster not found in the cloud yet. Admin: sign in, open Admin → Data Source, upload the Excel file, and click Apply mapping (once). Students can then return here — no daily upload needed.',
+          studentRoute
+            ? 'Could not load the latest roster. Check your internet connection and refresh this page.'
+            : 'Cohort roster not found in the cloud yet. Admin: sign in, open Admin → Data Source, upload the Excel file, and click Apply mapping (once). Students can then return here — no daily upload needed.',
         );
       } finally {
         setDatasetLoading(false);

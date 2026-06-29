@@ -1,0 +1,148 @@
+.anime-nudge {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 32px));
+  transform: translateY(120%) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease;
+}
+
+.anime-nudge--visible {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.anime-nudge__character {
+  position: relative;
+  width: 72px;
+  height: 88px;
+  flex-shrink: 0;
+  animation: anime-bounce 2.4s ease-in-out infinite;
+}
+
+.anime-nudge__hair {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  width: 56px;
+  height: 34px;
+  background: linear-gradient(135deg, #5b3cc4, #863bff);
+  border-radius: 28px 28px 12px 12px;
+}
+
+.anime-nudge__face {
+  position: absolute;
+  top: 18px;
+  left: 14px;
+  width: 44px;
+  height: 40px;
+  background: #ffe8d6;
+  border-radius: 50%;
+  border: 2px solid #1e2d45;
+}
+
+.anime-nudge__eye {
+  position: absolute;
+  top: 14px;
+  width: 8px;
+  height: 10px;
+  background: #1e2d45;
+  border-radius: 50%;
+  animation: anime-blink 4s infinite;
+}
+
+.anime-nudge__eye--left { left: 10px; }
+.anime-nudge__eye--right { right: 10px; }
+
+.anime-nudge__mouth {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  width: 12px;
+  height: 6px;
+  margin-left: -6px;
+  border-bottom: 2px solid #1e2d45;
+  border-radius: 0 0 12px 12px;
+}
+
+.anime-nudge__body {
+  position: absolute;
+  bottom: 0;
+  left: 10px;
+  width: 52px;
+  height: 34px;
+  background: linear-gradient(180deg, #fdcB29, #ef9f27);
+  border: 2px solid #1e2d45;
+  border-radius: 16px 16px 10px 10px;
+}
+
+.anime-nudge__bubble {
+  background: #fff;
+  border: 2px solid #1e2d45;
+  border-radius: 14px 14px 4px 14px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 24px rgba(30, 45, 69, 0.18);
+}
+
+.anime-nudge__tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #863bff;
+  margin-bottom: 4px;
+}
+
+.anime-nudge__message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1e2d45;
+  font-weight: 600;
+}
+
+.anime-nudge__dots {
+  display: flex;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.anime-nudge__dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d1d5db;
+}
+
+.anime-nudge__dots span.is-active {
+  background: #863bff;
+}
+
+@keyframes anime-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes anime-blink {
+  0%, 96%, 100% { transform: scaleY(1); }
+  98% { transform: scaleY(0.1); }
+}
+
+@media (max-width: 640px) {
+  .anime-nudge {
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+
+  .anime-nudge__character {
+    width: 60px;
+    height: 76px;
+  }
+}

@@ -43,6 +43,8 @@ export async function publishRosterDirectToStorage(
     classWiseAttendanceColumns: input.classWiseAttendanceColumns ?? [],
     cohortName: input.cohortName,
     fileName: input.fileName,
+    publishedAt: new Date().toISOString(),
+    cacheVersion: 3,
   };
 
   try {
