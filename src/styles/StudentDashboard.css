@@ -207,8 +207,15 @@
   background: var(--sd-amber);
 }
 
-.session-partial-dot__ring {
-  transition: r 0.18s ease, stroke-width 0.18s ease, filter 0.18s ease;
+.session-partial-dot__ring,
+.session-partial-dot__ring-outer {
+  transition: stroke-width 0.18s ease, filter 0.18s ease;
+}
+
+.session-partial-dot__pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: session-pulse-live 2s ease-in-out infinite;
 }
 
 .session-partial-dot__hit {
@@ -216,13 +223,33 @@
   cursor: pointer;
 }
 
-.session-partial-dot:hover .session-partial-dot__ring,
-.session-partial-dot--active .session-partial-dot__ring {
-  filter: drop-shadow(0 0 5px currentColor);
+.session-partial-dot:hover .session-partial-dot__pulse,
+.session-partial-dot--active .session-partial-dot__pulse {
+  animation-duration: 1.1s;
 }
 
-.session-partial-dot:hover .session-partial-dot__ring {
+.session-partial-dot:hover .session-partial-dot__ring,
+.session-partial-dot--active .session-partial-dot__ring {
+  filter: drop-shadow(0 0 6px currentColor);
   stroke-width: 2.75;
+}
+
+@keyframes session-pulse-live {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.42);
+    opacity: 0.22;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-partial-dot__pulse {
+    animation: none;
+    opacity: 0.65;
+  }
 }
 
 .quiz-summary {

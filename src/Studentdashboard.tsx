@@ -157,20 +157,38 @@ function SessionTrendDot(props: { cx?: number; cy?: number; payload?: { value?: 
 
   const stroke = sessionHoursIndicatorColor(v);
   const fill = sessionHoursIndicatorFill(v);
-  const ringR = active ? 8 : 6;
 
   return (
     <g className={`session-partial-dot ${active ? 'session-partial-dot--active' : ''}`}>
-      <circle cx={cx} cy={cy} r={18} fill="transparent" className="session-partial-dot__hit" />
-      <circle
-        className="session-partial-dot__ring"
-        cx={cx}
-        cy={cy}
-        r={ringR}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={active ? 3 : 2}
-      />
+      <circle cx={cx} cy={cy} r={22} fill="transparent" className="session-partial-dot__hit" />
+      <g transform={`translate(${cx}, ${cy})`}>
+        <circle
+          className="session-partial-dot__pulse"
+          r={11}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={2}
+          style={{ stroke }}
+        />
+        <circle
+          className="session-partial-dot__ring-outer"
+          r={8.5}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={1.5}
+          opacity={0.55}
+          style={{ stroke }}
+        />
+        <circle
+          className="session-partial-dot__ring"
+          r={6}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={active ? 2.75 : 2}
+          style={{ stroke }}
+        />
+        <circle className="session-partial-dot__core" r={2.5} fill={stroke} />
+      </g>
       <text x={cx} y={labelY} textAnchor="middle" fontSize={10} fontWeight={700} fill={stroke}>
         {v}
       </text>
