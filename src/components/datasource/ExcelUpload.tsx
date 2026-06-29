@@ -155,6 +155,8 @@ export default function ExcelUpload({ onDataImported }: Props) {
       rawRows?: Record<string, string>[];
       mapping?: ColumnMapping;
       discoveredColumns?: DiscoveredColumn[];
+      classWiseAttendance?: ClassWiseAttendanceEntry[];
+      classWiseAttendanceColumns?: string[];
     }) => {
       if (!canUpload) return { ok: false as const, error: 'Upload disabled' };
       return persistUploadToCloud(
@@ -172,6 +174,8 @@ export default function ExcelUpload({ onDataImported }: Props) {
           rawRows: input.rawRows,
           mapping: input.mapping,
           discoveredColumns: input.discoveredColumns,
+          classWiseAttendance: input.classWiseAttendance,
+          classWiseAttendanceColumns: input.classWiseAttendanceColumns,
         },
         cloudToken,
       );
@@ -434,6 +438,8 @@ export default function ExcelUpload({ onDataImported }: Props) {
             rawRows: parsed.rawRows,
             mapping,
             discoveredColumns: schemaColumns,
+            classWiseAttendance,
+            classWiseAttendanceColumns,
           });
           if (publish?.ok) {
             setCloudPublishStatus({

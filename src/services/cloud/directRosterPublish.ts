@@ -1,4 +1,5 @@
 import type { ColumnMapping, DiscoveredColumn } from '../../types/dynamicSchema';
+import type { ClassWiseAttendanceEntry } from '../classWiseAttendance';
 import { supabase } from '../../lib/supabase';
 import { getActiveOrganizationId } from './cloudConfig';
 
@@ -10,6 +11,8 @@ export interface RosterPublishInput {
   rawRows: Record<string, string>[];
   mapping?: ColumnMapping;
   discoveredColumns?: DiscoveredColumn[];
+  classWiseAttendance?: ClassWiseAttendanceEntry[];
+  classWiseAttendanceColumns?: string[];
 }
 
 async function gzipString(json: string): Promise<Blob> {
@@ -36,6 +39,8 @@ export async function publishRosterDirectToStorage(
     rawRows: input.rawRows,
     mapping: input.mapping ?? {},
     discoveredColumns: input.discoveredColumns ?? [],
+    classWiseAttendance: input.classWiseAttendance ?? [],
+    classWiseAttendanceColumns: input.classWiseAttendanceColumns ?? [],
     cohortName: input.cohortName,
     fileName: input.fileName,
   };

@@ -93,6 +93,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         rawRows: body.rawRows,
         mapping: body.mapping ?? {},
         discoveredColumns: body.discoveredColumns ?? [],
+        classWiseAttendance: body.classWiseAttendance ?? [],
+        classWiseAttendanceColumns: body.classWiseAttendanceColumns ?? [],
         cohortName: body.cohortName,
         fileName: body.fileName,
       };

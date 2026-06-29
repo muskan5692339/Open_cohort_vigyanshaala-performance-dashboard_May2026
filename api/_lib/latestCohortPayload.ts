@@ -40,11 +40,15 @@ async function decodeStoredPayload(
     rawRows: Record<string, string>[];
     mapping: Record<string, unknown>;
     discoveredColumns: unknown[];
+    classWiseAttendance?: unknown[];
+    classWiseAttendanceColumns?: string[];
     cohortName: string;
     fileName: string;
   };
 
   if (!stored.rawRows?.length) return null;
+
+  const classWiseAttendance = stored.classWiseAttendance ?? [];
 
   return {
     payload: {
@@ -58,12 +62,15 @@ async function decodeStoredPayload(
       headers: stored.headers ?? [],
       discoveredColumns: stored.discoveredColumns,
       mapping: stored.mapping ?? {},
+      classWiseAttendance: classWiseAttendance.length ? classWiseAttendance : undefined,
+      classWiseAttendanceColumns: stored.classWiseAttendanceColumns,
     },
     meta: {
       fileName: stored.fileName ?? upload.file_name ?? 'workbook.xlsx',
       cohortName: stored.cohortName ?? upload.cohort_name ?? 'Cohort',
       loadedAt: new Date().toISOString(),
       studentCount: stored.rawRows.length,
+      classWiseStudentCount: classWiseAttendance.length || undefined,
       source: 'cloud' as const,
     },
   };

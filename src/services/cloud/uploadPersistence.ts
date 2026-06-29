@@ -1,5 +1,6 @@
 import type { PersistUploadPayload } from '../../types/cloudTypes';
 import type { ParsedExcelPayload } from '../loadMetricsFromParsedExcel';
+import type { ClassWiseAttendanceEntry } from '../classWiseAttendance';
 import type { ColumnMapping, DiscoveredColumn } from '../../types/dynamicSchema';
 import { enqueueSyncItem, getActiveOrganizationId, isCloudPersistenceEnabled } from './cloudConfig';
 import { publishRosterDirectToStorage } from './directRosterPublish';
@@ -23,7 +24,13 @@ async function gunzipJson(blob: Blob): Promise<unknown> {
 
 type CohortFetchResult = {
   payload: ParsedExcelPayload;
-  meta: { fileName: string; cohortName: string; loadedAt: string; studentCount: number };
+  meta: {
+    fileName: string;
+    cohortName: string;
+    loadedAt: string;
+    studentCount: number;
+    classWiseStudentCount?: number;
+  };
 };
 
 function parseStoredCohort(stored: {
@@ -31,12 +38,15 @@ function parseStoredCohort(stored: {
   rawRows?: Record<string, string>[];
   mapping?: Record<string, unknown>;
   discoveredColumns?: unknown[];
+  classWiseAttendance?: ClassWiseAttendanceEntry[];
+  classWiseAttendanceColumns?: string[];
   cohortName?: string;
   fileName?: string;
 }): CohortFetchResult | null {
   if (!stored.rawRows?.length) return null;
   const fileName = stored.fileName ?? 'workbook.xlsx';
   const cohortName = stored.cohortName ?? 'Cohort';
+  const classWiseAttendance = stored.classWiseAttendance ?? [];
   return {
     payload: {
       cohortName,
@@ -49,12 +59,15 @@ function parseStoredCohort(stored: {
       headers: stored.headers ?? [],
       discoveredColumns: stored.discoveredColumns as DiscoveredColumn[] | undefined,
       mapping: (stored.mapping ?? {}) as ColumnMapping,
+      classWiseAttendance: classWiseAttendance.length ? classWiseAttendance : undefined,
+      classWiseAttendanceColumns: stored.classWiseAttendanceColumns,
     },
     meta: {
       fileName,
       cohortName,
       loadedAt: new Date().toISOString(),
       studentCount: stored.rawRows.length,
+      classWiseStudentCount: classWiseAttendance.length || undefined,
     },
   };
 }
@@ -117,6 +130,8 @@ export async function persistUploadToCloud(
     rawRows: input.rawRows,
     mapping: input.mapping,
     discoveredColumns: input.discoveredColumns,
+    classWiseAttendance: input.classWiseAttendance,
+    classWiseAttendanceColumns: input.classWiseAttendanceColumns,
     existingUploadId: input.existingUploadId,
     syncRunId: input.syncRunId,
   };
@@ -130,6 +145,8 @@ export async function persistUploadToCloud(
       rawRows: body.rawRows,
       mapping: body.mapping as ColumnMapping | undefined,
       discoveredColumns: body.discoveredColumns as DiscoveredColumn[] | undefined,
+      classWiseAttendance: body.classWiseAttendance as ClassWiseAttendanceEntry[] | undefined,
+      classWiseAttendanceColumns: body.classWiseAttendanceColumns,
     });
     if (direct.ok) {
       try {
