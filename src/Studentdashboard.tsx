@@ -424,7 +424,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
             onRefresh={() => { void refreshRoster(); }}
           />
           <div className="stat-row">
-            <StatCard label="Attendance" value={`${attendancePct.toFixed(1)}%`} subtitle={`${programHoursLabel} · ${attendedSessionCount}/${sessions || classWise?.sessions.length || 0} sessions`} warn={attendancePct === 0} />
+            <StatCard label="Attendance" value={`${attendancePct.toFixed(1)}%`} subtitle={programHoursLabel} warn={attendancePct === 0} />
             <div className={`metric-alert-wrap ${assignmentPct === 0 ? 'metric-alert-wrap--hot' : ''}`}>
               <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={`${assignmentRows.length} tracked items`} warn={assignmentPct === 0} />
               <AnimeMetricAlert
