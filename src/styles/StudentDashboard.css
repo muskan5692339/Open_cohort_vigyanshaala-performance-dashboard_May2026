@@ -231,6 +231,24 @@
   font-weight: 600;
 }
 
+.session-partial-dot__ring {
+  transition: r 0.18s ease, stroke-width 0.18s ease, filter 0.18s ease;
+}
+
+.session-partial-dot__hit {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.session-partial-dot:hover .session-partial-dot__ring,
+.session-partial-dot--active .session-partial-dot__ring {
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+.session-partial-dot:hover .session-partial-dot__ring {
+  stroke-width: 2.75;
+}
+
 .quiz-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -25,6 +25,7 @@ import {
   getClassWiseAttendanceForStudent,
   parseProgramHours,
   sessionHoursIndicatorColor,
+  sessionHoursIndicatorFill,
 } from './services/classWiseAttendance';
 import { normalizeExcelCell } from './services/excelCellValue';
 import {
@@ -136,6 +137,45 @@ function studentToDisplayRow(student: {
     'Assignment %': student.imported_assignment_pct != null ? String(student.imported_assignment_pct) : '',
     'Quiz Score': student.imported_quiz_pct != null ? String(student.imported_quiz_pct) : '',
   };
+}
+
+function SessionTrendDot(props: { cx?: number; cy?: number; payload?: { value?: number }; active?: boolean }) {
+  const { cx, cy, payload, active } = props;
+  const v = Number(payload?.value ?? 0);
+  if (cx == null || cy == null) return null;
+
+  const labelY = cy - 16;
+
+  if (v >= 1) {
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={4} fill="#22c55e" stroke="#1e2d45" strokeWidth={1.5} />
+        <text x={cx} y={labelY} textAnchor="middle" fontSize={10} fill="var(--sd-text-muted)">{v}</text>
+      </g>
+    );
+  }
+
+  const stroke = sessionHoursIndicatorColor(v);
+  const fill = sessionHoursIndicatorFill(v);
+  const ringR = active ? 8 : 6;
+
+  return (
+    <g className={`session-partial-dot ${active ? 'session-partial-dot--active' : ''}`}>
+      <circle cx={cx} cy={cy} r={18} fill="transparent" className="session-partial-dot__hit" />
+      <circle
+        className="session-partial-dot__ring"
+        cx={cx}
+        cy={cy}
+        r={ringR}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={active ? 3 : 2}
+      />
+      <text x={cx} y={labelY} textAnchor="middle" fontSize={10} fontWeight={700} fill={stroke}>
+        {v}
+      </text>
+    </g>
+  );
 }
 
 export default function StudentDashboard({ email, onBack }: Props) {
@@ -479,29 +519,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
                         dataKey="value"
                         stroke="var(--sd-primary)"
                         strokeWidth={2.5}
-                        dot={(props) => {
-                          const { cx, cy, payload } = props;
-                          const v = Number((payload as { value?: number })?.value ?? 0);
-                          if (cx == null || cy == null) return null;
-                          if (v >= 1) {
-                            return <circle cx={cx} cy={cy} r={4} fill="#22c55e" stroke="#1e2d45" strokeWidth={1.5} />;
-                          }
-                          const fill = sessionHoursIndicatorColor(v);
-                          return (
-                            <circle
-                              cx={cx}
-                              cy={cy}
-                              r={11}
-                              fill={fill}
-                              stroke="#1e2d45"
-                              strokeWidth={2}
-                            />
-                          );
-                        }}
-                        activeDot={{ r: 13, strokeWidth: 2 }}
-                      >
-                        <LabelList dataKey="value" position="top" fontSize={10} fill="var(--sd-text-muted)" />
-                      </Line>
+                        dot={(props) => <SessionTrendDot {...props} />}
+                        activeDot={(props) => <SessionTrendDot {...props} active />}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>

@@ -261,6 +261,14 @@ export function sessionHoursIndicatorColor(hours: number): string {
   return '#ef4444';
 }
 
+export function sessionHoursIndicatorFill(hours: number): string {
+  const stroke = sessionHoursIndicatorColor(hours);
+  const rgb = stroke.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (rgb) return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, 0.22)`;
+  if (stroke.startsWith('#') && stroke.length === 7) return `${stroke}38`;
+  return 'rgba(239, 68, 68, 0.22)';
+}
+
 function mixHexColors(a: string, b: string, t: number): string {
   const parse = (hex: string) => {
     const n = hex.replace('#', '');
