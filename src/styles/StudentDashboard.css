@@ -51,7 +51,10 @@
   background: var(--sd-header-bg);
   color: #fff;
   padding: 20px 28px;
-  border-radius: 12px 12px 0 0;
+}
+
+.student-notice-strip {
+  padding: 14px 14px 0;
 }
 
 .student-header-top {

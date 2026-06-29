@@ -33,7 +33,6 @@ import {
 } from './services/studentEmailLookup';
 import AnimeMetricAlert from './components/student/AnimeMetricAlert';
 import AnimeHelpAssistant from './components/student/AnimeHelpAssistant';
-import RosterSyncStatus from './components/student/RosterSyncStatus';
 import WeeklyUpdateNotice from './components/student/WeeklyUpdateNotice';
 import './components/student/AnimeMetricAlert.css';
 import './styles/StudentDashboard.css';
@@ -199,15 +198,7 @@ function SessionTrendDot(props: { cx?: number; cy?: number; payload?: { value?: 
 }
 
 export default function StudentDashboard({ email, onBack }: Props) {
-  const {
-    payload,
-    meta,
-    datasetLoading,
-    rosterRefreshing,
-    rosterIsStale,
-    rosterIncomplete,
-    refreshRoster,
-  } = useUploadedExcel();
+  const { payload } = useUploadedExcel();
   const mapping = (payload?.mapping ?? {}) as ColumnMapping;
 
   const lookup = useMemo(() => lookupStudentByEmail(payload, email), [payload, email]);
@@ -387,6 +378,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
   return (
     <div className="student-page">
       <section className="student-shell">
+        <div className="student-notice-strip">
+          <WeeklyUpdateNotice />
+        </div>
         <header className="student-header">
           <div className="student-header-top">
             <h1 className="student-name">{studentName}</h1>
@@ -416,18 +410,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
         </header>
 
         <div className="section-body">
-          <WeeklyUpdateNotice />
-          <RosterSyncStatus
-            compact
-            publishedAt={meta?.publishedAt ?? meta?.loadedAt ?? null}
-            fetchedAt={meta?.fetchedAt ?? null}
-            loading={datasetLoading}
-            refreshing={rosterRefreshing}
-            isStale={rosterIsStale}
-            incomplete={rosterIncomplete}
-            studentCount={meta?.studentCount ?? 0}
-            onRefresh={() => { void refreshRoster(); }}
-          />
           <div className="stat-row">
             <StatCard label="Attendance" value={`${attendancePct.toFixed(1)}%`} subtitle={programHoursLabel} warn={attendancePct === 0} />
             <div className={`metric-alert-wrap ${assignmentPct === 0 ? 'metric-alert-wrap--hot' : ''}`}>
