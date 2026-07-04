@@ -691,7 +691,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                               position="top"
                               fontSize={10}
                               fill="var(--sd-text-muted)"
-                              formatter={(value: number) => `${Math.round(value)}%`}
+                              formatter={(value) => `${Math.round(Number(value ?? 0))}%`}
                             />
                           </Bar>
                         </BarChart>
