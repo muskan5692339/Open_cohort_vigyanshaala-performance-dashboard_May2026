@@ -381,28 +381,6 @@ async function writeSyncLog(
 /* ── Main handler ───────────────────────────────────────── */
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.query.job === 'reminders') {
-    if (req.method !== 'GET' && req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
-    const { isAuthorizedCron } = await import('./_lib/cronAuth');
-    if (!isAuthorizedCron(req)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    try {
-      const { createServiceClient } = await import('./_lib/serviceClient');
-      const { runWeeklyStudentReminders } = await import('./_lib/runStudentReminders');
-      const slot = typeof req.query.slot === 'string' ? req.query.slot : undefined;
-      const db = createServiceClient();
-      const result = await runWeeklyStudentReminders(db, slot);
-      const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
-      return res.status(status).json({ ok: status === 200, ...result });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return res.status(500).json({ ok: false, error: message });
-    }
-  }
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

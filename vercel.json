@@ -28,12 +28,15 @@
       "schedule": "0 2 * * 1"
     },
     {
-      "path": "/api/sync?job=reminders",
+      "path": "/api/list-uploads?mode=student-reminders",
       "schedule": "0 4,13 * * 0"
     }
   ],
   "functions": {
     "api/sync.ts": {
+      "maxDuration": 120
+    },
+    "api/list-uploads.ts": {
       "maxDuration": 120
     }
   }

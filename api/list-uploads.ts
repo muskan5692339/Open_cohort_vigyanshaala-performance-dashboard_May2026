@@ -2,17 +2,42 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './_lib/assertOrgAccess';
 import { createServiceClient } from './_lib/serviceClient';
 import { fetchLatestCohortPayloadForOrg, fetchLatestCohortPayloadAny } from './_lib/latestCohortPayload';
+import { isAuthorizedCron } from './_lib/cronAuth';
+import { runWeeklyStudentReminders } from './_lib/runStudentReminders';
 
 const ROUTE = '/api/list-uploads';
 
 /** Public student roster bootstrap — no auth, latest persisted workbook for org. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const mode = String(req.query.mode ?? '');
+
+  if (mode === 'student-reminders') {
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    if (!isAuthorizedCron(req)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const db = createServiceClient();
+      const slot = typeof req.query.slot === 'string' ? req.query.slot : undefined;
+      const result = await runWeeklyStudentReminders(db, slot);
+      const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
+      return res.status(status).json({ ok: status === 200, ...result });
+    } catch (e) {
+      const message = (e as Error).message;
+      console.error(`[${ROUTE}?mode=student-reminders]`, e);
+      if (message.includes('Missing Supabase')) {
+        return res.status(503).json({ error: message, code: 'misconfigured' });
+      }
+      return res.status(500).json({ ok: false, error: message });
+    }
+  }
+
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const orgId = req.query.orgId as string;
   if (!orgId) return res.status(400).json({ error: 'orgId required', code: 'bad_request' });
-
-  const mode = String(req.query.mode ?? '');
 
   if (mode === 'latest-payload') {
     try {

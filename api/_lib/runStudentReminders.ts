@@ -9,7 +9,7 @@ import {
   type ReminderSlot,
   type ReminderThresholds,
   type StudentReminderSnapshot,
-} from '../../src/services/studentReminderMetrics';
+} from './studentReminderMetricsServer';
 
 export interface ReminderRunResult {
   weekKey: string;
