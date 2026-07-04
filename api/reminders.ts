@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createServiceClient } from './_lib/serviceClient';
+import { runWeeklyStudentReminders } from './_lib/runStudentReminders';
 
 function isAuthorized(req: VercelRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim();
@@ -24,8 +26,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { createServiceClient } = await import('./_lib/serviceClient');
-    const { runWeeklyStudentReminders } = await import('./_lib/runStudentReminders');
     const db = createServiceClient();
     const slot = typeof req.query.slot === 'string' ? req.query.slot : undefined;
     const result = await runWeeklyStudentReminders(db, slot);
