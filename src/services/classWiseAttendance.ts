@@ -381,12 +381,18 @@ export function buildPreRecordedTrendFromClassWise(
   entry: ClassWiseAttendanceEntry,
 ): SessionTrendPoint[] {
   return (entry.preRecorded ?? []).map(s => {
-    const maxCredit = s.maxCreditHours ?? 0;
+    const durationMin = s.durationMin ?? parseDurationFromPreRecordedHeader(s.key);
+    const maxCredit =
+      s.maxCreditHours && s.maxCreditHours > 0
+        ? s.maxCreditHours
+        : durationMin && durationMin > 0
+          ? Math.round((durationMin / 60) * 1000) / 1000
+          : 0;
     return {
       name: preRecordedChartLabel(s.key),
       value: preRecordedCompletionPct(s.hours, maxCredit),
       hoursCredit: s.hours,
-      durationMin: s.durationMin ?? null,
+      durationMin,
     };
   });
 }
