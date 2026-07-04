@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { fetchLatestCohortPayloadAny } from './latestCohortPayload.js';
-import { sendGmailMessage } from './gmailSender.js';
+import { fetchLatestCohortPayloadAny } from './latestCohortPayload';
 import {
   buildReminderEmail,
   DEFAULT_REMINDER_THRESHOLDS,
@@ -10,7 +9,7 @@ import {
   type ReminderSlot,
   type ReminderThresholds,
   type StudentReminderSnapshot,
-} from '../../src/services/studentReminderMetrics.js';
+} from '../../src/services/studentReminderMetrics';
 
 export interface ReminderRunResult {
   weekKey: string;
@@ -116,6 +115,7 @@ export async function runWeeklyStudentReminders(
 
       const mail = buildReminderEmail(snapshot, dashboardUrl);
       if (!dryRun) {
+        const { sendGmailMessage } = await import('./gmailSender');
         await sendGmailMessage({ to: snapshot.email, ...mail });
         await logReminderSent(db, snapshot, weekKey, cohortName);
       }
