@@ -261,6 +261,18 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+export type ReminderSlot = 'morning' | 'evening';
+
+export function resolveReminderSlot(explicit?: string, date = new Date()): ReminderSlot {
+  if (explicit === 'morning' || explicit === 'evening') return explicit;
+  // Cron fires at 04:00 UTC (9:30 IST) and 13:00 UTC (18:30 IST) on Sundays.
+  return date.getUTCHours() < 10 ? 'morning' : 'evening';
+}
+
+export function reminderLogKey(slot: ReminderSlot, date = new Date()): string {
+  return `${isoWeekKey(date)}-${slot}`;
+}
+
 export function isoWeekKey(date = new Date()): string {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));

@@ -4,14 +4,17 @@ import { sendGmailMessage } from './gmailSender.js';
 import {
   buildReminderEmail,
   DEFAULT_REMINDER_THRESHOLDS,
-  isoWeekKey,
   listStudentsNeedingReminders,
+  reminderLogKey,
+  resolveReminderSlot,
+  type ReminderSlot,
   type ReminderThresholds,
   type StudentReminderSnapshot,
 } from '../../src/services/studentReminderMetrics.js';
 
 export interface ReminderRunResult {
   weekKey: string;
+  slot: ReminderSlot;
   cohortName: string;
   candidates: number;
   sent: number;
@@ -68,8 +71,12 @@ async function logReminderSent(
   if (error && error.code !== '42P01') throw new Error(error.message);
 }
 
-export async function runWeeklyStudentReminders(db: SupabaseClient): Promise<ReminderRunResult> {
-  const weekKey = isoWeekKey();
+export async function runWeeklyStudentReminders(
+  db: SupabaseClient,
+  slotInput?: string,
+): Promise<ReminderRunResult> {
+  const slot = resolveReminderSlot(slotInput);
+  const weekKey = reminderLogKey(slot);
   const dryRun = process.env.REMINDER_DRY_RUN === 'true';
   const dashboardUrl =
     process.env.STUDENT_DASHBOARD_URL?.trim()
@@ -79,6 +86,7 @@ export async function runWeeklyStudentReminders(db: SupabaseClient): Promise<Rem
   if (!loaded?.payload) {
     return {
       weekKey,
+      slot,
       cohortName: '—',
       candidates: 0,
       sent: 0,
@@ -123,6 +131,7 @@ export async function runWeeklyStudentReminders(db: SupabaseClient): Promise<Rem
 
   return {
     weekKey,
+    slot,
     cohortName,
     candidates: snapshots.length,
     sent,

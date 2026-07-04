@@ -393,7 +393,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     try {
       const db = createServiceClient();
-      const result = await runWeeklyStudentReminders(db);
+      const slot = typeof req.query.slot === 'string' ? req.query.slot : undefined;
+      const result = await runWeeklyStudentReminders(db, slot);
       const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
       return res.status(status).json({ ok: status === 200, ...result });
     } catch (err) {
