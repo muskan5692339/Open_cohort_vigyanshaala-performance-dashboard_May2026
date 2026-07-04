@@ -6,6 +6,9 @@ import {
   parseAssignments,
   parseQuiz,
 } from '../src/services/excelParser';
+import { isAuthorizedCron } from './_lib/cronAuth.js';
+import { createServiceClient } from './_lib/serviceClient.js';
+import { runWeeklyStudentReminders } from './_lib/runStudentReminders.js';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -381,6 +384,24 @@ async function writeSyncLog(
 /* ── Main handler ───────────────────────────────────────── */
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.query.job === 'reminders') {
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    if (!isAuthorizedCron(req)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const db = createServiceClient();
+      const result = await runWeeklyStudentReminders(db);
+      const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
+      return res.status(status).json({ ok: status === 200, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return res.status(500).json({ ok: false, error: message });
+    }
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -492,4 +513,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-export const config = { maxDuration: 60 };
+export const config = { maxDuration: 120 };
