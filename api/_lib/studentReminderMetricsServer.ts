@@ -1,10 +1,34 @@
 /**
- * Server-only reminder metrics (no Vite import.meta / browser deps).
- * Kept in api/_lib so Vercel serverless bundles reliably.
+ * Server-only reminder metrics (no imports from src/ — Vercel-safe bundle).
  */
-import type { ColumnMapping } from '../../src/types/dynamicSchema';
-import type { ParsedExcelPayload } from '../../src/services/loadMetricsFromParsedExcel';
-import type { ParsedStudent } from '../../src/types/syncTypes';
+
+interface ParsedStudent {
+  student_id?: string;
+  name?: string;
+  email: string;
+  imported_attendance_pct?: number | null;
+  imported_quiz_pct?: number | null;
+}
+
+interface ParsedAssignment {
+  student_email: string;
+  assignment_name: string;
+  status: string;
+}
+
+export interface ReminderPayload {
+  cohortName: string;
+  fileName: string;
+  students?: ParsedStudent[];
+  attendance?: unknown[];
+  assignments?: ParsedAssignment[];
+  quiz?: unknown[];
+  rawRows?: Record<string, string>[];
+  headers?: string[];
+  mapping?: Record<string, { mappedRole?: string; mappedType?: string }>;
+  classWiseAttendance?: ClassWiseEntry[];
+  classWiseAttendanceColumns?: string[];
+}
 
 type ClassWiseSession = { key: string; hours: number };
 type ClassWiseEntry = {
@@ -40,7 +64,7 @@ function cellText(v: unknown): string {
   return normalizeStudentEmail(raw) || raw;
 }
 
-function columnNamesFromPayload(payload: ParsedExcelPayload): string[] {
+function columnNamesFromPayload(payload: ReminderPayload): string[] {
   const mapping = payload.mapping ?? {};
   const fromRowKeys = payload.rawRows?.length ? Object.keys(payload.rawRows[0]) : [];
   return [...new Set([...Object.keys(mapping), ...(payload.headers ?? []), ...fromRowKeys])];
@@ -51,7 +75,7 @@ function isEmailHeaderName(header: string): boolean {
   return l === 'email' || l.includes('email') || l.includes('mail id') || l.includes('mailid');
 }
 
-function resolveEmailColumnKey(payload: ParsedExcelPayload): string | null {
+function resolveEmailColumnKey(payload: ReminderPayload): string | null {
   const names = columnNamesFromPayload(payload);
   const exact = names.find(n => n.toLowerCase().replace(/^\uFEFF/, '').trim() === 'email');
   if (exact) return exact;
@@ -61,7 +85,7 @@ function resolveEmailColumnKey(payload: ParsedExcelPayload): string | null {
   return names.find(n => isEmailHeaderName(n)) ?? null;
 }
 
-function getAllStudentEmails(payload: ParsedExcelPayload | null | undefined): string[] {
+function getAllStudentEmails(payload: ReminderPayload | null | undefined): string[] {
   if (!payload) return [];
   const byNormalized = new Map<string, string>();
   for (const student of payload.students ?? []) {
@@ -90,7 +114,7 @@ function getAllStudentEmails(payload: ParsedExcelPayload | null | undefined): st
   return [...byNormalized.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
-function buildStudentFromRow(row: Record<string, unknown>, payload: ParsedExcelPayload, email: string): ParsedStudent {
+function buildStudentFromRow(row: Record<string, unknown>, payload: ReminderPayload, email: string): ParsedStudent {
   const name = Object.entries(row).find(([k]) => /name/i.test(k))?.[1];
   return {
     student_id: normalizeStudentEmail(email),
@@ -104,7 +128,7 @@ function buildStudentFromRow(row: Record<string, unknown>, payload: ParsedExcelP
   };
 }
 
-function enrichPayloadForStudentLookup(payload: ParsedExcelPayload): ParsedExcelPayload {
+function enrichPayloadForStudentLookup(payload: ReminderPayload): ReminderPayload {
   const students = [...(payload.students ?? [])];
   const seen = new Set(students.map(s => normalizeStudentEmail(s.email)).filter(Boolean));
   for (const row of payload.rawRows ?? []) {
@@ -142,7 +166,7 @@ function enrichPayloadForStudentLookup(payload: ParsedExcelPayload): ParsedExcel
   return { ...payload, students };
 }
 
-function findStudentRawRow(payload: ParsedExcelPayload, email: string): Record<string, unknown> | null {
+function findStudentRawRow(payload: ReminderPayload, email: string): Record<string, unknown> | null {
   const key = normalizeStudentEmail(email);
   const col = resolveEmailColumnKey(payload);
   for (const row of payload.rawRows ?? []) {
@@ -154,7 +178,7 @@ function findStudentRawRow(payload: ParsedExcelPayload, email: string): Record<s
   return null;
 }
 
-function lookupStudentByEmail(payload: ParsedExcelPayload | null | undefined, email: string) {
+function lookupStudentByEmail(payload: ReminderPayload | null | undefined, email: string) {
   if (!payload) return null;
   const key = normalizeStudentEmail(email);
   let student = payload.students?.find(s => normalizeStudentEmail(s.email) === key);
@@ -166,7 +190,7 @@ function lookupStudentByEmail(payload: ParsedExcelPayload | null | undefined, em
   return { student, rawRow: findStudentRawRow(payload, email) };
 }
 
-function getClassWiseAttendanceForStudent(payload: ParsedExcelPayload | null | undefined, email: string): ClassWiseEntry | undefined {
+function getClassWiseAttendanceForStudent(payload: ReminderPayload | null | undefined, email: string): ClassWiseEntry | undefined {
   if (!payload?.classWiseAttendance?.length) return undefined;
   const key = normalizeStudentEmail(email);
   return payload.classWiseAttendance.find(e => normalizeStudentEmail(e.student_email) === key);
@@ -279,14 +303,15 @@ function resolveField(row: Record<string, unknown>, fallback: string | undefined
 }
 
 function getMappedColumns(
-  mapping: ColumnMapping,
-  predicate: (entry: ColumnMapping[string], col: string) => boolean,
+  mapping: ReminderPayload['mapping'],
+  predicate: (entry: NonNullable<ReminderPayload['mapping']>[string], col: string) => boolean,
 ): string[] {
+  if (!mapping) return [];
   return Object.keys(mapping).filter(col => predicate(mapping[col], col));
 }
 
 export function buildStudentReminderSnapshot(
-  payload: ParsedExcelPayload,
+  payload: ReminderPayload,
   email: string,
   thresholds: ReminderThresholds = DEFAULT_REMINDER_THRESHOLDS,
 ): StudentReminderSnapshot | null {
@@ -295,7 +320,7 @@ export function buildStudentReminderSnapshot(
   if (!lookup?.student) return null;
 
   const matched = lookup.rawRow ?? {};
-  const mapping = (enriched.mapping ?? {}) as ColumnMapping;
+  const mapping = enriched.mapping ?? {};
   const student = lookup.student;
   const classWise = getClassWiseAttendanceForStudent(enriched, email);
 
@@ -389,7 +414,7 @@ export function buildStudentReminderSnapshot(
 }
 
 export function listStudentsNeedingReminders(
-  payload: ParsedExcelPayload,
+  payload: ReminderPayload,
   thresholds: ReminderThresholds = DEFAULT_REMINDER_THRESHOLDS,
 ): StudentReminderSnapshot[] {
   const enriched = enrichPayloadForStudentLookup(payload);

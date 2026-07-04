@@ -2,8 +2,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './_lib/assertOrgAccess';
 import { createServiceClient } from './_lib/serviceClient';
 import { fetchLatestCohortPayloadForOrg, fetchLatestCohortPayloadAny } from './_lib/latestCohortPayload';
-import { isAuthorizedCron } from './_lib/cronAuth';
-import { runWeeklyStudentReminders } from './_lib/runStudentReminders';
 
 const ROUTE = '/api/list-uploads';
 
@@ -15,10 +13,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'GET' && req.method !== 'POST') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
-    if (!isAuthorizedCron(req)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
     try {
+      const { isAuthorizedCron } = await import('./_lib/cronAuth');
+      if (!isAuthorizedCron(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      if (req.query.slot === 'ping') {
+        return res.status(200).json({
+          ok: true,
+          ping: true,
+          dryRun: process.env.REMINDER_DRY_RUN === 'true',
+        });
+      }
+      const { runWeeklyStudentReminders } = await import('./_lib/runStudentReminders');
       const db = createServiceClient();
       const slot = typeof req.query.slot === 'string' ? req.query.slot : undefined;
       const result = await runWeeklyStudentReminders(db, slot);

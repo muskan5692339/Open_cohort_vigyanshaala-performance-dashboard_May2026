@@ -9,6 +9,7 @@ import {
   type ReminderSlot,
   type ReminderThresholds,
   type StudentReminderSnapshot,
+  type ReminderPayload,
 } from './studentReminderMetricsServer';
 
 export interface ReminderRunResult {
@@ -97,7 +98,7 @@ export async function runWeeklyStudentReminders(
   }
 
   const thresholds = reminderThresholdsFromEnv();
-  const snapshots = listStudentsNeedingReminders(loaded.payload, thresholds);
+  const snapshots = listStudentsNeedingReminders(loaded.payload as ReminderPayload, thresholds);
   const cohortName = loaded.meta.cohortName ?? loaded.payload.cohortName ?? 'Cohort';
 
   let sent = 0;
