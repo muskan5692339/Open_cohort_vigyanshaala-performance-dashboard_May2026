@@ -6,9 +6,6 @@ import {
   parseAssignments,
   parseQuiz,
 } from '../src/services/excelParser';
-import { isAuthorizedCron } from './_lib/cronAuth.js';
-import { createServiceClient } from './_lib/serviceClient.js';
-import { runWeeklyStudentReminders } from './_lib/runStudentReminders.js';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -388,12 +385,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'GET' && req.method !== 'POST') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
+    const { isAuthorizedCron } = await import('./_lib/cronAuth.js');
     if (!isAuthorizedCron(req)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     try {
-      const db = createServiceClient();
+      const { createServiceClient } = await import('./_lib/serviceClient.js');
+      const { runWeeklyStudentReminders } = await import('./_lib/runStudentReminders.js');
       const slot = typeof req.query.slot === 'string' ? req.query.slot : undefined;
+      const db = createServiceClient();
       const result = await runWeeklyStudentReminders(db, slot);
       const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
       return res.status(status).json({ ok: status === 200, ...result });
