@@ -252,6 +252,14 @@
   white-space: nowrap;
 }
 
+.session-trend-explainer {
+  flex: 1 1 100%;
+  margin-left: 0;
+  white-space: normal;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .session-trend-scroll {
   height: 100%;
 }

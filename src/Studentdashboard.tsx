@@ -146,24 +146,36 @@ function studentToDisplayRow(student: {
   };
 }
 
-function SessionTrendDot(props: { cx?: number; cy?: number; payload?: { value?: number }; active?: boolean }) {
-  const { cx, cy, payload, active } = props;
-  const v = Number(payload?.value ?? 0);
+function SessionTrendDot(props: {
+  cx?: number;
+  cy?: number;
+  payload?: { value?: number };
+  active?: boolean;
+  scale?: 'hours' | 'percent';
+}) {
+  const { cx, cy, payload, active, scale = 'hours' } = props;
+  const raw = Number(payload?.value ?? 0);
   if (cx == null || cy == null) return null;
 
   const labelY = cy - 16;
+  const isPercent = scale === 'percent';
+  const colorInput = isPercent ? raw / 100 : raw;
+  const isFull = isPercent ? raw >= 99.5 : raw >= 1;
+  const label = isPercent
+    ? (raw >= 99.5 ? '100%' : `${Math.round(raw)}%`)
+    : String(raw);
 
-  if (v >= 1) {
+  if (isFull) {
     return (
       <g>
         <circle cx={cx} cy={cy} r={4} fill="#22c55e" stroke="#1e2d45" strokeWidth={1.5} />
-        <text x={cx} y={labelY} textAnchor="middle" fontSize={10} fill="var(--sd-text-muted)">{v}</text>
+        <text x={cx} y={labelY} textAnchor="middle" fontSize={10} fill="var(--sd-text-muted)">{label}</text>
       </g>
     );
   }
 
-  const stroke = sessionHoursIndicatorColor(v);
-  const fill = sessionHoursIndicatorFill(v);
+  const stroke = sessionHoursIndicatorColor(colorInput);
+  const fill = sessionHoursIndicatorFill(colorInput);
 
   return (
     <g className={`session-partial-dot ${active ? 'session-partial-dot--active' : ''}`}>
@@ -197,7 +209,7 @@ function SessionTrendDot(props: { cx?: number; cy?: number; payload?: { value?: 
         <circle className="session-partial-dot__core" r={2.5} fill={stroke} />
       </g>
       <text x={cx} y={labelY} textAnchor="middle" fontSize={10} fontWeight={700} fill={stroke}>
-        {v}
+        {label}
       </text>
     </g>
   );
@@ -398,10 +410,13 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionTrendMax = activeSessionTrend.length
     ? Math.max(1, ...activeSessionTrend.map(p => p.value))
     : 1;
-  const sessionTrendYMax = Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
+  const sessionTrendYMax = sessionChartSeries === 'prerecorded'
+    ? 100
+    : Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
+  const sessionTrendYLabel = sessionChartSeries === 'prerecorded' ? 'Completion %' : 'Hours';
+  const sessionTrendDotScale = sessionChartSeries === 'prerecorded' ? 'percent' as const : 'hours' as const;
   const sessionTrendChartWidth = Math.max(activeSessionTrend.length * SESSION_TREND_SLOT_WIDTH, 320);
   const sessionTrendNeedsScroll = activeSessionTrend.length > 4;
-  const sessionTrendTooltipLabel = sessionChartSeries === 'live' ? 'Attended' : 'Watched';
   const sessionTrendScrollHint = sessionChartSeries === 'live'
     ? `${activeSessionTrend.length} classes · scroll sideways →`
     : `${activeSessionTrend.length} videos · scroll sideways →`;
@@ -595,6 +610,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
                       Pre-recorded videos
                     </button>
                   </div>
+                  {sessionChartSeries === 'prerecorded' && (
+                    <span className="session-trend-scroll-hint session-trend-explainer">
+                      Short videos show % watched (100% = full video). Hover for program credit in hours.
+                    </span>
+                  )}
                   {activeSessionTrend.length > 0 && sessionTrendNeedsScroll && (
                     <>
                       <div className="session-trend-view-toggle">
@@ -649,16 +669,27 @@ export default function StudentDashboard({ email, onBack }: Props) {
                           domain={[0, sessionTrendYMax]}
                           stroke="var(--sd-text-muted)"
                           fontSize={11}
-                          label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                          label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
                         />
-                        <Tooltip formatter={(value) => [`${Number(value ?? 0)} hrs`, sessionTrendTooltipLabel]} />
+                        <Tooltip
+                          formatter={(value, _name, item) => {
+                            const point = (item?.payload ?? {}) as { hoursCredit?: number; durationMin?: number | null; name?: string };
+                            const label = sessionChartSeries === 'prerecorded' ? 'Pre-recorded' : 'Live class';
+                            const hrs = point.hoursCredit ?? 0;
+                            const dur = point.durationMin ? `${point.durationMin} min · ` : '';
+                            const text = sessionChartSeries === 'prerecorded'
+                              ? `${Math.round(Number(value ?? 0))}% watched · ${dur}${hrs.toFixed(2)} hr credit`
+                              : `${Number(value ?? 0).toFixed(2)} hrs`;
+                            return [text, label];
+                          }}
+                        />
                         <Line
                           type="monotone"
                           dataKey="value"
                           stroke="var(--sd-primary)"
                           strokeWidth={2.5}
-                          dot={(props) => <SessionTrendDot {...props} />}
-                          activeDot={(props) => <SessionTrendDot {...props} active />}
+                          dot={(props) => <SessionTrendDot {...props} scale={sessionTrendDotScale} />}
+                          activeDot={(props) => <SessionTrendDot {...props} scale={sessionTrendDotScale} active />}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -667,7 +698,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
               ) : hasAnySessionTrend ? (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
                   No pre-recorded video data for this student yet. Re-upload the workbook with
-                  {' '}&quot;Pre-recorded&quot; columns in the Class-wise Attendance sheet.
+                  {' '}&quot;Pre-recorded&quot; columns in the Class-wise Attendance sheet
+                  {' '}(include duration in header, e.g. Pre-rec WK3 (7 min)).
                 </p>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>

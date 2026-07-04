@@ -5,7 +5,18 @@ import { readExcelRow, type ExcelReadableRow } from './excelCellValue';
 export interface ClassWiseSession {
   key: string;
   hours: number;
+  /** Parsed from header, e.g. "Pre-rec WK3 (7 min)". */
+  durationMin?: number | null;
+  /** Max program credit when fully watched (= durationMin ÷ 60). */
+  maxCreditHours?: number;
 }
+
+export type SessionTrendPoint = {
+  name: string;
+  value: number;
+  hoursCredit?: number;
+  durationMin?: number | null;
+};
 
 export interface ClassWiseAttendanceEntry {
   student_email: string;
@@ -51,6 +62,78 @@ export function isPreRecordedColumnHeader(header: string): boolean {
   const h = normalizeHeader(header);
   if (!h) return false;
   return /pre[-\s]?recorded/.test(h) || /^prerecorded/.test(h);
+}
+
+/** Parse video length from header text, e.g. "Pre-recorded WK3 (7 min)" or "Pre-rec WK3 (02:21 min)". */
+export function parseDurationFromPreRecordedHeader(header: string): number | null {
+  const h = (header ?? '').replace(/^\uFEFF/, '').trim();
+
+  const mmssPatterns = [
+    /\(\s*(\d{1,3}):(\d{2})\s*(?:min(?:ute)?s?)?\s*\)/i,
+    /\[\s*(\d{1,3}):(\d{2})\s*(?:min(?:ute)?s?)?\s*\]/i,
+    /[-–—]\s*(\d{1,3}):(\d{2})\s*(?:min(?:ute)?s?)?\s*$/i,
+    /(\d{1,3}):(\d{2})\s*(?:min(?:ute)?s?)?\s*$/i,
+  ];
+  for (const pattern of mmssPatterns) {
+    const match = h.match(pattern);
+    if (match) {
+      const mins = parseInt(match[1], 10);
+      const secs = parseInt(match[2], 10);
+      if (Number.isFinite(mins) && Number.isFinite(secs) && secs >= 0 && secs < 60) {
+        const total = mins + secs / 60;
+        if (total > 0) return Math.round(total * 1000) / 1000;
+      }
+    }
+  }
+
+  const minutePatterns = [
+    /\(\s*(\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?)?\s*\)/i,
+    /\[\s*(\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?)?\s*\]/i,
+    /[-–—]\s*(\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?)?\s*$/i,
+    /(\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?)?\s*$/i,
+  ];
+  for (const pattern of minutePatterns) {
+    const match = h.match(pattern);
+    if (match) {
+      const minutes = parseFloat(match[1]);
+      if (Number.isFinite(minutes) && minutes > 0) return minutes;
+    }
+  }
+  return null;
+}
+
+export function preRecordedChartLabel(header: string): string {
+  return header
+    .replace(/^\uFEFF/, '')
+    .replace(/\(\s*\d{1,3}:\d{2}\s*(?:min(?:ute)?s?)?\s*\)/gi, '')
+    .replace(/\(\s*\d+(?:\.\d+)?\s*m(?:in(?:ute)?s?)?\s*\)/gi, '')
+    .replace(/\[\s*\d{1,3}:\d{2}\s*(?:min(?:ute)?s?)?\s*\]/gi, '')
+    .replace(/\[\s*\d+(?:\.\d+)?\s*m(?:in(?:ute)?s?)?\s*\]/gi, '')
+    .replace(/\s*[-–—]\s*\d{1,3}:\d{2}\s*(?:min(?:ute)?s?)?\s*$/i, '')
+    .replace(/\s*[-–—]\s*\d+(?:\.\d+)?\s*m(?:in(?:ute)?s?)?\s*$/i, '')
+    .replace(/\s+\d{1,3}:\d{2}\s*(?:min(?:ute)?s?)?\s*$/i, '')
+    .replace(/\s+\d+(?:\.\d+)?\s*m(?:in(?:ute)?s?)?\s*$/i, '')
+    .trim();
+}
+
+function maxCreditHoursForPreRecordedColumn(
+  column: string,
+  durationMin: number | null,
+  entries: ClassWiseAttendanceEntry[],
+): number {
+  if (durationMin && durationMin > 0) {
+    return Math.round((durationMin / 60) * 1000) / 1000;
+  }
+  const colMax = Math.max(
+    0,
+    ...entries.map(e => e.preRecorded?.find(s => s.key === column)?.hours ?? 0),
+  );
+  return colMax > 0 ? Math.round(colMax * 1000) / 1000 : 0;
+}
+
+export function preRecordedCompletionPct(hours: number, maxCreditHours: number): number {
+  if (!Number.isFinite(maxCreditHours) || maxCreditHours <= 0) return 0;
+  return Math.min(100, Math.round((Math.max(0, hours) / maxCreditHours) * 10000) / 100);
 }
 
 export function isSessionColumnHeader(header: string): boolean {
@@ -186,7 +269,12 @@ export function parseClassWiseAttendanceRows(
     });
     const preRecorded: ClassWiseSession[] = preRecordedColumns.map(col => {
       const colIdx = headers.indexOf(col);
-      return { key: col, hours: parsePreRecordedHours(r[colIdx] ?? '') };
+      const durationMin = parseDurationFromPreRecordedHeader(col);
+      return {
+        key: col,
+        hours: parsePreRecordedHours(r[colIdx] ?? ''),
+        durationMin,
+      };
     });
 
     entries.push({
@@ -198,6 +286,18 @@ export function parseClassWiseAttendanceRows(
   }
 
   if (!entries.length) return null;
+
+  for (const entry of entries) {
+    if (!entry.preRecorded?.length) continue;
+    entry.preRecorded = entry.preRecorded.map(session => {
+      const maxCreditHours = maxCreditHoursForPreRecordedColumn(
+        session.key,
+        session.durationMin ?? null,
+        entries,
+      );
+      return { ...session, maxCreditHours };
+    });
+  }
   return {
     sheetName: sheetName || 'Class-wise Attendance',
     sessionColumns,
@@ -264,27 +364,31 @@ export function getClassWiseAttendanceForStudent(
 
 export function buildTrendFromSessions(
   sessions: ClassWiseSession[],
-  mode: 'live' | 'prerecorded' = 'live',
 ): { name: string; value: number }[] {
   return sessions.map(s => ({
     name: s.key,
-    value:
-      mode === 'live'
-        ? Math.round(normalizeSessionHours(s.hours) * 100) / 100
-        : Math.round(Math.max(0, s.hours) * 100) / 100,
+    value: Math.round(normalizeSessionHours(s.hours) * 100) / 100,
   }));
 }
 
 export function buildSessionTrendFromClassWise(
   entry: ClassWiseAttendanceEntry,
-): { name: string; value: number }[] {
-  return buildTrendFromSessions(entry.sessions, 'live');
+): SessionTrendPoint[] {
+  return buildTrendFromSessions(entry.sessions);
 }
 
 export function buildPreRecordedTrendFromClassWise(
   entry: ClassWiseAttendanceEntry,
-): { name: string; value: number }[] {
-  return buildTrendFromSessions(entry.preRecorded ?? [], 'prerecorded');
+): SessionTrendPoint[] {
+  return (entry.preRecorded ?? []).map(s => {
+    const maxCredit = s.maxCreditHours ?? 0;
+    return {
+      name: preRecordedChartLabel(s.key),
+      value: preRecordedCompletionPct(s.hours, maxCredit),
+      hoursCredit: s.hours,
+      durationMin: s.durationMin ?? null,
+    };
+  });
 }
 
 /** Red (0) → orange → yellow → light green → green (1) for partial session hours. */
