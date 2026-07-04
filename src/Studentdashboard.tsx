@@ -414,7 +414,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
     ? 100
     : Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
   const sessionTrendYLabel = sessionChartSeries === 'prerecorded' ? 'Completion %' : 'Hours';
-  const sessionTrendDotScale = sessionChartSeries === 'prerecorded' ? 'percent' as const : 'hours' as const;
   const sessionTrendChartWidth = Math.max(activeSessionTrend.length * SESSION_TREND_SLOT_WIDTH, 320);
   const sessionTrendNeedsScroll = activeSessionTrend.length > 4;
   const sessionTrendScrollHint = sessionChartSeries === 'live'
@@ -654,44 +653,79 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     }}
                   >
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={activeSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
-                        <XAxis
-                          dataKey="name"
-                          stroke="var(--sd-text-muted)"
-                          fontSize={10}
-                          interval={0}
-                          angle={-25}
-                          textAnchor="end"
-                          height={56}
-                        />
-                        <YAxis
-                          domain={[0, sessionTrendYMax]}
-                          stroke="var(--sd-text-muted)"
-                          fontSize={11}
-                          label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
-                        />
-                        <Tooltip
-                          formatter={(value, _name, item) => {
-                            const point = (item?.payload ?? {}) as { hoursCredit?: number; durationMin?: number | null; name?: string };
-                            const label = sessionChartSeries === 'prerecorded' ? 'Pre-recorded' : 'Live class';
-                            const hrs = point.hoursCredit ?? 0;
-                            const dur = point.durationMin ? `${point.durationMin} min · ` : '';
-                            const text = sessionChartSeries === 'prerecorded'
-                              ? `${Math.round(Number(value ?? 0))}% watched · ${dur}${hrs.toFixed(2)} hr credit`
-                              : `${Number(value ?? 0).toFixed(2)} hrs`;
-                            return [text, label];
-                          }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="value"
-                          stroke="var(--sd-primary)"
-                          strokeWidth={2.5}
-                          dot={(props) => <SessionTrendDot {...props} scale={sessionTrendDotScale} />}
-                          activeDot={(props) => <SessionTrendDot {...props} scale={sessionTrendDotScale} active />}
-                        />
-                      </LineChart>
+                      {sessionChartSeries === 'prerecorded' ? (
+                        <BarChart data={activeSessionTrend} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                          <XAxis
+                            dataKey="name"
+                            stroke="var(--sd-text-muted)"
+                            fontSize={10}
+                            interval={0}
+                            angle={-25}
+                            textAnchor="end"
+                            height={56}
+                          />
+                          <YAxis
+                            domain={[0, sessionTrendYMax]}
+                            stroke="var(--sd-text-muted)"
+                            fontSize={11}
+                            label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                          />
+                          <Tooltip
+                            formatter={(value, _name, item) => {
+                              const point = (item?.payload ?? {}) as { hoursCredit?: number; durationMin?: number | null };
+                              const hrs = point.hoursCredit ?? 0;
+                              const dur = point.durationMin ? `${Math.round(point.durationMin * 10) / 10} min · ` : '';
+                              return [`${Math.round(Number(value ?? 0))}% watched · ${dur}${hrs.toFixed(2)} hr credit`, 'Pre-recorded'];
+                            }}
+                          />
+                          <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                            {activeSessionTrend.map((entry, idx) => (
+                              <Cell
+                                key={`${entry.name}-${idx}`}
+                                fill={sessionHoursIndicatorColor(Math.min(1, entry.value / 100))}
+                              />
+                            ))}
+                            <LabelList
+                              dataKey="value"
+                              position="top"
+                              fontSize={10}
+                              fill="var(--sd-text-muted)"
+                              formatter={(value: number) => `${Math.round(value)}%`}
+                            />
+                          </Bar>
+                        </BarChart>
+                      ) : (
+                        <LineChart data={activeSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                          <XAxis
+                            dataKey="name"
+                            stroke="var(--sd-text-muted)"
+                            fontSize={10}
+                            interval={0}
+                            angle={-25}
+                            textAnchor="end"
+                            height={56}
+                          />
+                          <YAxis
+                            domain={[0, sessionTrendYMax]}
+                            stroke="var(--sd-text-muted)"
+                            fontSize={11}
+                            label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                          />
+                          <Tooltip
+                            formatter={(value) => [`${Number(value ?? 0).toFixed(2)} hrs`, 'Live class']}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="value"
+                            stroke="var(--sd-primary)"
+                            strokeWidth={2.5}
+                            dot={(props) => <SessionTrendDot {...props} scale="hours" />}
+                            activeDot={(props) => <SessionTrendDot {...props} scale="hours" active />}
+                          />
+                        </LineChart>
+                      )}
                     </ResponsiveContainer>
                   </div>
                 </div>
