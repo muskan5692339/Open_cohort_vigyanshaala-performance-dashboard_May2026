@@ -6,6 +6,11 @@ interface ParsedStudent {
   student_id?: string;
   name?: string;
   email: string;
+  college?: string;
+  program?: string;
+  cohort?: string;
+  state?: string;
+  status?: string;
   imported_attendance_pct?: number | null;
   imported_quiz_pct?: number | null;
 }

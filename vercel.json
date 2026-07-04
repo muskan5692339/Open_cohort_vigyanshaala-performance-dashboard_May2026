@@ -29,7 +29,7 @@
       "schedule": "0 2 * * 1"
     },
     {
-      "path": "/api/reminders",
+      "path": "/api/persist-sync-run?job=reminders",
       "schedule": "0 4,13 * * 0"
     }
   ],
@@ -37,7 +37,7 @@
     "api/sync.ts": {
       "maxDuration": 120
     },
-    "api/reminders.ts": {
+    "api/persist-sync-run.ts": {
       "maxDuration": 120
     }
   }
