@@ -1,6 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createServiceClient } from './_lib/serviceClient';
-import { runWeeklyStudentReminders } from './_lib/runStudentReminders';
+import { createClient } from '@supabase/supabase-js';
+import { runWeeklyStudentReminders } from './_lib/runStudentReminders.js';
+
+function createServiceClient() {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+  if (!url?.startsWith('http') || !serviceKey) {
+    throw new Error('Missing Supabase service configuration');
+  }
+  return createClient(url, serviceKey, { auth: { persistSession: false } });
+}
 
 function isAuthorized(req: VercelRequest): boolean {
   const secret = process.env.CRON_SECRET?.trim();

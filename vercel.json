@@ -38,7 +38,11 @@
       "maxDuration": 120
     },
     "api/reminders.ts": {
-      "maxDuration": 120
+      "maxDuration": 120,
+      "includeFiles": "api/_lib/**"
+    },
+    "api/list-uploads.ts": {
+      "includeFiles": "api/_lib/**"
     }
   }
 }
