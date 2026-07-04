@@ -1,0 +1,39 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { isAuthorizedCron } from './_lib/cronAuth';
+import { createServiceClient } from './_lib/serviceClient';
+import { runWeeklyStudentReminders } from './_lib/runStudentReminders';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!isAuthorizedCron(req)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (req.query.slot === 'ping') {
+    return res.status(200).json({
+      ok: true,
+      ping: true,
+      dryRun: process.env.REMINDER_DRY_RUN === 'true',
+    });
+  }
+
+  try {
+    const db = createServiceClient();
+    const slot = typeof req.query.slot === 'string' ? req.query.slot : undefined;
+    const result = await runWeeklyStudentReminders(db, slot);
+    const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
+    return res.status(status).json({ ok: status === 200, ...result });
+  } catch (e) {
+    const message = (e as Error).message;
+    console.error('[api/reminders]', e);
+    if (message.includes('Missing Supabase')) {
+      return res.status(503).json({ ok: false, error: message, code: 'misconfigured' });
+    }
+    return res.status(500).json({ ok: false, error: message });
+  }
+}
+
+export const config = { maxDuration: 120 };

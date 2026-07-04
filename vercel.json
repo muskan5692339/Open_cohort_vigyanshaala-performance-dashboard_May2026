@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/list-sync-runs", "destination": "/api/persist-sync-run" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -28,7 +29,7 @@
       "schedule": "0 2 * * 1"
     },
     {
-      "path": "/api/list-uploads?mode=student-reminders",
+      "path": "/api/reminders",
       "schedule": "0 4,13 * * 0"
     }
   ],
@@ -36,7 +37,7 @@
     "api/sync.ts": {
       "maxDuration": 120
     },
-    "api/list-uploads.ts": {
+    "api/reminders.ts": {
       "maxDuration": 120
     }
   }
