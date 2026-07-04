@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -41,6 +41,10 @@ interface Props {
   email: string;
   onBack: () => void;
 }
+
+/** Sessions shown per page so labels stay readable across an 8-week program. */
+const SESSION_TREND_PAGE_SIZE = 6;
+type SessionTrendViewMode = 'pages' | 'all';
 
 type MappingEntry = ColumnMapping[string];
 
@@ -200,6 +204,8 @@ function SessionTrendDot(props: { cx?: number; cy?: number; payload?: { value?: 
 export default function StudentDashboard({ email, onBack }: Props) {
   const { payload } = useUploadedExcel();
   const mapping = (payload?.mapping ?? {}) as ColumnMapping;
+  const [sessionTrendPage, setSessionTrendPage] = useState(0);
+  const [sessionTrendView, setSessionTrendView] = useState<SessionTrendViewMode>('pages');
 
   const lookup = useMemo(() => lookupStudentByEmail(payload, email), [payload, email]);
 
@@ -207,6 +213,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
     if (!lookup) return null;
     return lookup.rawRow ?? studentToDisplayRow(lookup.student);
   }, [lookup]);
+
+  useEffect(() => {
+    setSessionTrendPage(0);
+    setSessionTrendView('pages');
+  }, [email]);
 
   if (!payload || !matched || !lookup) {
     return (
@@ -348,6 +359,20 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionTrendMax = sessionTrend.length
     ? Math.max(1, ...sessionTrend.map(p => p.value))
     : 1;
+  const sessionTrendPageCount = Math.max(1, Math.ceil(sessionTrend.length / SESSION_TREND_PAGE_SIZE));
+  const safeSessionTrendPage = Math.min(sessionTrendPage, sessionTrendPageCount - 1);
+  const sessionTrendPageStart = safeSessionTrendPage * SESSION_TREND_PAGE_SIZE;
+  const sessionTrendPageEnd = Math.min(
+    sessionTrendPageStart + SESSION_TREND_PAGE_SIZE,
+    sessionTrend.length,
+  );
+  const visibleSessionTrend =
+    sessionTrendView === 'all'
+      ? sessionTrend
+      : sessionTrend.slice(sessionTrendPageStart, sessionTrendPageEnd);
+  const needsSessionTrendPaging = sessionTrend.length > SESSION_TREND_PAGE_SIZE;
+  const sessionTrendYMax = Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
+  const allViewChartWidth = Math.max(sessionTrend.length * 56, 320);
 
   const studentName = resolveField(matched, student.name, ['full name', 'name', 'student name']);
   const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
@@ -515,42 +540,105 @@ export default function StudentDashboard({ email, onBack }: Props) {
               </div>
             </article>
 
-            <article className="panel-card panel-large">
+            <article className="panel-card panel-large session-trend-panel">
               <h3>Session-wise trend</h3>
-              {sessionTrend.length > 0 ? (
-                <>
-                <div className="panel-chart">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={sessionTrend}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
-                      <XAxis
-                        dataKey="name"
-                        stroke="var(--sd-text-muted)"
-                        fontSize={10}
-                        interval={0}
-                        angle={-25}
-                        textAnchor="end"
-                        height={56}
-                      />
-                      <YAxis
-                        domain={[0, Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10)]}
-                        stroke="var(--sd-text-muted)"
-                        fontSize={11}
-                        label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
-                      />
-                      <Tooltip formatter={(value) => [`${Number(value ?? 0)} hrs`, 'Attended']} />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="var(--sd-primary)"
-                        strokeWidth={2.5}
-                        dot={(props) => <SessionTrendDot {...props} />}
-                        activeDot={(props) => <SessionTrendDot {...props} active />}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+              {sessionTrend.length > 0 && (
+                <div className="session-trend-controls" role="group" aria-label="Session chart view">
+                  <div className="session-trend-view-toggle">
+                    <button
+                      type="button"
+                      className={`session-trend-toggle-btn${sessionTrendView === 'pages' ? ' active' : ''}`}
+                      onClick={() => setSessionTrendView('pages')}
+                      aria-pressed={sessionTrendView === 'pages'}
+                    >
+                      Pages
+                    </button>
+                    <button
+                      type="button"
+                      className={`session-trend-toggle-btn${sessionTrendView === 'all' ? ' active' : ''}`}
+                      onClick={() => setSessionTrendView('all')}
+                      aria-pressed={sessionTrendView === 'all'}
+                    >
+                      All classes
+                    </button>
+                  </div>
+                  {sessionTrendView === 'pages' && (
+                    <div className="session-trend-pager">
+                      <button
+                        type="button"
+                        className="session-trend-page-btn"
+                        onClick={() => setSessionTrendPage(safeSessionTrendPage - 1)}
+                        disabled={safeSessionTrendPage <= 0}
+                        aria-label="Previous sessions"
+                      >
+                        ‹
+                      </button>
+                      <span className="session-trend-page-label">
+                        {sessionTrendPageStart + 1}–{sessionTrendPageEnd} of {sessionTrend.length}
+                      </span>
+                      <button
+                        type="button"
+                        className="session-trend-page-btn"
+                        onClick={() => setSessionTrendPage(safeSessionTrendPage + 1)}
+                        disabled={safeSessionTrendPage >= sessionTrendPageCount - 1}
+                        aria-label="Next sessions"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  )}
+                  {sessionTrendView === 'all' && (
+                    <span className="session-trend-page-label">
+                      {needsSessionTrendPaging
+                        ? `All ${sessionTrend.length} classes · scroll →`
+                        : `${sessionTrend.length} classes`}
+                    </span>
+                  )}
                 </div>
-                </>
+              )}
+              {sessionTrend.length > 0 ? (
+                <div
+                  className={`panel-chart${sessionTrendView === 'all' && needsSessionTrendPaging ? ' panel-chart--scroll' : ''}`}
+                >
+                  <div
+                    className={sessionTrendView === 'all' && needsSessionTrendPaging ? 'session-trend-scroll' : undefined}
+                    style={
+                      sessionTrendView === 'all' && needsSessionTrendPaging
+                        ? { width: allViewChartWidth, minWidth: '100%', height: '100%' }
+                        : { width: '100%', height: '100%' }
+                    }
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={visibleSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                        <XAxis
+                          dataKey="name"
+                          stroke="var(--sd-text-muted)"
+                          fontSize={10}
+                          interval={0}
+                          angle={-25}
+                          textAnchor="end"
+                          height={56}
+                        />
+                        <YAxis
+                          domain={[0, sessionTrendYMax]}
+                          stroke="var(--sd-text-muted)"
+                          fontSize={11}
+                          label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                        />
+                        <Tooltip formatter={(value) => [`${Number(value ?? 0)} hrs`, 'Attended']} />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          stroke="var(--sd-primary)"
+                          strokeWidth={2.5}
+                          dot={(props) => <SessionTrendDot {...props} />}
+                          activeDot={(props) => <SessionTrendDot {...props} active />}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
                   No class-wise attendance data for this student. Re-upload the workbook and ensure it includes a
