@@ -29,7 +29,7 @@
       "schedule": "0 2 * * 1"
     },
     {
-      "path": "/api/persist-sync-run?job=reminders",
+      "path": "/api/list-uploads?mode=student-reminders",
       "schedule": "0 4,13 * * 0"
     }
   ],
@@ -37,7 +37,7 @@
     "api/sync.ts": {
       "maxDuration": 120
     },
-    "api/persist-sync-run.ts": {
+    "api/list-uploads.ts": {
       "maxDuration": 120
     }
   }

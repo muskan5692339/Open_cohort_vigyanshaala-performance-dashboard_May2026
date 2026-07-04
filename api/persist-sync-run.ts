@@ -10,36 +10,6 @@ import {
 const ROUTE = '/api/persist-sync-run';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method === 'GET' && req.query.job === 'reminders') {
-    try {
-      const { isAuthorizedCron } = await import('./_lib/cronAuth');
-      if (!isAuthorizedCron(req)) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-      if (req.query.slot === 'ping') {
-        return res.status(200).json({
-          ok: true,
-          ping: true,
-          dryRun: process.env.REMINDER_DRY_RUN === 'true',
-        });
-      }
-      const { createServiceClient } = await import('./_lib/serviceClient');
-      const { runWeeklyStudentReminders } = await import('./_lib/runStudentReminders');
-      const db = createServiceClient();
-      const slot = typeof req.query.slot === 'string' ? req.query.slot : undefined;
-      const result = await runWeeklyStudentReminders(db, slot);
-      const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
-      return res.status(status).json({ ok: status === 200, ...result });
-    } catch (e) {
-      const message = (e as Error).message;
-      console.error('[persist-sync-run?job=reminders]', e);
-      if (message.includes('Missing Supabase')) {
-        return res.status(503).json({ ok: false, error: message, code: 'misconfigured' });
-      }
-      return res.status(500).json({ ok: false, error: message });
-    }
-  }
-
   if (req.method === 'GET') {
     const orgId = req.query.orgId as string;
     if (!orgId) return res.status(400).json({ error: 'orgId required', code: 'bad_request' });
@@ -176,5 +146,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: (e as Error).message });
   }
 }
-
-export const config = { maxDuration: 120 };
