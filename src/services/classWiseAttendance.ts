@@ -11,11 +11,14 @@ export interface ClassWiseAttendanceEntry {
   student_email: string;
   student_name?: string;
   sessions: ClassWiseSession[];
+  /** Pre-recorded video watch hours (separate from live session columns). */
+  preRecorded?: ClassWiseSession[];
 }
 
 export interface ClassWiseAttendanceData {
   sheetName: string;
   sessionColumns: string[];
+  preRecordedColumns: string[];
   entries: ClassWiseAttendanceEntry[];
 }
 
@@ -44,9 +47,16 @@ function normalizeHeader(h: string): string {
   return (h ?? '').replace(/^\uFEFF/, '').trim().toLowerCase();
 }
 
+export function isPreRecordedColumnHeader(header: string): boolean {
+  const h = normalizeHeader(header);
+  if (!h) return false;
+  return /pre[-\s]?recorded/.test(h) || /^prerecorded/.test(h);
+}
+
 export function isSessionColumnHeader(header: string): boolean {
   const h = (header ?? '').replace(/^\uFEFF/, '').trim();
   if (!h) return false;
+  if (isPreRecordedColumnHeader(h)) return false;
   if (/^WK\d/i.test(h)) return true;
   if (/^W\d{1,2}[_\s]/i.test(h)) return true;
   if (/^week\s*\d/i.test(h)) return true;
@@ -82,9 +92,11 @@ function findHeaderRowIndex(rows: string[][]): number {
     const headers = rows[i] ?? [];
     const emailIdx = headers.findIndex(isEmailHeader);
     const sessionCount = headers.filter(isSessionColumnHeader).length;
+    const preRecordedCount = headers.filter(isPreRecordedColumnHeader).length;
     let score = 0;
     if (emailIdx >= 0) score += 10;
     score += sessionCount * 3;
+    score += preRecordedCount * 3;
     if (score > bestScore) {
       bestScore = score;
       bestIdx = i;
@@ -97,12 +109,19 @@ export function isClassWiseAttendanceHeaders(headers: string[]): boolean {
   if (!headers.length) return false;
   const hasEmail = headers.some(isEmailHeader);
   const sessionCols = headers.filter(isSessionColumnHeader);
-  return hasEmail && sessionCols.length >= 1;
+  const preRecordedCols = headers.filter(isPreRecordedColumnHeader);
+  return hasEmail && (sessionCols.length >= 1 || preRecordedCols.length >= 1);
 }
 
 function parseSessionHours(raw: string): number {
   const n = parseFloat(String(raw ?? '').replace(/,/g, '').trim());
   return normalizeSessionHours(n);
+}
+
+function parsePreRecordedHours(raw: string): number {
+  const n = parseFloat(String(raw ?? '').replace(/,/g, '').trim());
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n * 100) / 100;
 }
 
 /** Each session slot counts at most 1 hour; values above 1 are treated as full attendance. */
@@ -145,10 +164,13 @@ export function parseClassWiseAttendanceRows(
   });
 
   let sessionColumns = headers.filter(isSessionColumnHeader);
-  if (!sessionColumns.length && nameMatchesClassWise) {
-    sessionColumns = headers.filter((h, idx) => idx !== emailIdx && idx !== nameCol && h.trim());
+  let preRecordedColumns = headers.filter(isPreRecordedColumnHeader);
+  if (!sessionColumns.length && !preRecordedColumns.length && nameMatchesClassWise) {
+    const dataColumns = headers.filter((h, idx) => idx !== emailIdx && idx !== nameCol && h.trim());
+    sessionColumns = dataColumns.filter(h => !isPreRecordedColumnHeader(h));
+    preRecordedColumns = dataColumns.filter(isPreRecordedColumnHeader);
   }
-  if (!sessionColumns.length) return null;
+  if (!sessionColumns.length && !preRecordedColumns.length) return null;
 
   const entries: ClassWiseAttendanceEntry[] = [];
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
@@ -162,16 +184,26 @@ export function parseClassWiseAttendanceRows(
       const colIdx = headers.indexOf(col);
       return { key: col, hours: parseSessionHours(r[colIdx] ?? '') };
     });
+    const preRecorded: ClassWiseSession[] = preRecordedColumns.map(col => {
+      const colIdx = headers.indexOf(col);
+      return { key: col, hours: parsePreRecordedHours(r[colIdx] ?? '') };
+    });
 
     entries.push({
       student_email: email,
       student_name: nameCol >= 0 ? (r[nameCol] ?? '').trim() || undefined : undefined,
       sessions,
+      preRecorded: preRecorded.length ? preRecorded : undefined,
     });
   }
 
   if (!entries.length) return null;
-  return { sheetName: sheetName || 'Class-wise Attendance', sessionColumns, entries };
+  return {
+    sheetName: sheetName || 'Class-wise Attendance',
+    sessionColumns,
+    preRecordedColumns,
+    entries,
+  };
 }
 
 export function readClassWiseAttendanceFromWorkbook(
@@ -201,7 +233,7 @@ export function readClassWiseAttendanceFromWorkbook(
           parsed.entries.length,
           'students from sheet',
           `"${parsed.sheetName}"`,
-          `(${parsed.sessionColumns.length} sessions)`,
+          `(${parsed.sessionColumns.length} live, ${parsed.preRecordedColumns.length} pre-recorded)`,
         );
       }
       return parsed;
@@ -230,13 +262,29 @@ export function getClassWiseAttendanceForStudent(
   return payload.classWiseAttendance.find(e => normalizeStudentEmail(e.student_email) === key);
 }
 
+export function buildTrendFromSessions(
+  sessions: ClassWiseSession[],
+  mode: 'live' | 'prerecorded' = 'live',
+): { name: string; value: number }[] {
+  return sessions.map(s => ({
+    name: s.key,
+    value:
+      mode === 'live'
+        ? Math.round(normalizeSessionHours(s.hours) * 100) / 100
+        : Math.round(Math.max(0, s.hours) * 100) / 100,
+  }));
+}
+
 export function buildSessionTrendFromClassWise(
   entry: ClassWiseAttendanceEntry,
 ): { name: string; value: number }[] {
-  return entry.sessions.map(s => ({
-    name: s.key,
-    value: Math.round(normalizeSessionHours(s.hours) * 100) / 100,
-  }));
+  return buildTrendFromSessions(entry.sessions, 'live');
+}
+
+export function buildPreRecordedTrendFromClassWise(
+  entry: ClassWiseAttendanceEntry,
+): { name: string; value: number }[] {
+  return buildTrendFromSessions(entry.preRecorded ?? [], 'prerecorded');
 }
 
 /** Red (0) → orange → yellow → light green → green (1) for partial session hours. */

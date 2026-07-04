@@ -18,6 +18,7 @@ import { useUploadedExcel } from './context/UploadedExcelContext';
 import type { ColumnMapping } from './types/dynamicSchema';
 import {
   buildSessionTrendFromClassWise,
+  buildPreRecordedTrendFromClassWise,
   buildAttendanceDonutFromHours,
   computeHoursBasedAttendance,
   countAttendedSessions,
@@ -45,6 +46,7 @@ interface Props {
 /** Minimum chart width per session so labels stay readable when scrolling. */
 const SESSION_TREND_SLOT_WIDTH = 72;
 type SessionTrendFocus = 'start' | 'latest';
+type SessionChartSeries = 'live' | 'prerecorded';
 
 type MappingEntry = ColumnMapping[string];
 
@@ -206,6 +208,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const mapping = (payload?.mapping ?? {}) as ColumnMapping;
   const sessionTrendScrollRef = useRef<HTMLDivElement>(null);
   const [sessionTrendFocus, setSessionTrendFocus] = useState<SessionTrendFocus>('start');
+  const [sessionChartSeries, setSessionChartSeries] = useState<SessionChartSeries>('live');
 
   const lookup = useMemo(() => lookupStudentByEmail(payload, email), [payload, email]);
 
@@ -214,16 +217,33 @@ export default function StudentDashboard({ email, onBack }: Props) {
     return lookup.rawRow ?? studentToDisplayRow(lookup.student);
   }, [lookup]);
 
+  const classWiseEntry = useMemo(
+    () => getClassWiseAttendanceForStudent(payload, email),
+    [payload, email],
+  );
+  const liveTrendLength = classWiseEntry?.sessions.length ?? 0;
+  const preRecordedTrendLength = classWiseEntry?.preRecorded?.length ?? 0;
+
+  useEffect(() => {
+    setSessionTrendFocus('start');
+    if (!liveTrendLength && preRecordedTrendLength) {
+      setSessionChartSeries('prerecorded');
+    } else {
+      setSessionChartSeries('live');
+    }
+    sessionTrendScrollRef.current?.scrollTo({ left: 0, behavior: 'auto' });
+  }, [email, liveTrendLength, preRecordedTrendLength]);
+
+  const activeTrendLength = sessionChartSeries === 'live' ? liveTrendLength : preRecordedTrendLength;
+
   useEffect(() => {
     setSessionTrendFocus('start');
     sessionTrendScrollRef.current?.scrollTo({ left: 0, behavior: 'auto' });
-  }, [email]);
-
-  const sessionTrendLength = getClassWiseAttendanceForStudent(payload, email)?.sessions.length ?? 0;
+  }, [sessionChartSeries]);
 
   useEffect(() => {
     const el = sessionTrendScrollRef.current;
-    if (!el || sessionTrendLength === 0) return;
+    if (!el || activeTrendLength === 0) return;
     const frame = requestAnimationFrame(() => {
       const targetLeft = sessionTrendFocus === 'latest'
         ? Math.max(0, el.scrollWidth - el.clientWidth)
@@ -231,7 +251,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
       el.scrollTo({ left: targetLeft, behavior: 'smooth' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [sessionTrendFocus, sessionTrendLength, email]);
+  }, [sessionTrendFocus, activeTrendLength, email, sessionChartSeries]);
 
   if (!payload || !matched || !lookup) {
     return (
@@ -370,12 +390,21 @@ export default function StudentDashboard({ email, onBack }: Props) {
         : buildAttendanceDonutFromHours(0, 0);
 
   const sessionTrend = classWise ? buildSessionTrendFromClassWise(classWise) : [];
-  const sessionTrendMax = sessionTrend.length
-    ? Math.max(1, ...sessionTrend.map(p => p.value))
+  const preRecordedTrend = classWise ? buildPreRecordedTrendFromClassWise(classWise) : [];
+  const activeSessionTrend = sessionChartSeries === 'live' ? sessionTrend : preRecordedTrend;
+  const hasLiveTrend = sessionTrend.length > 0;
+  const hasPreRecordedTrend = preRecordedTrend.length > 0;
+  const hasAnySessionTrend = hasLiveTrend || hasPreRecordedTrend;
+  const sessionTrendMax = activeSessionTrend.length
+    ? Math.max(1, ...activeSessionTrend.map(p => p.value))
     : 1;
   const sessionTrendYMax = Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
-  const sessionTrendChartWidth = Math.max(sessionTrend.length * SESSION_TREND_SLOT_WIDTH, 320);
-  const sessionTrendNeedsScroll = sessionTrend.length > 4;
+  const sessionTrendChartWidth = Math.max(activeSessionTrend.length * SESSION_TREND_SLOT_WIDTH, 320);
+  const sessionTrendNeedsScroll = activeSessionTrend.length > 4;
+  const sessionTrendTooltipLabel = sessionChartSeries === 'live' ? 'Attended' : 'Watched';
+  const sessionTrendScrollHint = sessionChartSeries === 'live'
+    ? `${activeSessionTrend.length} classes · scroll sideways →`
+    : `${activeSessionTrend.length} videos · scroll sideways →`;
 
   const studentName = resolveField(matched, student.name, ['full name', 'name', 'student name']);
   const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
@@ -545,32 +574,53 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
             <article className="panel-card panel-large session-trend-panel">
               <h3>Session-wise trend</h3>
-              {sessionTrend.length > 0 && sessionTrendNeedsScroll && (
-                <div className="session-trend-controls" role="group" aria-label="Session chart focus">
-                  <div className="session-trend-view-toggle">
+              {hasAnySessionTrend && (
+                <div className="session-trend-controls" role="group" aria-label="Session chart options">
+                  <div className="session-trend-view-toggle session-trend-series-toggle">
                     <button
                       type="button"
-                      className={`session-trend-toggle-btn${sessionTrendFocus === 'start' ? ' active' : ''}`}
-                      onClick={() => setSessionTrendFocus('start')}
-                      aria-pressed={sessionTrendFocus === 'start'}
+                      className={`session-trend-toggle-btn${sessionChartSeries === 'live' ? ' active' : ''}`}
+                      onClick={() => setSessionChartSeries('live')}
+                      aria-pressed={sessionChartSeries === 'live'}
+                      disabled={!hasLiveTrend}
                     >
-                      Program start
+                      Live classes
                     </button>
                     <button
                       type="button"
-                      className={`session-trend-toggle-btn${sessionTrendFocus === 'latest' ? ' active' : ''}`}
-                      onClick={() => setSessionTrendFocus('latest')}
-                      aria-pressed={sessionTrendFocus === 'latest'}
+                      className={`session-trend-toggle-btn${sessionChartSeries === 'prerecorded' ? ' active' : ''}`}
+                      onClick={() => setSessionChartSeries('prerecorded')}
+                      aria-pressed={sessionChartSeries === 'prerecorded'}
                     >
-                      Latest class
+                      Pre-recorded videos
                     </button>
                   </div>
-                  <span className="session-trend-scroll-hint">
-                    {sessionTrend.length} classes · scroll sideways →
-                  </span>
+                  {activeSessionTrend.length > 0 && sessionTrendNeedsScroll && (
+                    <>
+                      <div className="session-trend-view-toggle">
+                        <button
+                          type="button"
+                          className={`session-trend-toggle-btn${sessionTrendFocus === 'start' ? ' active' : ''}`}
+                          onClick={() => setSessionTrendFocus('start')}
+                          aria-pressed={sessionTrendFocus === 'start'}
+                        >
+                          Program start
+                        </button>
+                        <button
+                          type="button"
+                          className={`session-trend-toggle-btn${sessionTrendFocus === 'latest' ? ' active' : ''}`}
+                          onClick={() => setSessionTrendFocus('latest')}
+                          aria-pressed={sessionTrendFocus === 'latest'}
+                        >
+                          {sessionChartSeries === 'live' ? 'Latest class' : 'Latest video'}
+                        </button>
+                      </div>
+                      <span className="session-trend-scroll-hint">{sessionTrendScrollHint}</span>
+                    </>
+                  )}
                 </div>
               )}
-              {sessionTrend.length > 0 ? (
+              {activeSessionTrend.length > 0 ? (
                 <div
                   ref={sessionTrendScrollRef}
                   className={`panel-chart${sessionTrendNeedsScroll ? ' panel-chart--scroll' : ''}`}
@@ -584,7 +634,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     }}
                   >
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={sessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                      <LineChart data={activeSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
                         <XAxis
                           dataKey="name"
@@ -601,7 +651,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                           fontSize={11}
                           label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
                         />
-                        <Tooltip formatter={(value) => [`${Number(value ?? 0)} hrs`, 'Attended']} />
+                        <Tooltip formatter={(value) => [`${Number(value ?? 0)} hrs`, sessionTrendTooltipLabel]} />
                         <Line
                           type="monotone"
                           dataKey="value"
@@ -614,6 +664,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     </ResponsiveContainer>
                   </div>
                 </div>
+              ) : hasAnySessionTrend ? (
+                <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
+                  No pre-recorded video data for this student yet. Re-upload the workbook with
+                  {' '}&quot;Pre-recorded&quot; columns in the Class-wise Attendance sheet.
+                </p>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
                   No class-wise attendance data for this student. Re-upload the workbook and ensure it includes a

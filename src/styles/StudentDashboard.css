@@ -205,6 +205,10 @@
   background: var(--sd-bg);
 }
 
+.session-trend-series-toggle {
+  flex: 1 1 100%;
+}
+
 .session-trend-view-toggle {
   display: inline-flex;
   border: 1px solid var(--sd-border);
@@ -233,6 +237,11 @@
 .session-trend-toggle-btn:not(.active):hover {
   background: color-mix(in srgb, var(--sd-primary) 10%, transparent);
   color: var(--sd-text);
+}
+
+.session-trend-toggle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .session-trend-scroll-hint {
