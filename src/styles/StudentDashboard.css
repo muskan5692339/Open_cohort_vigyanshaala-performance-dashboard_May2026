@@ -189,6 +189,8 @@
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
 }
 
 .session-trend-panel .session-trend-controls {
@@ -233,46 +235,11 @@
   color: var(--sd-text);
 }
 
-.session-trend-pager {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-}
-
-.session-trend-page-btn {
-  border: 1px solid var(--sd-border);
-  border-radius: 6px;
-  background: var(--sd-surface);
-  color: var(--sd-text);
-  width: 30px;
-  height: 30px;
-  font-size: 18px;
-  line-height: 1;
-  font-weight: 700;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.session-trend-page-btn:hover:not(:disabled) {
-  border-color: var(--sd-primary);
-  color: var(--sd-primary);
-}
-
-.session-trend-page-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.session-trend-page-label {
+.session-trend-scroll-hint {
   font-size: 12px;
   font-weight: 600;
   color: var(--sd-text-muted);
-  min-width: 7.5rem;
-  text-align: center;
+  margin-left: auto;
   white-space: nowrap;
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -42,9 +42,9 @@ interface Props {
   onBack: () => void;
 }
 
-/** Sessions shown per page so labels stay readable across an 8-week program. */
-const SESSION_TREND_PAGE_SIZE = 6;
-type SessionTrendViewMode = 'pages' | 'all';
+/** Minimum chart width per session so labels stay readable when scrolling. */
+const SESSION_TREND_SLOT_WIDTH = 72;
+type SessionTrendFocus = 'start' | 'latest';
 
 type MappingEntry = ColumnMapping[string];
 
@@ -204,8 +204,8 @@ function SessionTrendDot(props: { cx?: number; cy?: number; payload?: { value?: 
 export default function StudentDashboard({ email, onBack }: Props) {
   const { payload } = useUploadedExcel();
   const mapping = (payload?.mapping ?? {}) as ColumnMapping;
-  const [sessionTrendPage, setSessionTrendPage] = useState(0);
-  const [sessionTrendView, setSessionTrendView] = useState<SessionTrendViewMode>('pages');
+  const sessionTrendScrollRef = useRef<HTMLDivElement>(null);
+  const [sessionTrendFocus, setSessionTrendFocus] = useState<SessionTrendFocus>('start');
 
   const lookup = useMemo(() => lookupStudentByEmail(payload, email), [payload, email]);
 
@@ -215,9 +215,23 @@ export default function StudentDashboard({ email, onBack }: Props) {
   }, [lookup]);
 
   useEffect(() => {
-    setSessionTrendPage(0);
-    setSessionTrendView('pages');
+    setSessionTrendFocus('start');
+    sessionTrendScrollRef.current?.scrollTo({ left: 0, behavior: 'auto' });
   }, [email]);
+
+  const sessionTrendLength = getClassWiseAttendanceForStudent(payload, email)?.sessions.length ?? 0;
+
+  useEffect(() => {
+    const el = sessionTrendScrollRef.current;
+    if (!el || sessionTrendLength === 0) return;
+    const frame = requestAnimationFrame(() => {
+      const targetLeft = sessionTrendFocus === 'latest'
+        ? Math.max(0, el.scrollWidth - el.clientWidth)
+        : 0;
+      el.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [sessionTrendFocus, sessionTrendLength, email]);
 
   if (!payload || !matched || !lookup) {
     return (
@@ -359,20 +373,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionTrendMax = sessionTrend.length
     ? Math.max(1, ...sessionTrend.map(p => p.value))
     : 1;
-  const sessionTrendPageCount = Math.max(1, Math.ceil(sessionTrend.length / SESSION_TREND_PAGE_SIZE));
-  const safeSessionTrendPage = Math.min(sessionTrendPage, sessionTrendPageCount - 1);
-  const sessionTrendPageStart = safeSessionTrendPage * SESSION_TREND_PAGE_SIZE;
-  const sessionTrendPageEnd = Math.min(
-    sessionTrendPageStart + SESSION_TREND_PAGE_SIZE,
-    sessionTrend.length,
-  );
-  const visibleSessionTrend =
-    sessionTrendView === 'all'
-      ? sessionTrend
-      : sessionTrend.slice(sessionTrendPageStart, sessionTrendPageEnd);
-  const needsSessionTrendPaging = sessionTrend.length > SESSION_TREND_PAGE_SIZE;
   const sessionTrendYMax = Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
-  const allViewChartWidth = Math.max(sessionTrend.length * 56, 320);
+  const sessionTrendChartWidth = Math.max(sessionTrend.length * SESSION_TREND_SLOT_WIDTH, 320);
+  const sessionTrendNeedsScroll = sessionTrend.length > 4;
 
   const studentName = resolveField(matched, student.name, ['full name', 'name', 'student name']);
   const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
@@ -542,74 +545,46 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
             <article className="panel-card panel-large session-trend-panel">
               <h3>Session-wise trend</h3>
-              {sessionTrend.length > 0 && (
-                <div className="session-trend-controls" role="group" aria-label="Session chart view">
+              {sessionTrend.length > 0 && sessionTrendNeedsScroll && (
+                <div className="session-trend-controls" role="group" aria-label="Session chart focus">
                   <div className="session-trend-view-toggle">
                     <button
                       type="button"
-                      className={`session-trend-toggle-btn${sessionTrendView === 'pages' ? ' active' : ''}`}
-                      onClick={() => setSessionTrendView('pages')}
-                      aria-pressed={sessionTrendView === 'pages'}
+                      className={`session-trend-toggle-btn${sessionTrendFocus === 'start' ? ' active' : ''}`}
+                      onClick={() => setSessionTrendFocus('start')}
+                      aria-pressed={sessionTrendFocus === 'start'}
                     >
-                      Pages
+                      Program start
                     </button>
                     <button
                       type="button"
-                      className={`session-trend-toggle-btn${sessionTrendView === 'all' ? ' active' : ''}`}
-                      onClick={() => setSessionTrendView('all')}
-                      aria-pressed={sessionTrendView === 'all'}
+                      className={`session-trend-toggle-btn${sessionTrendFocus === 'latest' ? ' active' : ''}`}
+                      onClick={() => setSessionTrendFocus('latest')}
+                      aria-pressed={sessionTrendFocus === 'latest'}
                     >
-                      All classes
+                      Latest class
                     </button>
                   </div>
-                  {sessionTrendView === 'pages' && (
-                    <div className="session-trend-pager">
-                      <button
-                        type="button"
-                        className="session-trend-page-btn"
-                        onClick={() => setSessionTrendPage(safeSessionTrendPage - 1)}
-                        disabled={safeSessionTrendPage <= 0}
-                        aria-label="Previous sessions"
-                      >
-                        ‹
-                      </button>
-                      <span className="session-trend-page-label">
-                        {sessionTrendPageStart + 1}–{sessionTrendPageEnd} of {sessionTrend.length}
-                      </span>
-                      <button
-                        type="button"
-                        className="session-trend-page-btn"
-                        onClick={() => setSessionTrendPage(safeSessionTrendPage + 1)}
-                        disabled={safeSessionTrendPage >= sessionTrendPageCount - 1}
-                        aria-label="Next sessions"
-                      >
-                        ›
-                      </button>
-                    </div>
-                  )}
-                  {sessionTrendView === 'all' && (
-                    <span className="session-trend-page-label">
-                      {needsSessionTrendPaging
-                        ? `All ${sessionTrend.length} classes · scroll →`
-                        : `${sessionTrend.length} classes`}
-                    </span>
-                  )}
+                  <span className="session-trend-scroll-hint">
+                    {sessionTrend.length} classes · scroll sideways →
+                  </span>
                 </div>
               )}
               {sessionTrend.length > 0 ? (
                 <div
-                  className={`panel-chart${sessionTrendView === 'all' && needsSessionTrendPaging ? ' panel-chart--scroll' : ''}`}
+                  ref={sessionTrendScrollRef}
+                  className={`panel-chart${sessionTrendNeedsScroll ? ' panel-chart--scroll' : ''}`}
                 >
                   <div
-                    className={sessionTrendView === 'all' && needsSessionTrendPaging ? 'session-trend-scroll' : undefined}
-                    style={
-                      sessionTrendView === 'all' && needsSessionTrendPaging
-                        ? { width: allViewChartWidth, minWidth: '100%', height: '100%' }
-                        : { width: '100%', height: '100%' }
-                    }
+                    className="session-trend-scroll"
+                    style={{
+                      width: sessionTrendNeedsScroll ? sessionTrendChartWidth : '100%',
+                      minWidth: '100%',
+                      height: '100%',
+                    }}
                   >
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={visibleSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                      <LineChart data={sessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
                         <XAxis
                           dataKey="name"
