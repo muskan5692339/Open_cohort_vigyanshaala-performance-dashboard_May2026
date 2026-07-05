@@ -19,8 +19,8 @@ function stringifyCellValue(v: unknown): string {
 }
 
 export function isAssignmentCommentColumn(col: string): boolean {
-  const l = col.toLowerCase();
-  return /\b(comments?|feedback|remarks?|notes?)\b/.test(l);
+  const l = col.toLowerCase().replace(/^\uFEFF/, '').trim();
+  return /(comments?|feedback|remarks?|notes?|facilitator\s*response)/i.test(l);
 }
 
 export function normalizeAssignmentKey(col: string): string {
@@ -44,23 +44,70 @@ export function findCommentColumnForAssignment(assignmentCol: string, columns: s
 }
 
 export function classifyAssignmentStatus(value: string): AssignmentDisplayKind {
-  const s = value.toLowerCase();
+  const s = value.toLowerCase().trim();
+  if (!s) return 'pending';
+  // Long cell text is facilitator feedback, not a status (may contain the word "accepted").
+  if (s.length > 56) return 'other';
+  if (s.includes('rejected')) return 'rejected';
   if (['accepted', 'submitted', 'complete', 'completed', 'pass'].some(k => s.includes(k))) {
     return 'accepted';
   }
-  if (s.includes('rejected')) return 'rejected';
-  if (!s.trim() || ['no submission', 'not submission', 'pending', 'in progress', 'awaiting'].some(k => s.includes(k))) {
+  if (['no submission', 'not submission', 'pending', 'in progress', 'awaiting'].some(k => s.includes(k))) {
     return 'pending';
   }
   return 'other';
+}
+
+export function isLongFeedbackText(value: string): boolean {
+  return value.trim().length > 56;
 }
 
 export function isAssignmentAccepted(value: string): boolean {
   return classifyAssignmentStatus(value) === 'accepted';
 }
 
-export function listAssignmentStatusColumns(cols: string[]): string[] {
-  return cols.filter(col => !isAssignmentCommentColumn(col));
+export function listAssignmentStatusColumns(cols: string[], allRowCols: string[] = cols): string[] {
+  const exclude = new Set<string>();
+  for (const col of allRowCols) {
+    if (isAssignmentCommentColumn(col)) exclude.add(col);
+  }
+  for (const col of cols) {
+    if (isAssignmentCommentColumn(col)) continue;
+    const commentCol = findCommentColumnForAssignment(col, allRowCols);
+    if (commentCol) exclude.add(commentCol);
+  }
+  return cols.filter(col => !exclude.has(col) && !isAssignmentCommentColumn(col));
+}
+
+export function resolveAssignmentDisplayFields(item: StudentAssignmentItem): {
+  statusLabel: string;
+  feedbackText: string;
+  kind: AssignmentDisplayKind;
+} {
+  const nameLooksLikeComment = isAssignmentCommentColumn(item.name);
+  const statusIsFeedback = isLongFeedbackText(item.status);
+
+  if (nameLooksLikeComment || (statusIsFeedback && !item.feedback)) {
+    return {
+      statusLabel: 'Feedback',
+      feedbackText: item.feedback || item.status,
+      kind: 'other',
+    };
+  }
+
+  if (statusIsFeedback && item.feedback) {
+    return {
+      statusLabel: item.status.slice(0, 48),
+      feedbackText: item.feedback,
+      kind: item.kind,
+    };
+  }
+
+  return {
+    statusLabel: item.status,
+    feedbackText: item.feedback,
+    kind: item.kind,
+  };
 }
 
 export function getAssignmentStatusExplanation(
@@ -95,7 +142,7 @@ export function buildStudentAssignmentItems(
   assignmentCols: string[],
   allRowCols: string[],
 ): StudentAssignmentItem[] {
-  const statusCols = listAssignmentStatusColumns(assignmentCols);
+  const statusCols = listAssignmentStatusColumns(assignmentCols, allRowCols);
   return statusCols.slice(0, 12).map(col => {
     const status = stringifyCellValue(matched[col]) || 'Pending';
     const commentCol = findCommentColumnForAssignment(col, allRowCols);

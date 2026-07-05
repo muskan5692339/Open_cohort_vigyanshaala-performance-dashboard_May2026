@@ -43,7 +43,9 @@ import {
   classifyAssignmentStatus,
   getAssignmentStatusExplanation,
   isAssignmentAccepted,
+  isAssignmentCommentColumn,
   listAssignmentStatusColumns,
+  resolveAssignmentDisplayFields,
   REJECTED_ASSIGNMENT_STEPS,
 } from './services/studentAssignmentDisplay';
 import { adminDataUpdatedAt } from './utils/formatAdminUpdateTime';
@@ -349,7 +351,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const missedAttendancePct = hoursAttendance
     ? hoursAttendance.missedPct
     : Math.max(0, Math.round((100 - attendancePct) * 100) / 100);
-  const assignmentStatusCols = listAssignmentStatusColumns(assignmentCols);
+  const assignmentStatusCols = listAssignmentStatusColumns(assignmentCols, Object.keys(matched));
   const assignmentPct = assignmentStatusCols.length
     ? Math.round((assignmentStatusCols.filter(col => isAssignmentAccepted(stringifyCellValue(matched[col]))).length / assignmentStatusCols.length) * 100) || 0
     : (() => {
@@ -578,37 +580,45 @@ export default function StudentDashboard({ email, onBack }: Props) {
               <h3>Assignments</h3>
               <div className="assignment-list">
                 {assignmentRows.map(item => {
-                  const explanation = getAssignmentStatusExplanation(item.kind, Boolean(item.feedback));
+                  if (isAssignmentCommentColumn(item.name)) return null;
+                  const display = resolveAssignmentDisplayFields(item);
+                  const explanation = getAssignmentStatusExplanation(display.kind, Boolean(display.feedbackText));
                   const statusClass =
-                    item.kind === 'accepted' ? 'accepted' : item.kind === 'rejected' ? 'rejected' : item.kind === 'pending' ? 'pending' : '';
+                    display.kind === 'accepted'
+                      ? 'accepted'
+                      : display.kind === 'rejected'
+                        ? 'rejected'
+                        : display.kind === 'pending'
+                          ? 'pending'
+                          : '';
                   return (
                     <div className="assignment-block" key={item.name}>
                       <div className="assignment-row">
-                        <div>
+                        <div className="assignment-name-wrap">
                           <div className="assignment-name">{item.name}</div>
                           <div className="assignment-date">{item.date}</div>
                         </div>
-                        <span className={`status-pill ${statusClass}`}>
-                          {item.status}
+                        <span className={`status-pill ${statusClass}`} title={display.statusLabel}>
+                          {display.statusLabel}
                         </span>
                       </div>
                       {explanation && (
-                        <div className={`assignment-explainer assignment-explainer--${item.kind}`}>
+                        <div className={`assignment-explainer assignment-explainer--${display.kind}`}>
                           {explanation}
                         </div>
                       )}
-                      {item.kind === 'rejected' && (
+                      {display.kind === 'rejected' && (
                         <ol className="assignment-action-steps">
                           {REJECTED_ASSIGNMENT_STEPS.map(step => (
                             <li key={step}>{step}</li>
                           ))}
                         </ol>
                       )}
-                      {item.feedback && (
-                        <div className={`assignment-feedback assignment-feedback--${item.kind}`}>
-                          <div className="assignment-feedback__label">Facilitator feedback</div>
+                      {display.feedbackText && (
+                        <div className={`assignment-feedback assignment-feedback--${display.kind}`}>
+                          <div className="assignment-feedback__label">Facilitator feedback — scroll to read all</div>
                           <div className="assignment-feedback__scroll" tabIndex={0}>
-                            {item.feedback}
+                            {display.feedbackText}
                           </div>
                         </div>
                       )}
