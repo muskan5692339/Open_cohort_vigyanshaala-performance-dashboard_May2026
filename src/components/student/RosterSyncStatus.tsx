@@ -1,4 +1,5 @@
 import './RosterSyncStatus.css';
+import { formatAdminUpdateTime } from '../../utils/formatAdminUpdateTime';
 
 interface Props {
   publishedAt: string | null;
@@ -10,21 +11,12 @@ interface Props {
   studentCount: number;
   onRefresh: () => void;
   compact?: boolean;
+  /** Hide "loaded on this device" — students only need admin upload time. */
+  adminTimeOnly?: boolean;
 }
 
 function formatWhen(iso: string | null): string {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return '—';
-  }
+  return formatAdminUpdateTime(iso);
 }
 
 export default function RosterSyncStatus({
@@ -37,6 +29,7 @@ export default function RosterSyncStatus({
   studentCount,
   onRefresh,
   compact = false,
+  adminTimeOnly = true,
 }: Props) {
   if (loading && studentCount === 0) {
     return (
@@ -58,11 +51,11 @@ export default function RosterSyncStatus({
         ) : incomplete ? (
           <strong>Some attendance details may be missing.</strong>
         ) : (
-          <strong>Data loaded from server.</strong>
+          <strong>Dashboard data last updated by admin.</strong>
         )}
         <span>
-          Published {formatWhen(publishedAt)}
-          {fetchedAt ? ` · Loaded on this device ${formatWhen(fetchedAt)}` : ''}
+          Source file uploaded {formatWhen(publishedAt)}
+          {!adminTimeOnly && fetchedAt ? ` · Loaded on this device ${formatWhen(fetchedAt)}` : ''}
         </span>
         {(isStale || incomplete) && (
           <span className="roster-sync__hint">

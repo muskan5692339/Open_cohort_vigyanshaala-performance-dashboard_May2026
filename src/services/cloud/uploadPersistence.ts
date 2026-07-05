@@ -28,6 +28,7 @@ type CohortFetchResult = {
     fileName: string;
     cohortName: string;
     loadedAt: string;
+    publishedAt?: string;
     studentCount: number;
     classWiseStudentCount?: number;
   };
@@ -68,6 +69,7 @@ function parseStoredCohort(stored: {
       fileName,
       cohortName,
       loadedAt: stored.publishedAt ?? new Date().toISOString(),
+      publishedAt: stored.publishedAt,
       studentCount: stored.rawRows.length,
       classWiseStudentCount: classWiseAttendance.length || undefined,
     },

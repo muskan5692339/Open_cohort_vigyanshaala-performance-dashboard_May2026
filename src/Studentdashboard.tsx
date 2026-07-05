@@ -34,8 +34,19 @@ import {
 } from './services/studentEmailLookup';
 import AnimeMetricAlert from './components/student/AnimeMetricAlert';
 import AnimeHelpAssistant from './components/student/AnimeHelpAssistant';
+import ChartDataUpdatedBubble from './components/student/ChartDataUpdatedBubble';
 import WeeklyUpdateNotice from './components/student/WeeklyUpdateNotice';
 import './components/student/AnimeMetricAlert.css';
+import './components/student/ChartDataUpdatedBubble.css';
+import {
+  buildStudentAssignmentItems,
+  classifyAssignmentStatus,
+  getAssignmentStatusExplanation,
+  isAssignmentAccepted,
+  listAssignmentStatusColumns,
+  REJECTED_ASSIGNMENT_STEPS,
+} from './services/studentAssignmentDisplay';
+import { adminDataUpdatedAt } from './utils/formatAdminUpdateTime';
 import './styles/StudentDashboard.css';
 
 interface Props {
@@ -71,11 +82,6 @@ function parsePct(raw: unknown): number {
 function isAccepted(value: string): boolean {
   const s = value.toLowerCase();
   return ['accepted', 'submitted', 'complete', 'completed', 'pass'].some(k => s.includes(k));
-}
-
-function isPending(value: string): boolean {
-  const s = value.toLowerCase();
-  return ['pending', 'no submission', 'not submission', 'in progress', 'awaiting'].some(k => s.includes(k));
 }
 
 function normalizeColumnKey(key: string): string {
@@ -216,7 +222,7 @@ function SessionTrendDot(props: {
 }
 
 export default function StudentDashboard({ email, onBack }: Props) {
-  const { payload } = useUploadedExcel();
+  const { payload, meta } = useUploadedExcel();
   const mapping = (payload?.mapping ?? {}) as ColumnMapping;
   const sessionTrendScrollRef = useRef<HTMLDivElement>(null);
   const [sessionTrendFocus, setSessionTrendFocus] = useState<SessionTrendFocus>('start');
@@ -343,8 +349,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const missedAttendancePct = hoursAttendance
     ? hoursAttendance.missedPct
     : Math.max(0, Math.round((100 - attendancePct) * 100) / 100);
-  const assignmentPct = assignmentCols.length
-    ? Math.round((assignmentCols.filter(col => isAccepted(stringifyCellValue(matched[col]))).length / assignmentCols.length) * 100) || 0
+  const assignmentStatusCols = listAssignmentStatusColumns(assignmentCols);
+  const assignmentPct = assignmentStatusCols.length
+    ? Math.round((assignmentStatusCols.filter(col => isAssignmentAccepted(stringifyCellValue(matched[col]))).length / assignmentStatusCols.length) * 100) || 0
     : (() => {
         const rows = (payload.assignments ?? []).filter(a => a.student_email.toLowerCase() === student.email.toLowerCase());
         if (!rows.length) return 0;
@@ -369,10 +376,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const engagementLabel = avgEngagement >= 70 ? 'High Engagement' : avgEngagement >= 40 ? 'Medium Engagement' : 'Low Engagement';
 
   const assignmentRows = assignmentCols.length
-    ? assignmentCols.slice(0, 8).map(col => {
-        const status = stringifyCellValue(matched[col]) || 'Pending';
-        return { name: col.replace(/_/g, ' '), date: '—', status };
-      })
+    ? buildStudentAssignmentItems(matched, assignmentCols, Object.keys(matched))
     : (payload.assignments ?? [])
         .filter(a => a.student_email.toLowerCase() === student.email.toLowerCase())
         .slice(0, 8)
@@ -380,6 +384,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
           name: a.assignment_name,
           date: a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : '—',
           status: a.status,
+          feedback: '',
+          kind: classifyAssignmentStatus(a.status),
         }));
 
   const quizBarData = quizScoreCols
@@ -445,6 +451,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const cohort = resolveField(matched, student.cohort || payload.cohortName, ['cohort', 'batch', 'program cohort']);
   const college = resolveField(matched, student.college, ['college', 'university', 'institution']);
   const studentCategory = resolveField(matched, undefined, ['student_cat', 'student category', 'college category', 'institution category']);
+  const adminUpdatedAt = adminDataUpdatedAt(meta);
 
   return (
     <div className="student-page">
@@ -531,7 +538,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
               </div>
             </article>
 
-            <article className="panel-card panel-large">
+            <article className="panel-card panel-large panel-card-wrap">
+              <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="quiz" delayMs={600} />
               <h3>Quiz performance</h3>
               <div className="panel-chart">
                 <ResponsiveContainer width="100%" height="100%">
@@ -565,28 +573,53 @@ export default function StudentDashboard({ email, onBack }: Props) {
               </div>
             </article>
 
-            <article className="panel-card panel-large">
+            <article className="panel-card panel-large panel-card-wrap">
+              <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="assignments" delayMs={900} />
               <h3>Assignments</h3>
               <div className="assignment-list">
                 {assignmentRows.map(item => {
-                  const pending = isPending(item.status);
-                  const accepted = isAccepted(item.status);
+                  const explanation = getAssignmentStatusExplanation(item.kind, Boolean(item.feedback));
+                  const statusClass =
+                    item.kind === 'accepted' ? 'accepted' : item.kind === 'rejected' ? 'rejected' : item.kind === 'pending' ? 'pending' : '';
                   return (
-                    <div className="assignment-row" key={item.name}>
-                      <div>
-                        <div className="assignment-name">{item.name}</div>
-                        <div className="assignment-date">{item.date}</div>
+                    <div className="assignment-block" key={item.name}>
+                      <div className="assignment-row">
+                        <div>
+                          <div className="assignment-name">{item.name}</div>
+                          <div className="assignment-date">{item.date}</div>
+                        </div>
+                        <span className={`status-pill ${statusClass}`}>
+                          {item.status}
+                        </span>
                       </div>
-                      <span className={`status-pill ${accepted ? 'accepted' : pending ? 'pending' : ''}`}>
-                        {item.status}
-                      </span>
+                      {explanation && (
+                        <div className={`assignment-explainer assignment-explainer--${item.kind}`}>
+                          {explanation}
+                        </div>
+                      )}
+                      {item.kind === 'rejected' && (
+                        <ol className="assignment-action-steps">
+                          {REJECTED_ASSIGNMENT_STEPS.map(step => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      )}
+                      {item.feedback && (
+                        <div className={`assignment-feedback assignment-feedback--${item.kind}`}>
+                          <div className="assignment-feedback__label">Facilitator feedback</div>
+                          <div className="assignment-feedback__scroll" tabIndex={0}>
+                            {item.feedback}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             </article>
 
-            <article className="panel-card panel-large session-trend-panel">
+            <article className="panel-card panel-large session-trend-panel panel-card-wrap">
+              <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="sessions" delayMs={1200} />
               <h3>Session-wise trend</h3>
               {hasAnySessionTrend && (
                 <div className="session-trend-controls" role="group" aria-label="Session chart options">

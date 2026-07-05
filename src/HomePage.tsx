@@ -9,6 +9,7 @@ import {
 } from './services/studentEmailLookup';
 import './styles/HomePage.css';
 import RosterSyncStatus from './components/student/RosterSyncStatus';
+import { adminDataUpdatedAt, formatAdminUpdateTime } from './utils/formatAdminUpdateTime';
 
 const BRAND = {
   purple: '#863bff',
@@ -124,6 +125,8 @@ export default function HomePage({
       ? BRAND.purple
       : '#9ca3af';
 
+  const adminUpdatedAt = adminDataUpdatedAt(meta);
+
   return (
     <div className="student-home">
       <header className="student-home__header">
@@ -163,7 +166,7 @@ export default function HomePage({
 
           {studentOnly && (
             <RosterSyncStatus
-              publishedAt={meta?.publishedAt ?? meta?.loadedAt ?? null}
+              publishedAt={adminUpdatedAt}
               fetchedAt={meta?.fetchedAt ?? null}
               loading={datasetLoading}
               refreshing={rosterRefreshing}
@@ -171,6 +174,7 @@ export default function HomePage({
               incomplete={rosterIncomplete}
               studentCount={lookupCount}
               onRefresh={() => { void refreshRoster(); }}
+              adminTimeOnly
             />
           )}
 
@@ -186,7 +190,7 @@ export default function HomePage({
               {!datasetLoading && lookupCount > 0 && (
                 <span style={{ display: 'block', marginTop: 6, color: '#15803d' }}>
                   {lookupCount} registered email{lookupCount === 1 ? '' : 's'} ready
-                  {meta?.loadedAt ? ` (updated ${new Date(meta.loadedAt).toLocaleDateString()})` : ''}.
+                  {adminUpdatedAt ? ` (admin upload ${formatAdminUpdateTime(adminUpdatedAt)})` : ''}.
                 </span>
               )}
               {!datasetLoading && lookupCount === 0 && (
