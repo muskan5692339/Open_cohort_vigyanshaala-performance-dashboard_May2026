@@ -119,6 +119,7 @@ export interface Filters {
 }
 
 export type SidebarSection =
+  | 'program-overview'
   | 'dashboard'
   | 'profile-approvals'
   | 'students'

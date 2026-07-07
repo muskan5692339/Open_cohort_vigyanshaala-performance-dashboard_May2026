@@ -21,6 +21,7 @@ const DashboardHealthPanel = lazyWithRetry(() => import('../../components/dashbo
 const AuditLogPanel = lazyWithRetry(() => import('../../components/dashboard/admin/AuditLogPanel'));
 const TelemetryPanel = lazyWithRetry(() => import('../../components/system/TelemetryPanel'));
 const AdminWeeklyBrief = lazyWithRetry(() => import('../../components/dashboard/admin/AdminWeeklyBrief'));
+const AdminProgramOverview = lazyWithRetry(() => import('../../components/dashboard/admin/AdminProgramOverview'));
 const AdminProfileApprovals = lazyWithRetry(() => import('../../components/dashboard/admin/AdminProfileApprovals'));
 const ProgramIntelligenceHub = lazyWithRetry(() => import('../../components/dashboard/admin/intelligence/ProgramIntelligenceHub'));
 const SavedFilterViewsPanel = lazyWithRetry(() => import('../../components/dashboard/admin/SavedFilterViewsPanel'));
@@ -512,6 +513,16 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
     }
 
     switch (section) {
+      case 'program-overview':
+        return (
+          <Suspense fallback={<ChartFallback />}>
+            <AdminProgramOverview
+              rows={rawRows}
+              headers={payload?.headers ?? (rawRows[0] ? Object.keys(rawRows[0]) : [])}
+              mapping={mapping}
+            />
+          </Suspense>
+        );
       case 'dashboard':
         return (
           <Suspense fallback={<ChartFallback />}>
