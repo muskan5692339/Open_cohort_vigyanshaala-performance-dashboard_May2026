@@ -134,7 +134,7 @@ export const REJECTED_ASSIGNMENT_STEPS = [
   'Read every point in the facilitator feedback below.',
   'Update your work to fix each issue mentioned.',
   'Re-submit the assignment for review.',
-  'Check this dashboard after the next sync (Monday, Wednesday, or Saturday) for your updated status.',
+  'Check this dashboard after the next sync (Monday, Wednesday, or Friday) for your updated status.',
 ] as const;
 
 export function buildStudentAssignmentItems(

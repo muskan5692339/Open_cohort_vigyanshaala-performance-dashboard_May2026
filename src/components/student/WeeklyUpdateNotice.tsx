@@ -1,6 +1,6 @@
 import './WeeklyUpdateNotice.css';
 
-const UPDATE_DAYS = ['Monday', 'Wednesday', 'Saturday'] as const;
+const UPDATE_DAYS = ['Monday', 'Wednesday', 'Friday'] as const;
 
 export default function WeeklyUpdateNotice() {
   return (
