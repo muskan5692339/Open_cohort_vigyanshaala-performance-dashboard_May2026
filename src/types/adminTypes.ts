@@ -120,15 +120,16 @@ export interface Filters {
 
 export type SidebarSection =
   | 'dashboard'
-  | 'cohort-overview'
+  | 'profile-approvals'
   | 'students'
+  | 'data-source'
+  | 'cohort-overview'
   | 'attendance'
   | 'assignments'
   | 'quizzes'
   | 'risk'
   | 'weekly-ops'
   | 'cohort-comparison'
-  | 'data-source'
   | 'help-center'
   | 'system-health'
   | 'sync'

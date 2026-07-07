@@ -1,20 +1,12 @@
 import { useState } from 'react';
 import {
   LayoutGrid,
-  PieChart,
   Users,
-  Calendar,
-  ClipboardList,
-  Award,
-  AlertTriangle,
-  Activity,
-  BarChart3,
   Database,
   ArrowLeft,
   Menu,
   X,
-  HelpCircle,
-  ActivitySquare,
+  UserCheck,
 } from 'lucide-react';
 import type { SidebarSection } from '../../../types/adminTypes';
 import { BRAND } from '../../../types/adminTypes';
@@ -31,23 +23,18 @@ interface NavItem {
   icon: typeof LayoutGrid;
 }
 
+import { countPendingProfileCorrections } from '../../../services/studentProfileCorrections';
+
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
-  { id: 'cohort-overview', label: 'Cohort Overview', icon: PieChart },
-  { id: 'students', label: 'Students', icon: Users },
-  { id: 'attendance', label: 'Attendance Analytics', icon: Calendar },
-  { id: 'assignments', label: 'Assignment Analytics', icon: ClipboardList },
-  { id: 'quizzes', label: 'Quiz Analytics', icon: Award },
-  { id: 'risk', label: 'Risk Intelligence', icon: AlertTriangle },
-  { id: 'weekly-ops', label: 'Weekly Operations', icon: Activity },
-  { id: 'cohort-comparison', label: 'Cohort Comparison', icon: BarChart3 },
+  { id: 'dashboard', label: 'Weekly Dashboard', icon: LayoutGrid },
+  { id: 'profile-approvals', label: 'Student Updates', icon: UserCheck },
   { id: 'data-source', label: 'Data Sources', icon: Database },
-  { id: 'system-health', label: 'System Health', icon: ActivitySquare },
-  { id: 'help-center', label: 'Help Center', icon: HelpCircle },
+  { id: 'students', label: 'Student Table', icon: Users },
 ];
 
 export default function Sidebar({ active, onChange, onBackToStudent }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pendingUpdates = countPendingProfileCorrections();
 
   const sidebarStyle: React.CSSProperties = {
     width: 256,
@@ -179,6 +166,19 @@ export default function Sidebar({ active, onChange, onBackToStudent }: SidebarPr
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
+                {item.id === 'profile-approvals' && pendingUpdates > 0 && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    background: BRAND.yellow,
+                    color: BRAND.navy,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    borderRadius: 999,
+                    padding: '2px 7px',
+                  }}>
+                    {pendingUpdates}
+                  </span>
+                )}
               </button>
             );
           })}

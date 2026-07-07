@@ -8,6 +8,7 @@ import {
   computeHealthScore,
   generateProgramIntelligence,
 } from '../services/programIntelligence';
+import { computeWeeklyAssignmentTotals } from '../services/weeklyAdminMetrics';
 import {
   getPreviousSnapshot,
   listUploadSnapshots,
@@ -48,7 +49,16 @@ export function useProgramIntelligence(input: {
     savedRef.current = key;
 
     const health = computeHealthScore(analytics, dataQuality);
-    const metrics = buildSnapshotMetrics(analytics, health);
+    const headers = rows.length ? Object.keys(rows[0]) : [];
+    const weekly = computeWeeklyAssignmentTotals(rows, headers, mapping);
+    const metrics = {
+      ...buildSnapshotMetrics(analytics, health),
+      assignmentsSubmitted: weekly.assignmentsSubmitted,
+      assignmentsReviewed: weekly.assignmentsReviewed,
+      assignmentsAccepted: weekly.assignmentsAccepted,
+      assignmentsPending: weekly.assignmentsPending,
+      interventionBreakdown: weekly.interventionBreakdown,
+    };
     saveUploadSnapshot({ fileName, metrics });
 
     const bundle = generateProgramIntelligence({

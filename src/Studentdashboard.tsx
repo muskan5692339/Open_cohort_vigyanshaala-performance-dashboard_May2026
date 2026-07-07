@@ -36,7 +36,9 @@ import AnimeMetricAlert from './components/student/AnimeMetricAlert';
 import AnimeHelpAssistant from './components/student/AnimeHelpAssistant';
 import ChartDataUpdatedBubble from './components/student/ChartDataUpdatedBubble';
 import ChartMobileFrame from './components/student/ChartMobileFrame';
+import StudentProfileEditPanel from './components/student/StudentProfileEditPanel';
 import WeeklyUpdateNotice from './components/student/WeeklyUpdateNotice';
+import './components/student/StudentProfileEditPanel.css';
 import './components/student/AnimeMetricAlert.css';
 import './components/student/ChartDataUpdatedBubble.css';
 import './components/student/ChartMobileFrame.css';
@@ -500,6 +502,16 @@ export default function StudentDashboard({ email, onBack }: Props) {
               <div className="header-value">{studentCategory}</div>
             </div>
           </div>
+          <StudentProfileEditPanel
+            email={studentEmail}
+            studentName={studentName}
+            current={{
+              phone,
+              college,
+              course: studentCourse,
+              year: pursuingYear,
+            }}
+          />
         </header>
 
         <div className="section-body">

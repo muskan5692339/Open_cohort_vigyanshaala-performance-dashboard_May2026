@@ -20,6 +20,8 @@ const TestingQualityReportPage = lazyWithRetry(() => import('./TestingQualityRep
 const DashboardHealthPanel = lazyWithRetry(() => import('../../components/dashboard/admin/DashboardHealthPanel'));
 const AuditLogPanel = lazyWithRetry(() => import('../../components/dashboard/admin/AuditLogPanel'));
 const TelemetryPanel = lazyWithRetry(() => import('../../components/system/TelemetryPanel'));
+const AdminWeeklyBrief = lazyWithRetry(() => import('../../components/dashboard/admin/AdminWeeklyBrief'));
+const AdminProfileApprovals = lazyWithRetry(() => import('../../components/dashboard/admin/AdminProfileApprovals'));
 const ProgramIntelligenceHub = lazyWithRetry(() => import('../../components/dashboard/admin/intelligence/ProgramIntelligenceHub'));
 const SavedFilterViewsPanel = lazyWithRetry(() => import('../../components/dashboard/admin/SavedFilterViewsPanel'));
 const ExportPanel = lazyWithRetry(() => import('../../components/dashboard/admin/ExportPanel'));
@@ -188,7 +190,7 @@ function LoadErrorState({ error, onRetry }: { error: string; onRetry: () => void
 export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPageProps) {
   const [section, setSection] = useState<SidebarSection>('dashboard');
   const [syncing, setSyncing] = useState(false);
-  const { payload } = useUploadedExcel();
+  const { payload, meta } = useUploadedExcel();
 
   const {
     loading,
@@ -512,11 +514,21 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
     switch (section) {
       case 'dashboard':
         return (
-          <>
-            {renderOpsToolbar()}
-            {intelligence && <ProgramIntelligenceHub intelligence={intelligence} mode="dashboard" />}
-            {renderAnalyticsSections()}
-          </>
+          <Suspense fallback={<ChartFallback />}>
+            <AdminWeeklyBrief
+              rows={rawRows}
+              headers={payload?.headers ?? (rawRows[0] ? Object.keys(rawRows[0]) : [])}
+              mapping={mapping}
+              fileName={fileName}
+              publishedAt={meta?.publishedAt ?? meta?.loadedAt ?? null}
+            />
+          </Suspense>
+        );
+      case 'profile-approvals':
+        return (
+          <Suspense fallback={<ChartFallback />}>
+            <AdminProfileApprovals />
+          </Suspense>
         );
       case 'cohort-overview':
       case 'cohort-comparison':
@@ -542,8 +554,7 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
       case 'students':
         return (
           <>
-            {renderOpsToolbar()}
-            <SectionHeading title="Master Student Table" hint="Search, sort, filter, and export dynamically mapped columns." />
+            <SectionHeading title="Student table" hint="Raw workbook rows — use Weekly Dashboard for trends." />
             <DynamicStudentTable
               rows={deferredFilteredRows}
               allColumns={tableColumns}

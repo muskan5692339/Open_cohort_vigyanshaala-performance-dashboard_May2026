@@ -76,6 +76,15 @@ export interface TrendMetric {
   unit: '%' | 'count' | 'score';
 }
 
+export interface WeeklyInterventionStats {
+  group: string;
+  studentCount: number;
+  assignmentsSubmitted: number;
+  assignmentsReviewed: number;
+  assignmentsAccepted: number;
+  assignmentsPending: number;
+}
+
 export interface UploadSnapshotMetrics {
   studentCount: number;
   avgAttendance: number;
@@ -85,6 +94,11 @@ export interface UploadSnapshotMetrics {
   atRiskCount: number;
   criticalRiskCount: number;
   healthScore: number;
+  assignmentsSubmitted?: number;
+  assignmentsReviewed?: number;
+  assignmentsAccepted?: number;
+  assignmentsPending?: number;
+  interventionBreakdown?: WeeklyInterventionStats[];
 }
 
 export interface UploadSnapshot {
