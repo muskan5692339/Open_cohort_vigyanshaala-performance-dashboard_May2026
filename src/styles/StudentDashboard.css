@@ -39,7 +39,8 @@
   background: var(--sd-surface);
   border: 1px solid var(--sd-border);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .student-empty {
@@ -120,6 +121,9 @@
 
 .section-body {
   padding: 16px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 .stat-row {
@@ -165,6 +169,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
 }
 
 .panel-card {
@@ -172,6 +177,8 @@
   border-radius: 12px;
   background: var(--sd-surface);
   padding: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .panel-card h3 {
@@ -573,6 +580,7 @@
 @media (max-width: 640px) {
   .student-page {
     padding: 10px;
+    overflow-x: hidden;
   }
 
   .student-header {
@@ -581,6 +589,16 @@
 
   .student-name {
     font-size: 22px;
+  }
+
+  .section-body {
+    padding: 12px;
+  }
+
+  .session-trend-scroll-hint {
+    margin-left: 0;
+    white-space: normal;
+    flex: 1 1 100%;
   }
 
   .header-profile-grid,

@@ -35,9 +35,11 @@ import {
 import AnimeMetricAlert from './components/student/AnimeMetricAlert';
 import AnimeHelpAssistant from './components/student/AnimeHelpAssistant';
 import ChartDataUpdatedBubble from './components/student/ChartDataUpdatedBubble';
+import ChartMobileFrame from './components/student/ChartMobileFrame';
 import WeeklyUpdateNotice from './components/student/WeeklyUpdateNotice';
 import './components/student/AnimeMetricAlert.css';
 import './components/student/ChartDataUpdatedBubble.css';
+import './components/student/ChartMobileFrame.css';
 import {
   buildStudentAssignmentItems,
   classifyAssignmentStatus,
@@ -49,6 +51,7 @@ import {
   REJECTED_ASSIGNMENT_STEPS,
 } from './services/studentAssignmentDisplay';
 import { adminDataUpdatedAt } from './utils/formatAdminUpdateTime';
+import { useMediaQuery } from './hooks/useMediaQuery';
 import './styles/StudentDashboard.css';
 
 interface Props {
@@ -58,6 +61,8 @@ interface Props {
 
 /** Minimum chart width per session so labels stay readable when scrolling. */
 const SESSION_TREND_SLOT_WIDTH = 72;
+/** Minimum chart width per quiz bar on narrow screens. */
+const QUIZ_SLOT_WIDTH = 108;
 type SessionTrendFocus = 'start' | 'latest';
 type SessionChartSeries = 'live' | 'prerecorded';
 
@@ -229,6 +234,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionTrendScrollRef = useRef<HTMLDivElement>(null);
   const [sessionTrendFocus, setSessionTrendFocus] = useState<SessionTrendFocus>('start');
   const [sessionChartSeries, setSessionChartSeries] = useState<SessionChartSeries>('live');
+  const isMobile = useMediaQuery('(max-width: 640px)');
 
   const lookup = useMemo(() => lookupStudentByEmail(payload, email), [payload, email]);
 
@@ -264,14 +270,19 @@ export default function StudentDashboard({ email, onBack }: Props) {
   useEffect(() => {
     const el = sessionTrendScrollRef.current;
     if (!el || activeTrendLength === 0) return;
-    const frame = requestAnimationFrame(() => {
+    const apply = () => {
       const targetLeft = sessionTrendFocus === 'latest'
         ? Math.max(0, el.scrollWidth - el.clientWidth)
         : 0;
       el.scrollTo({ left: targetLeft, behavior: 'smooth' });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [sessionTrendFocus, activeTrendLength, email, sessionChartSeries]);
+    };
+    const frame = requestAnimationFrame(apply);
+    const timer = window.setTimeout(apply, 150);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [sessionTrendFocus, activeTrendLength, email, sessionChartSeries, isMobile]);
 
   if (!payload || !matched || !lookup) {
     return (
@@ -422,8 +433,10 @@ export default function StudentDashboard({ email, onBack }: Props) {
     ? 100
     : Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
   const sessionTrendYLabel = sessionChartSeries === 'prerecorded' ? 'Completion %' : 'Hours';
-  const sessionTrendChartWidth = Math.max(activeSessionTrend.length * SESSION_TREND_SLOT_WIDTH, 320);
-  const sessionTrendNeedsScroll = activeSessionTrend.length > 4;
+  const sessionTrendChartWidth = Math.max(activeSessionTrend.length * SESSION_TREND_SLOT_WIDTH, isMobile ? 300 : 320);
+  const sessionTrendNeedsScroll = activeSessionTrend.length > (isMobile ? 1 : 4);
+  const quizChartWidth = Math.max(quizData.length * QUIZ_SLOT_WIDTH, isMobile ? 300 : 320);
+  const quizNeedsScroll = quizData.length > (isMobile ? 1 : 3);
   const sessionTrendScrollHint = sessionChartSeries === 'live'
     ? `${activeSessionTrend.length} classes · scroll sideways →`
     : `${activeSessionTrend.length} videos · scroll sideways →`;
@@ -519,9 +532,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
           </div>
 
           <div className="charts-grid">
-            <article className="panel-card panel-large">
+            <article className="panel-card panel-large panel-card-wrap">
               <h3>Attendance breakdown</h3>
-              <div className="panel-chart">
+              <ChartMobileFrame chartKey="attendance" height={220}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={attendanceDonut} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92}>
@@ -533,7 +546,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-              </div>
+              </ChartMobileFrame>
               <div className="legend-row">
                 <span><i className="legend-dot attended" />Attended ({attendancePct.toFixed(1)}%)</span>
                 <span><i className="legend-dot missed" />Missed ({missedAttendancePct.toFixed(1)}%)</span>
@@ -543,23 +556,32 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <article className="panel-card panel-large panel-card-wrap">
               <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="quiz" delayMs={600} />
               <h3>Quiz performance</h3>
-              <div className="panel-chart">
+              <ChartMobileFrame
+                chartKey="quiz"
+                height={220}
+                needsHorizontalScroll={quizNeedsScroll}
+                innerWidth={quizChartWidth}
+                showScrollLadder={quizNeedsScroll}
+              >
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={quizData}>
+                  <BarChart data={quizData} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
                     <XAxis
                       dataKey="name"
                       stroke="var(--sd-text-muted)"
-                      fontSize={11}
+                      fontSize={isMobile ? 10 : 11}
                       interval={0}
+                      angle={isMobile ? -20 : 0}
+                      textAnchor={isMobile ? 'end' : 'middle'}
+                      height={isMobile ? 52 : 30}
                       tickFormatter={value => {
                         const text = String(value ?? '');
-                        return text.length > 26 ? `${text.slice(0, 26)}...` : text;
+                        return text.length > (isMobile ? 18 : 26) ? `${text.slice(0, isMobile ? 18 : 26)}...` : text;
                       }}
                     />
-                    <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} />
+                    <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} width={isMobile ? 28 : 36} />
                     <Tooltip />
-                    <Bar dataKey="score" radius={[6, 6, 0, 0]}>
+                    <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={isMobile ? 36 : 48}>
                       {quizData.map((entry, idx) => (
                         <Cell key={`${entry.name}-${idx}`} fill={entry.score >= 100 ? 'var(--sd-light-green)' : 'var(--sd-accent)'} />
                       ))}
@@ -567,7 +589,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              </ChartMobileFrame>
               <div className="quiz-summary">
                 <MiniStat label="Average" value={`${avgQuiz}%`} />
                 <MiniStat label="Highest" value={`${quizHighest}%`} />
@@ -683,19 +705,15 @@ export default function StudentDashboard({ email, onBack }: Props) {
                 </div>
               )}
               {activeSessionTrend.length > 0 ? (
-                <div
-                  ref={sessionTrendScrollRef}
-                  className={`panel-chart${sessionTrendNeedsScroll ? ' panel-chart--scroll' : ''}`}
+                <ChartMobileFrame
+                  chartKey="sessions"
+                  height={240}
+                  needsHorizontalScroll={sessionTrendNeedsScroll}
+                  innerWidth={sessionTrendChartWidth}
+                  scrollRef={sessionTrendScrollRef}
+                  showScrollLadder={sessionTrendNeedsScroll}
                 >
-                  <div
-                    className="session-trend-scroll"
-                    style={{
-                      width: sessionTrendNeedsScroll ? sessionTrendChartWidth : '100%',
-                      minWidth: '100%',
-                      height: '100%',
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%">
                       {sessionChartSeries === 'prerecorded' ? (
                         <BarChart data={activeSessionTrend} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
@@ -770,8 +788,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                         </LineChart>
                       )}
                     </ResponsiveContainer>
-                  </div>
-                </div>
+                </ChartMobileFrame>
               ) : hasAnySessionTrend ? (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
                   No pre-recorded video data for this student yet. Re-upload the workbook with
