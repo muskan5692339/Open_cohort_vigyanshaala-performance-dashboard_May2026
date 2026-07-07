@@ -79,6 +79,9 @@ export interface TrendMetric {
 export interface WeeklyInterventionStats {
   group: string;
   studentCount: number;
+  avgAttendance: number;
+  avgProgramHours: number;
+  avgQuizScore: number;
   assignmentsSubmitted: number;
   assignmentsReviewed: number;
   assignmentsAccepted: number;
@@ -89,6 +92,8 @@ export interface UploadSnapshotMetrics {
   studentCount: number;
   avgAttendance: number;
   avgAssessment: number;
+  avgQuizScore?: number;
+  avgProgramHours?: number;
   completionRate: number;
   certificationRate: number;
   atRiskCount: number;
