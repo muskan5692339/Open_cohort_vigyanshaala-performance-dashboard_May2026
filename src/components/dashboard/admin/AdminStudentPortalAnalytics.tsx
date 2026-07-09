@@ -46,11 +46,11 @@ export default function AdminStudentPortalAnalytics() {
         }
         return;
       }
-      const data = await fetchStudentPortalStats(session.access_token, days);
+      const { stats: data, error: fetchError } = await fetchStudentPortalStats(session.access_token, days);
       if (cancelled) return;
       if (!data) {
         setStats(null);
-        setError('Could not load portal analytics. Check Supabase telemetry is configured.');
+        setError(fetchError ?? 'Could not load portal analytics.');
       } else {
         setStats(data);
         setError(null);
@@ -98,6 +98,13 @@ export default function AdminStudentPortalAnalytics() {
       {!loading && error && (
         <div style={{ padding: 16, background: BRAND.yellowLight, border: `1px solid ${BRAND.yellow}`, borderRadius: 10, fontSize: 13 }}>
           {error}
+        </div>
+      )}
+
+      {!loading && stats && stats.totalViews === 0 && stats.totalClicks === 0 && (
+        <div style={{ padding: 16, background: '#f0f4ff', border: `1px solid ${BRAND.border}`, borderRadius: 10, fontSize: 13 }}>
+          No student portal activity recorded yet for this period. Share{' '}
+          <code style={{ fontSize: 12 }}>/student-view</code> with students — visits and clicks will appear here after they use the dashboard.
         </div>
       )}
 

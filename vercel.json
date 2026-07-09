@@ -1,7 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/list-sync-runs", "destination": "/api/persist-sync-run" },
-    { "source": "/api/student-engagement", "destination": "/api/list-uploads" },
+    { "source": "/api/student-engagement", "destination": "/api/list-uploads?portal=1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

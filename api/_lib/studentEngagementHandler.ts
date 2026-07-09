@@ -25,8 +25,12 @@ interface TelemetryRow {
 }
 
 export function isStudentEngagementRequest(req: VercelRequest): boolean {
-  const url = req.url ?? '';
-  return url.includes('student-engagement');
+  if (String(req.query?.portal ?? '') === '1') return true;
+  if (String(req.query?.mode ?? '') === 'portal-analytics') return true;
+  const url = String(req.url ?? '');
+  if (url.includes('student-engagement')) return true;
+  const orig = String(req.headers['x-vercel-original-url'] ?? req.headers['x-invoke-path'] ?? '');
+  return orig.includes('student-engagement');
 }
 
 function eventNameForType(type: PostBody['type']): string {

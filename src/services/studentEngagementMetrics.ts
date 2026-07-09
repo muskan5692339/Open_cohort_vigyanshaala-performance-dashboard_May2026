@@ -38,16 +38,32 @@ export function formatDurationMs(ms: number): string {
 export async function fetchStudentPortalStats(
   accessToken: string | undefined,
   days = 30,
-): Promise<StudentPortalStats | null> {
-  if (!accessToken) return null;
+): Promise<{ stats: StudentPortalStats | null; error: string | null }> {
+  if (!accessToken) {
+    return { stats: null, error: 'Sign in with cloud admin access to view student portal analytics.' };
+  }
   const orgId = resolveOrgId();
   try {
-    const res = await fetch(`/api/student-engagement?orgId=${encodeURIComponent(orgId)}&days=${days}`, {
+    const qs = new URLSearchParams({
+      mode: 'portal-analytics',
+      orgId,
+      days: String(days),
+    });
+    const res = await fetch(`/api/list-uploads?${qs}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!res.ok) return null;
-    return (await res.json()) as StudentPortalStats;
-  } catch {
-    return null;
+    if (!res.ok) {
+      let message = `Server returned ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body?.error) message = body.error;
+      } catch {
+        // ignore
+      }
+      return { stats: null, error: message };
+    }
+    return { stats: (await res.json()) as StudentPortalStats, error: null };
+  } catch (e) {
+    return { stats: null, error: (e as Error).message || 'Network error loading portal analytics.' };
   }
 }
