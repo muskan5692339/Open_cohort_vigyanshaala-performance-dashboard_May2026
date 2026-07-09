@@ -33,6 +33,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rawRows?: Record<string, string>[];
     mapping?: Record<string, unknown>;
     discoveredColumns?: unknown[];
+    classWiseAttendance?: unknown[];
+    classWiseAttendanceColumns?: string[];
     existingUploadId?: string;
     syncRunId?: string;
   };

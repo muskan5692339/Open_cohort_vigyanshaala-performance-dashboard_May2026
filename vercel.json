@@ -43,6 +43,9 @@
     },
     "api/list-uploads.ts": {
       "includeFiles": "api/_lib/**"
+    },
+    "api/student-engagement.ts": {
+      "includeFiles": "api/_lib/**"
     }
   }
 }

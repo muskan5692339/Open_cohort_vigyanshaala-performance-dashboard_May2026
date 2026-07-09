@@ -320,7 +320,7 @@ export function lookupStudentByEmail(
 
   const studentCount = getStudentLookupCount(payload);
   const emailColumn = resolveEmailColumnKey(payload);
-  if (import.meta.env?.DEV) {
+  if (process.env.NODE_ENV !== 'production') {
     console.debug('[StudentLookup] records available:', studentCount, emailColumn ? `(email column: "${emailColumn}")` : '');
   }
 

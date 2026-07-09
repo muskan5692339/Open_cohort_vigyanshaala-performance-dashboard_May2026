@@ -61,7 +61,7 @@ async function batchGetIds(
   for (const c of chunks(unique, CHUNK)) {
     const { data, error } = await db.from(table).select(`id, ${col}`).in(col, c);
     if (error) throw new Error(`Lookup failed on ${table}.${col}: ${error.message}`);
-    for (const r of (data ?? []) as { id: string; [k: string]: string }[]) map.set(r[col], r.id);
+    for (const r of (data ?? []) as unknown as { id: string; [k: string]: string }[]) map.set(r[col], r.id);
   }
   return map;
 }
