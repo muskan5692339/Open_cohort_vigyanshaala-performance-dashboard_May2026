@@ -2,11 +2,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './_lib/assertOrgAccess';
 import { createServiceClient } from './_lib/serviceClient';
 import { fetchLatestCohortPayloadForOrg, fetchLatestCohortPayloadAny } from './_lib/latestCohortPayload';
+import { handleStudentEngagement, isStudentEngagementRequest } from './_lib/studentEngagementHandler';
 
 const ROUTE = '/api/list-uploads';
 
-/** Public student roster bootstrap — no auth, latest persisted workbook for org. */
+/** Upload list + student portal analytics (rewritten from /api/student-engagement on Hobby plan). */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (isStudentEngagementRequest(req)) {
+    return handleStudentEngagement(req, res);
+  }
+
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const orgId = req.query.orgId as string;

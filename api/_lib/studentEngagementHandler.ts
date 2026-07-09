@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './_lib/assertOrgAccess';
-import { createServiceClient } from './_lib/serviceClient';
+import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './assertOrgAccess';
+import { createServiceClient } from './serviceClient';
 
 const ROUTE = '/api/student-engagement';
 
@@ -22,6 +22,11 @@ interface TelemetryRow {
   duration_ms: number | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
+}
+
+export function isStudentEngagementRequest(req: VercelRequest): boolean {
+  const url = req.url ?? '';
+  return url.includes('student-engagement');
 }
 
 function eventNameForType(type: PostBody['type']): string {
@@ -86,8 +91,7 @@ function aggregatePortalStats(rows: TelemetryRow[]) {
     const sessionId = String(meta.sessionId ?? '');
     if (!sessionId) continue;
     const email = String(meta.studentEmail ?? 'anonymous').toLowerCase();
-    const key = sessionId;
-    const existing = sessions.get(key) ?? {
+    const existing = sessions.get(sessionId) ?? {
       email,
       clicks: 0,
       activeMs: 0,
@@ -96,9 +100,7 @@ function aggregatePortalStats(rows: TelemetryRow[]) {
       isFinal: false,
     };
 
-    if (row.event_name === 'student_portal_page_view') {
-      existing.views += 1;
-    }
+    if (row.event_name === 'student_portal_page_view') existing.views += 1;
     if (row.event_name === 'student_portal_session_pulse') {
       const clicks = Number(meta.clickCount ?? 0);
       const ms = row.duration_ms ?? 0;
@@ -111,7 +113,7 @@ function aggregatePortalStats(rows: TelemetryRow[]) {
       }
     }
     existing.email = email;
-    sessions.set(key, existing);
+    sessions.set(sessionId, existing);
   }
 
   const byStudent = new Map<string, { email: string; clicks: number; activeMs: number; sessions: number; views: number }>();
@@ -135,17 +137,6 @@ function aggregatePortalStats(rows: TelemetryRow[]) {
   const avgTimePerStudentMs = uniqueStudents ? Math.round(totalActiveMs / uniqueStudents) : 0;
   const avgTimePerSessionMs = sessions.size ? Math.round(totalActiveMs / sessions.size) : 0;
 
-  const studentBreakdown = Array.from(byStudent.values())
-    .sort((a, b) => b.activeMs - a.activeMs)
-    .map(s => ({
-      email: s.email,
-      clicks: s.clicks,
-      activeMs: s.activeMs,
-      sessions: s.sessions,
-      views: s.views,
-      avgSessionMs: s.sessions ? Math.round(s.activeMs / s.sessions) : 0,
-    }));
-
   return {
     totalClicks,
     totalActiveMs,
@@ -154,7 +145,16 @@ function aggregatePortalStats(rows: TelemetryRow[]) {
     sessionCount: sessions.size,
     avgTimePerStudentMs,
     avgTimePerSessionMs,
-    studentBreakdown,
+    studentBreakdown: Array.from(byStudent.values())
+      .sort((a, b) => b.activeMs - a.activeMs)
+      .map(s => ({
+        email: s.email,
+        clicks: s.clicks,
+        activeMs: s.activeMs,
+        sessions: s.sessions,
+        views: s.views,
+        avgSessionMs: s.sessions ? Math.round(s.activeMs / s.sessions) : 0,
+      })),
   };
 }
 
@@ -194,7 +194,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleStudentEngagement(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST') return handlePost(req, res);
   if (req.method === 'GET') return handleGet(req, res);
   return res.status(405).json({ error: 'Method not allowed' });
