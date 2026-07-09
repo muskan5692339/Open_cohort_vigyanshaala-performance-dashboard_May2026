@@ -22,6 +22,7 @@ const AuditLogPanel = lazyWithRetry(() => import('../../components/dashboard/adm
 const TelemetryPanel = lazyWithRetry(() => import('../../components/system/TelemetryPanel'));
 const AdminWeeklyBrief = lazyWithRetry(() => import('../../components/dashboard/admin/AdminWeeklyBrief'));
 const AdminProgramOverview = lazyWithRetry(() => import('../../components/dashboard/admin/AdminProgramOverview'));
+const AdminStudentPortalAnalytics = lazyWithRetry(() => import('../../components/dashboard/admin/AdminStudentPortalAnalytics'));
 const AdminProfileApprovals = lazyWithRetry(() => import('../../components/dashboard/admin/AdminProfileApprovals'));
 const ProgramIntelligenceHub = lazyWithRetry(() => import('../../components/dashboard/admin/intelligence/ProgramIntelligenceHub'));
 const SavedFilterViewsPanel = lazyWithRetry(() => import('../../components/dashboard/admin/SavedFilterViewsPanel'));
@@ -521,6 +522,12 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
               headers={payload?.headers ?? (rawRows[0] ? Object.keys(rawRows[0]) : [])}
               mapping={mapping}
             />
+          </Suspense>
+        );
+      case 'portal-analytics':
+        return (
+          <Suspense fallback={<ChartFallback />}>
+            <AdminStudentPortalAnalytics />
           </Suspense>
         );
       case 'dashboard':

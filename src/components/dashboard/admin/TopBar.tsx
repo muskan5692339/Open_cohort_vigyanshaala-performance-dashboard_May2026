@@ -13,6 +13,7 @@ interface TopBarProps {
 
 const TITLES: Record<SidebarSection, { title: string; subtitle: string }> = {
   'program-overview': { title: 'Program Overview', subtitle: 'Activity tiers, assignments, quizzes — by category with student drill-down' },
+  'portal-analytics': { title: 'Portal Analytics', subtitle: 'Student clicks and time on /student-view' },
   dashboard: { title: 'Weekly Dashboard', subtitle: 'Assignment trends by intervention group — one readable screen' },
   'profile-approvals': { title: 'Student Updates', subtitle: 'Approve profile corrections submitted by students' },
   students: { title: 'Student Table', subtitle: 'Search and export — use Weekly Dashboard for insights' },

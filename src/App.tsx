@@ -6,6 +6,7 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import { UploadedExcelProvider } from './context/UploadedExcelContext';
 import { AuthProvider } from './context/AuthContext';
 import ErrorBoundary from './components/system/ErrorBoundary';
+import { useStudentEngagementTracker } from './hooks/useStudentEngagementTracker';
 
 type View = 'home' | 'student' | 'admin';
 
@@ -22,6 +23,12 @@ function AppContent() {
     location.pathname.startsWith('/admin') ? 'admin' : 'home',
   );
   const [email, setEmail] = useState<string | null>(null);
+
+  useStudentEngagementTracker(
+    isStudentOnlyRoute && view !== 'admin',
+    '/student-view',
+    view === 'student' ? email : null,
+  );
 
   useEffect(() => {
     if (location.pathname.startsWith('/admin')) {
