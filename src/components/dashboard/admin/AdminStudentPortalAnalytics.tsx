@@ -53,7 +53,11 @@ export default function AdminStudentPortalAnalytics() {
         setError(fetchError ?? 'Could not load portal analytics.');
       } else {
         setStats(data);
-        setError(null);
+        setError(
+          data.telemetryReady === false
+            ? 'Telemetry table not set up yet — run Supabase migration 006_sprint8_cloud.sql. Showing zeros until then.'
+            : null,
+        );
       }
       setLoading(false);
     })();

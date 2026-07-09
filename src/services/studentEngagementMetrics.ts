@@ -19,6 +19,7 @@ export interface StudentPortalStats {
     views: number;
     avgSessionMs: number;
   }[];
+  telemetryReady?: boolean;
 }
 
 function resolveOrgId(): string {
@@ -45,11 +46,10 @@ export async function fetchStudentPortalStats(
   const orgId = resolveOrgId();
   try {
     const qs = new URLSearchParams({
-      mode: 'portal-analytics',
       orgId,
       days: String(days),
     });
-    const res = await fetch(`/api/list-uploads?${qs}`, {
+    const res = await fetch(`/api/student-engagement?${qs}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) {

@@ -1,7 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/list-sync-runs", "destination": "/api/persist-sync-run" },
-    { "source": "/api/student-engagement", "destination": "/api/list-uploads?portal=1" },
+    { "source": "/api/list-upload-versions", "destination": "/api/list-uploads?mode=versions" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -43,6 +43,9 @@
       "includeFiles": "api/_lib/**"
     },
     "api/list-uploads.ts": {
+      "includeFiles": "api/_lib/**"
+    },
+    "api/student-engagement.ts": {
       "includeFiles": "api/_lib/**"
     }
   }
