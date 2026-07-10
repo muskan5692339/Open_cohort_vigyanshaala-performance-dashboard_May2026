@@ -14,11 +14,40 @@ export interface StudentPortalEventPayload {
 }
 
 const SESSION_KEY = 'vs_student_portal_session';
-const FLUSH_INTERVAL_MS = 30_000;
+const STUDENT_EMAIL_KEY = 'vs_student_portal_email';
+const FLUSH_INTERVAL_MS = 15_000;
 
 /** Anonymous student portal — use build-time org, not admin localStorage. */
 function resolveOrgId(): string {
   return import.meta.env.VITE_DEFAULT_ORG_ID || DEFAULT_ORG_ID;
+}
+
+export function readPersistedStudentEmail(): string | null {
+  try {
+    const raw = sessionStorage.getItem(STUDENT_EMAIL_KEY)?.trim().toLowerCase();
+    return raw || null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistStudentEmail(email: string | null | undefined): void {
+  try {
+    const normalized = email?.trim().toLowerCase();
+    if (normalized) sessionStorage.setItem(STUDENT_EMAIL_KEY, normalized);
+    else sessionStorage.removeItem(STUDENT_EMAIL_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function clearStudentPortalIdentity(): void {
+  try {
+    sessionStorage.removeItem(STUDENT_EMAIL_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 function newSessionId(): string {
@@ -78,13 +107,19 @@ export class StudentPortalSession {
   }
 
   setStudentEmail(email: string | null | undefined) {
-    this.studentEmail = email?.trim().toLowerCase() || null;
+    const normalized = email?.trim().toLowerCase() || null;
+    if (normalized) persistStudentEmail(normalized);
+    const resolved = normalized ?? readPersistedStudentEmail();
+    const changed = resolved !== this.studentEmail;
+    this.studentEmail = resolved;
+    if (this.started && changed && this.studentEmail) this.flush(false);
   }
 
   start() {
     if (this.started || typeof window === 'undefined') return;
     this.started = true;
     this.lastTick = Date.now();
+    this.studentEmail = readPersistedStudentEmail();
 
     void sendStudentPortalEvent({
       orgId: resolveOrgId(),
@@ -97,6 +132,7 @@ export class StudentPortalSession {
     this.onClick = () => {
       this.tick();
       this.clickCount += 1;
+      if (this.clickCount % 5 === 0) this.flush(false);
     };
     document.addEventListener('click', this.onClick, true);
 

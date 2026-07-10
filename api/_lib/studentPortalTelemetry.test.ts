@@ -58,4 +58,50 @@ describe('aggregatePortalStats', () => {
     expect(stats.uniqueStudents).toBe(1);
     expect(stats.studentBreakdown[0]?.email).toBe('a@test.com');
   });
+
+  it('keeps the highest click count across pulses in a session', () => {
+    const stats = aggregatePortalStats([
+      {
+        event_name: 'student_portal_session_pulse',
+        duration_ms: 30_000,
+        metadata: { sessionId: 's1', clickCount: 3 },
+        created_at: '2026-07-01T10:00:00.000Z',
+      },
+      {
+        event_name: 'student_portal_session_pulse',
+        duration_ms: 120_000,
+        metadata: { sessionId: 's1', clickCount: 18, isFinal: true },
+        created_at: '2026-07-01T10:05:00.000Z',
+      },
+      {
+        event_name: 'student_portal_session_pulse',
+        duration_ms: 60_000,
+        metadata: { sessionId: 's1', clickCount: 4 },
+        created_at: '2026-07-01T10:06:00.000Z',
+      },
+    ]);
+
+    expect(stats.totalClicks).toBe(18);
+    expect(stats.totalActiveMs).toBe(120_000);
+  });
+
+  it('prefers a later identified email over anonymous landing-page events', () => {
+    const stats = aggregatePortalStats([
+      {
+        event_name: 'student_portal_page_view',
+        duration_ms: null,
+        metadata: { sessionId: 's1' },
+        created_at: '2026-07-01T10:00:00.000Z',
+      },
+      {
+        event_name: 'student_portal_session_pulse',
+        duration_ms: 90_000,
+        metadata: { sessionId: 's1', studentEmail: 'student@college.edu', clickCount: 7, isFinal: true },
+        created_at: '2026-07-01T10:05:00.000Z',
+      },
+    ]);
+
+    expect(stats.studentBreakdown[0]?.email).toBe('student@college.edu');
+    expect(stats.totalClicks).toBe(7);
+  });
 });

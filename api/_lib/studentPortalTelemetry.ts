@@ -24,27 +24,34 @@ export function eventNameForPortalType(type: 'page_view' | 'session_pulse'): str
   return type === 'page_view' ? 'student_portal_page_view' : 'student_portal_session_pulse';
 }
 
+function resolveSessionEmail(current: string | undefined, meta: Record<string, unknown>): string {
+  const raw = meta.studentEmail;
+  if (typeof raw === 'string' && raw.trim()) return raw.trim().toLowerCase();
+  return current && current !== 'anonymous' ? current : 'anonymous';
+}
+
 export function aggregatePortalStats(rows: TelemetryRow[]) {
   const sessions = new Map<string, {
     email: string;
     clicks: number;
     activeMs: number;
     views: number;
-    lastAt: string;
     isFinal: boolean;
   }>();
 
-  for (const row of rows) {
+  const ordered = [...rows].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+
+  for (const row of ordered) {
     const meta = row.metadata ?? {};
     const sessionId = String(meta.sessionId ?? '');
     if (!sessionId) continue;
-    const email = String(meta.studentEmail ?? 'anonymous').toLowerCase();
     const existing = sessions.get(sessionId) ?? {
-      email,
+      email: 'anonymous',
       clicks: 0,
       activeMs: 0,
       views: 0,
-      lastAt: row.created_at,
       isFinal: false,
     };
 
@@ -52,15 +59,11 @@ export function aggregatePortalStats(rows: TelemetryRow[]) {
     if (row.event_name === 'student_portal_session_pulse') {
       const clicks = Number(meta.clickCount ?? 0);
       const ms = row.duration_ms ?? 0;
-      const isFinal = Boolean(meta.isFinal);
-      if (isFinal || row.created_at >= existing.lastAt) {
-        existing.clicks = Math.max(existing.clicks, clicks);
-        existing.activeMs = Math.max(existing.activeMs, ms);
-        existing.isFinal = existing.isFinal || isFinal;
-        existing.lastAt = row.created_at;
-      }
+      existing.clicks = Math.max(existing.clicks, clicks);
+      existing.activeMs = Math.max(existing.activeMs, ms);
+      existing.isFinal = existing.isFinal || Boolean(meta.isFinal);
     }
-    existing.email = email;
+    existing.email = resolveSessionEmail(existing.email, meta);
     sessions.set(sessionId, existing);
   }
 

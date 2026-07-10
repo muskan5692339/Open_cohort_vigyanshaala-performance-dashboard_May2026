@@ -7,6 +7,7 @@ import { UploadedExcelProvider } from './context/UploadedExcelContext';
 import { AuthProvider } from './context/AuthContext';
 import ErrorBoundary from './components/system/ErrorBoundary';
 import { useStudentEngagementTracker } from './hooks/useStudentEngagementTracker';
+import { clearStudentPortalIdentity, persistStudentEmail, readPersistedStudentEmail } from './services/studentEngagementTracker';
 
 type View = 'home' | 'student' | 'admin';
 
@@ -26,10 +27,13 @@ function AppContent() {
   );
   const [email, setEmail] = useState<string | null>(null);
 
+  const trackedEmail =
+    (view === 'student' ? email : null) ?? readPersistedStudentEmail();
+
   useStudentEngagementTracker(
     isStudentPortalRoute && view !== 'admin',
     isStudentOnlyRoute ? '/student-view' : location.pathname,
-    view === 'student' ? email : null,
+    trackedEmail,
   );
 
   useEffect(() => {
@@ -44,18 +48,21 @@ function AppContent() {
   }, [location.pathname, view, isStudentOnlyRoute]);
 
   const goHome = () => {
+    clearStudentPortalIdentity();
     setEmail(null);
     setView('home');
     navigate(homePath);
   };
 
   const goAdmin = () => {
+    clearStudentPortalIdentity();
     setEmail(null);
     setView('admin');
     navigate('/admin');
   };
 
   const openStudentDashboard = (studentEmail: string) => {
+    persistStudentEmail(studentEmail);
     setEmail(studentEmail);
     setView('student');
     navigate(homePath);

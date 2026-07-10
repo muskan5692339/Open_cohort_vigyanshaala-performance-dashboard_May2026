@@ -69,10 +69,13 @@ export default function AdminStudentPortalAnalytics() {
   }, [session?.access_token, cloudEnabled, days, organization?.id]);
 
   const topStudents = (stats?.studentBreakdown ?? []).slice(0, 12).map(s => ({
-    email: s.email === 'anonymous' ? 'Anonymous' : s.email.split('@')[0],
+    email: s.email === 'anonymous' ? 'Not signed in' : s.email,
     minutes: Math.round(s.activeMs / 60_000 * 10) / 10,
     clicks: s.clicks,
   }));
+
+  const formatStudentLabel = (email: string) =>
+    email === 'anonymous' ? 'Not signed in (landing page)' : email;
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -80,7 +83,7 @@ export default function AdminStudentPortalAnalytics() {
         <strong>Student portal usage</strong> — clicks and time on{' '}
         <code style={{ fontSize: 12 }}>/student-view</code>
         <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 6 }}>
-          Tracks page visits, clicks, and active time while students use the dashboard. Data syncs to cloud telemetry after each session.
+          Tracks page visits, clicks, and active time while students use the dashboard. Counts only activity after a student enters their email (or while browsing the landing page before sign-in). Older traffic before tracking was enabled is not included.
         </div>
       </div>
 
@@ -122,7 +125,7 @@ export default function AdminStudentPortalAnalytics() {
             <StatCard label="Page visits" value={String(stats.totalViews)} hint="Opens of student dashboard" />
             <StatCard label="Total clicks" value={String(stats.totalClicks)} hint="All clicks on /student-view" />
             <StatCard label="Total time" value={formatDurationMs(stats.totalActiveMs)} hint="Active time (tab visible)" />
-            <StatCard label="Unique students" value={String(stats.uniqueStudents)} hint="By email when signed in" />
+            <StatCard label="Unique students" value={String(stats.uniqueStudents)} hint="Students who entered email" />
             <StatCard label="Avg time / student" value={formatDurationMs(stats.avgTimePerStudentMs)} hint="Total time ÷ unique students" />
             <StatCard label="Avg time / visit" value={formatDurationMs(stats.avgTimePerSessionMs)} hint="Per browser session" />
           </div>
@@ -164,7 +167,7 @@ export default function AdminStudentPortalAnalytics() {
                 <tbody>
                   {stats.studentBreakdown.map(s => (
                     <tr key={s.email} style={{ borderBottom: `1px solid ${BRAND.borderLight}` }}>
-                      <td style={{ padding: '8px 10px', fontWeight: 600 }}>{s.email}</td>
+                      <td style={{ padding: '8px 10px', fontWeight: 600 }}>{formatStudentLabel(s.email)}</td>
                       <td style={{ padding: '8px 10px' }}>{s.views}</td>
                       <td style={{ padding: '8px 10px' }}>{s.clicks}</td>
                       <td style={{ padding: '8px 10px' }}>{formatDurationMs(s.activeMs)}</td>
