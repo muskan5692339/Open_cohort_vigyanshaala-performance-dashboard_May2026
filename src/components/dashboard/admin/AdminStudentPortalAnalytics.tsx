@@ -28,10 +28,25 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 
 export default function AdminStudentPortalAnalytics() {
   const { session, cloudEnabled, organization } = useAuth();
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(0);
   const [stats, setStats] = useState<StudentPortalStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const periodLabel =
+    days === 0 ? 'all time (since tracking started)' : `last ${days} days`;
+
+  const formatTrackingDate = (iso: string | null | undefined) => {
+    if (!iso) return null;
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    } catch {
+      return iso;
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -83,8 +98,16 @@ export default function AdminStudentPortalAnalytics() {
         <strong>Student portal usage</strong> — clicks and time on{' '}
         <code style={{ fontSize: 12 }}>/student-view</code>
         <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 6 }}>
-          Tracks page visits, clicks, and active time while students use the dashboard. Counts only activity after a student enters their email (or while browsing the landing page before sign-in). Older traffic before tracking was enabled is not included.
+          Cumulative click and time history for <code style={{ fontSize: 11 }}>/student-view</code>.
+          Choose <strong>All time</strong> for total counts since tracking began.
+          Pre-tracking traffic is not included. Site-wide page views are also in Vercel → Analytics.
         </div>
+        {stats?.firstEventAt && (
+          <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 6 }}>
+            Tracking since {formatTrackingDate(stats.firstEventAt)}
+            {stats.lastEventAt ? ` · Last activity ${formatTrackingDate(stats.lastEventAt)}` : ''}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
@@ -95,6 +118,7 @@ export default function AdminStudentPortalAnalytics() {
             onChange={e => setDays(Number(e.target.value))}
             style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
           >
+            <option value={0}>All time</option>
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
             <option value={90}>Last 90 days</option>
@@ -123,7 +147,11 @@ export default function AdminStudentPortalAnalytics() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
             <StatCard label="Page visits" value={String(stats.totalViews)} hint="Opens of student dashboard" />
-            <StatCard label="Total clicks" value={String(stats.totalClicks)} hint="All clicks on /student-view" />
+            <StatCard
+              label="Total clicks"
+              value={String(stats.totalClicks)}
+              hint={days === 0 ? 'All recorded clicks since tracking started' : `Clicks in the ${periodLabel}`}
+            />
             <StatCard label="Total time" value={formatDurationMs(stats.totalActiveMs)} hint="Active time (tab visible)" />
             <StatCard label="Unique students" value={String(stats.uniqueStudents)} hint="Students who entered email" />
             <StatCard label="Avg time / student" value={formatDurationMs(stats.avgTimePerStudentMs)} hint="Total time ÷ unique students" />
@@ -133,7 +161,9 @@ export default function AdminStudentPortalAnalytics() {
           {topStudents.length > 0 && (
             <div style={{ background: BRAND.card, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14 }}>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Time on page by student</div>
-              <div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 12 }}>Top students by active minutes (last {days} days)</div>
+              <div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 12 }}>
+                Top students by active minutes ({periodLabel})
+              </div>
               <div style={{ height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topStudents} margin={{ top: 8, right: 12, left: 0, bottom: 40 }}>

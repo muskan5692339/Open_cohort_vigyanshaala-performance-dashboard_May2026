@@ -3,7 +3,9 @@ import { DEFAULT_ORG_ID } from '../types/cloudTypes';
 
 export interface StudentPortalStats {
   days: number;
-  since: string;
+  since: string | null;
+  firstEventAt: string | null;
+  lastEventAt: string | null;
   totalClicks: number;
   totalActiveMs: number;
   totalViews: number;

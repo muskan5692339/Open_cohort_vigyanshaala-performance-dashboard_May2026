@@ -23,10 +23,12 @@ interface PostBody {
   isFinal?: boolean;
 }
 
-function emptyStats(days: number, since: string) {
+function emptyStats(days: number, since: string | null) {
   return {
     days,
     since,
+    firstEventAt: null as string | null,
+    lastEventAt: null as string | null,
     totalClicks: 0,
     totalActiveMs: 0,
     totalViews: 0,
@@ -115,8 +117,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   const orgId = String(req.query.orgId ?? '');
   if (!orgId) return res.status(400).json({ error: 'orgId required' });
 
-  const days = Math.min(90, Math.max(1, Number(req.query.days ?? 30) || 30));
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const allTime = String(req.query.days ?? '') === '0';
+  const days = allTime ? 0 : Math.min(90, Math.max(1, Number(req.query.days ?? 30) || 30));
+  const since = allTime
+    ? null
+    : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   try {
     const { serviceDb, membership } = await assertOrgAccess(req, orgId, {
@@ -124,14 +129,17 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
       requiredRoles: ORG_READ_ROLES,
     });
 
-    const { data, error } = await serviceDb
+    let query = serviceDb
       .from('telemetry_events')
       .select('event_name, duration_ms, metadata, created_at')
       .eq('organization_id', membership.organization_id)
       .in('event_name', [...PORTAL_EVENTS])
-      .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(5000);
+
+    if (since) query = query.gte('created_at', since);
+
+    const { data, error } = await query;
 
     if (error) {
       if (isTelemetryTableMissing(error.message)) {
@@ -140,8 +148,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: error.message });
     }
 
-    const stats = aggregatePortalStats((data ?? []) as TelemetryRow[]);
-    return res.status(200).json({ days, since, ...stats });
+    const rows = (data ?? []) as TelemetryRow[];
+    const stats = aggregatePortalStats(rows);
+    const lastEventAt = rows[0]?.created_at ?? null;
+    const firstEventAt = rows.length ? rows[rows.length - 1].created_at : null;
+    return res.status(200).json({ days, since, firstEventAt, lastEventAt, ...stats });
   } catch (e) {
     if (await handleOrgAccessFailure(res, e, req, ROUTE, orgId)) return;
     const message = (e as Error).message;
