@@ -1,13 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './_lib/assertOrgAccess.js';
 import { createServiceClient } from './_lib/serviceClient.js';
+import {
+  aggregatePortalStats,
+  eventNameForPortalType,
+  isStudentPortalPath,
+  PORTAL_EVENTS,
+  resolveTelemetryOrgId,
+  type TelemetryRow,
+} from './_lib/studentPortalTelemetry.js';
 
 const ROUTE = '/api/student-engagement';
 
-const PORTAL_EVENTS = ['student_portal_page_view', 'student_portal_session_pulse'] as const;
-
 interface PostBody {
-  orgId: string;
+  orgId?: string;
   type: 'page_view' | 'session_pulse';
   sessionId: string;
   path: string;
@@ -15,13 +21,6 @@ interface PostBody {
   clickCount?: number;
   activeMs?: number;
   isFinal?: boolean;
-}
-
-interface TelemetryRow {
-  event_name: string;
-  duration_ms: number | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
 }
 
 function emptyStats(days: number, since: string) {
@@ -47,38 +46,46 @@ function emptyStats(days: number, since: string) {
   };
 }
 
-function eventNameForType(type: PostBody['type']): string {
-  return type === 'page_view' ? 'student_portal_page_view' : 'student_portal_session_pulse';
-}
-
 function isTelemetryTableMissing(message: string): boolean {
   const m = message.toLowerCase();
   return m.includes('telemetry_events') && (m.includes('does not exist') || m.includes('not found') || m.includes('schema cache'));
 }
 
-async function handlePost(req: VercelRequest, res: VercelResponse) {
-  let raw = req.body;
-  if (typeof raw === 'string') {
+function parsePostBody(req: VercelRequest): PostBody | null {
+  let raw: unknown = req.body;
+  if (Buffer.isBuffer(raw)) {
     try {
-      raw = JSON.parse(raw) as PostBody;
+      raw = JSON.parse(raw.toString('utf8'));
     } catch {
-      return res.status(400).json({ error: 'Invalid JSON body' });
+      return null;
+    }
+  } else if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return null;
     }
   }
-  const body = raw as PostBody;
-  if (!body?.orgId || !body?.sessionId || !body?.type || !body?.path) {
-    return res.status(400).json({ error: 'orgId, sessionId, type, and path required' });
+  if (!raw || typeof raw !== 'object') return null;
+  return raw as PostBody;
+}
+
+async function handlePost(req: VercelRequest, res: VercelResponse) {
+  const body = parsePostBody(req);
+  if (!body?.sessionId || !body?.type || !body?.path) {
+    return res.status(400).json({ error: 'sessionId, type, and path required' });
   }
-  if (!body.path.includes('student-view') && body.path !== '/student-view') {
-    return res.status(400).json({ error: 'Only student-view path is tracked' });
+  if (!isStudentPortalPath(body.path)) {
+    return res.status(400).json({ error: 'Only student portal paths are tracked' });
   }
 
   try {
     const serviceDb = createServiceClient();
+    const organizationId = resolveTelemetryOrgId();
     const email = typeof body.studentEmail === 'string' ? body.studentEmail.trim().toLowerCase().slice(0, 200) : null;
     const { error } = await serviceDb.from('telemetry_events').insert({
-      organization_id: body.orgId,
-      event_name: eventNameForType(body.type),
+      organization_id: organizationId,
+      event_name: eventNameForPortalType(body.type),
       duration_ms: body.type === 'session_pulse' ? Math.max(0, Math.round(body.activeMs ?? 0)) : null,
       metadata: {
         sessionId: body.sessionId.slice(0, 80),
@@ -102,89 +109,6 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     }
     return res.status(500).json({ error: message });
   }
-}
-
-function aggregatePortalStats(rows: TelemetryRow[]) {
-  const sessions = new Map<string, {
-    email: string;
-    clicks: number;
-    activeMs: number;
-    views: number;
-    lastAt: string;
-    isFinal: boolean;
-  }>();
-
-  for (const row of rows) {
-    const meta = row.metadata ?? {};
-    const sessionId = String(meta.sessionId ?? '');
-    if (!sessionId) continue;
-    const email = String(meta.studentEmail ?? 'anonymous').toLowerCase();
-    const existing = sessions.get(sessionId) ?? {
-      email,
-      clicks: 0,
-      activeMs: 0,
-      views: 0,
-      lastAt: row.created_at,
-      isFinal: false,
-    };
-
-    if (row.event_name === 'student_portal_page_view') existing.views += 1;
-    if (row.event_name === 'student_portal_session_pulse') {
-      const clicks = Number(meta.clickCount ?? 0);
-      const ms = row.duration_ms ?? 0;
-      const isFinal = Boolean(meta.isFinal);
-      if (isFinal || row.created_at >= existing.lastAt) {
-        existing.clicks = Math.max(existing.clicks, clicks);
-        existing.activeMs = Math.max(existing.activeMs, ms);
-        existing.isFinal = existing.isFinal || isFinal;
-        existing.lastAt = row.created_at;
-      }
-    }
-    existing.email = email;
-    sessions.set(sessionId, existing);
-  }
-
-  const byStudent = new Map<string, { email: string; clicks: number; activeMs: number; sessions: number; views: number }>();
-  let totalClicks = 0;
-  let totalActiveMs = 0;
-  let totalViews = 0;
-
-  for (const s of sessions.values()) {
-    totalClicks += s.clicks;
-    totalActiveMs += s.activeMs;
-    totalViews += Math.max(1, s.views);
-    const cur = byStudent.get(s.email) ?? { email: s.email, clicks: 0, activeMs: 0, sessions: 0, views: 0 };
-    cur.clicks += s.clicks;
-    cur.activeMs += s.activeMs;
-    cur.sessions += 1;
-    cur.views += Math.max(1, s.views);
-    byStudent.set(s.email, cur);
-  }
-
-  const uniqueStudents = byStudent.size;
-  const avgTimePerStudentMs = uniqueStudents ? Math.round(totalActiveMs / uniqueStudents) : 0;
-  const avgTimePerSessionMs = sessions.size ? Math.round(totalActiveMs / sessions.size) : 0;
-
-  return {
-    totalClicks,
-    totalActiveMs,
-    totalViews,
-    uniqueStudents,
-    sessionCount: sessions.size,
-    avgTimePerStudentMs,
-    avgTimePerSessionMs,
-    studentBreakdown: Array.from(byStudent.values())
-      .sort((a, b) => b.activeMs - a.activeMs)
-      .map(s => ({
-        email: s.email,
-        clicks: s.clicks,
-        activeMs: s.activeMs,
-        sessions: s.sessions,
-        views: s.views,
-        avgSessionMs: s.sessions ? Math.round(s.activeMs / s.sessions) : 0,
-      })),
-    telemetryReady: true,
-  };
 }
 
 async function handleGet(req: VercelRequest, res: VercelResponse) {

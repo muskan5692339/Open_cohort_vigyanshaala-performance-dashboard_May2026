@@ -27,7 +27,7 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 }
 
 export default function AdminStudentPortalAnalytics() {
-  const { session, cloudEnabled } = useAuth();
+  const { session, cloudEnabled, organization } = useAuth();
   const [days, setDays] = useState(30);
   const [stats, setStats] = useState<StudentPortalStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +46,11 @@ export default function AdminStudentPortalAnalytics() {
         }
         return;
       }
-      const { stats: data, error: fetchError } = await fetchStudentPortalStats(session.access_token, days);
+      const { stats: data, error: fetchError } = await fetchStudentPortalStats(
+        session.access_token,
+        days,
+        organization?.id,
+      );
       if (cancelled) return;
       if (!data) {
         setStats(null);
@@ -62,7 +66,7 @@ export default function AdminStudentPortalAnalytics() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [session?.access_token, cloudEnabled, days]);
+  }, [session?.access_token, cloudEnabled, days, organization?.id]);
 
   const topStudents = (stats?.studentBreakdown ?? []).slice(0, 12).map(s => ({
     email: s.email === 'anonymous' ? 'Anonymous' : s.email.split('@')[0],

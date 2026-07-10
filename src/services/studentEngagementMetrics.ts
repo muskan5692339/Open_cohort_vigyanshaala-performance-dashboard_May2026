@@ -39,11 +39,12 @@ export function formatDurationMs(ms: number): string {
 export async function fetchStudentPortalStats(
   accessToken: string | undefined,
   days = 30,
+  organizationId?: string | null,
 ): Promise<{ stats: StudentPortalStats | null; error: string | null }> {
   if (!accessToken) {
     return { stats: null, error: 'Sign in with cloud admin access to view student portal analytics.' };
   }
-  const orgId = resolveOrgId();
+  const orgId = organizationId || resolveOrgId();
   try {
     const qs = new URLSearchParams({
       orgId,

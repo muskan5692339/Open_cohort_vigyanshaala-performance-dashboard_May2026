@@ -1,4 +1,3 @@
-import { getActiveOrganizationId } from './cloud/cloudConfig';
 import { DEFAULT_ORG_ID } from '../types/cloudTypes';
 
 export type StudentPortalEventType = 'page_view' | 'session_pulse';
@@ -17,8 +16,9 @@ export interface StudentPortalEventPayload {
 const SESSION_KEY = 'vs_student_portal_session';
 const FLUSH_INTERVAL_MS = 30_000;
 
+/** Anonymous student portal — use build-time org, not admin localStorage. */
 function resolveOrgId(): string {
-  return getActiveOrganizationId() || import.meta.env.VITE_DEFAULT_ORG_ID || DEFAULT_ORG_ID;
+  return import.meta.env.VITE_DEFAULT_ORG_ID || DEFAULT_ORG_ID;
 }
 
 function newSessionId(): string {

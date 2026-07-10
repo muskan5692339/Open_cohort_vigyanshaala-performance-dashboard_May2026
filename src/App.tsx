@@ -17,6 +17,8 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const isStudentOnlyRoute = location.pathname.startsWith('/student-view');
+  const isStudentPortalRoute =
+    isStudentOnlyRoute || (STUDENT_ONLY_HOME && location.pathname === '/');
   const homePath = isStudentOnlyRoute ? '/student-view' : '/';
 
   const [view, setView] = useState<View>(() =>
@@ -25,8 +27,8 @@ function AppContent() {
   const [email, setEmail] = useState<string | null>(null);
 
   useStudentEngagementTracker(
-    isStudentOnlyRoute && view !== 'admin',
-    '/student-view',
+    isStudentPortalRoute && view !== 'admin',
+    isStudentOnlyRoute ? '/student-view' : location.pathname,
     view === 'student' ? email : null,
   );
 
