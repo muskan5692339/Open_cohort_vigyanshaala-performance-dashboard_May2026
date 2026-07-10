@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import HomePage from './HomePage';
 import StudentDashboard from './Studentdashboard';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
@@ -103,6 +104,7 @@ function App() {
               <Route path="/admin/*" element={<AppContent />} />
             </Routes>
           </BrowserRouter>
+          <Analytics />
         </ErrorBoundary>
       </UploadedExcelProvider>
     </AuthProvider>
