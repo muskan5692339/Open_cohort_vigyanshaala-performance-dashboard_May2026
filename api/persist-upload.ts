@@ -6,7 +6,7 @@ import {
   assertUploadBelongsToOrg,
   handleOrgAccessFailure,
   ORG_UPLOAD_ROLES,
-} from './_lib/assertOrgAccess';
+} from './_lib/assertOrgAccess.js';
 
 const ROUTE = '/api/persist-upload';
 

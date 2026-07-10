@@ -11,7 +11,7 @@ import type {
   ParsedAttendance,
   ParsedAssignment,
   ParsedQuiz,
-} from '../src/types/syncTypes';
+} from '../src/types/syncTypes.js';
 
 // vercel dev runs functions in a separate worker — .env.local is not auto-injected
 try {

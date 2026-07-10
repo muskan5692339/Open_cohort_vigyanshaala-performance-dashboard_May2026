@@ -4,7 +4,7 @@ import {
   handleOrgAccessFailure,
   ORG_HYBRID_WRITE_ROLES,
   ORG_READ_ROLES,
-} from './_lib/assertOrgAccess';
+} from './_lib/assertOrgAccess.js';
 
 const ALLOWED = new Set(['saved_views', 'risk_actions', 'audit_logs', 'schema_profiles', 'upload_snapshots']);
 const ROUTE = '/api/sync-hybrid';

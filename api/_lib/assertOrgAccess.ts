@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
-import { createAnonAuthClient, createServiceClient } from './serviceClient';
-import { recordSecurityEvent } from './securityTelemetry';
+import { createAnonAuthClient, createServiceClient } from './serviceClient.js';
+import { recordSecurityEvent } from './securityTelemetry.js';
 
 export type AppRole = 'admin' | 'program_manager' | 'viewer';
 

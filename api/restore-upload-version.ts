@@ -6,8 +6,8 @@ import {
   OrgAccessError,
   ORG_READ_ROLES,
   resolveOrganizationIdForVersion,
-} from './_lib/assertOrgAccess';
-import { createServiceClient } from './_lib/serviceClient';
+} from './_lib/assertOrgAccess.js';
+import { createServiceClient } from './_lib/serviceClient.js';
 
 const ROUTE = '/api/restore-upload-version';
 

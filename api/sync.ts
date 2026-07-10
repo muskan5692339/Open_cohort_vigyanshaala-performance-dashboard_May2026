@@ -5,7 +5,7 @@ import {
   parseAttendance,
   parseAssignments,
   parseQuiz,
-} from '../src/services/excelParser';
+} from '../src/services/excelParser.js';
 
 /* ── Types ─────────────────────────────────────────────── */
 

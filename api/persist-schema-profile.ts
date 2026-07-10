@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { assertOrgAccess, handleOrgAccessFailure, ORG_UPLOAD_ROLES } from './_lib/assertOrgAccess';
+import { assertOrgAccess, handleOrgAccessFailure, ORG_UPLOAD_ROLES } from './_lib/assertOrgAccess.js';
 
 const ROUTE = '/api/persist-schema-profile';
 

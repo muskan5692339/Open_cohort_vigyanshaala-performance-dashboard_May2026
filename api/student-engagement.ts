@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './_lib/assertOrgAccess';
-import { createServiceClient } from './_lib/serviceClient';
+import { assertOrgAccess, handleOrgAccessFailure, ORG_READ_ROLES } from './_lib/assertOrgAccess.js';
+import { createServiceClient } from './_lib/serviceClient.js';
 
 const ROUTE = '/api/student-engagement';
 

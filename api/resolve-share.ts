@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { assertAuthenticatedForSyncOps, handleOrgAccessFailure } from './_lib/assertOrgAccess';
+import { assertAuthenticatedForSyncOps, handleOrgAccessFailure } from './_lib/assertOrgAccess.js';
 
 const ROUTE = '/api/resolve-share';
 const DEV = process.env.NODE_ENV !== 'production';

@@ -4,9 +4,9 @@ import {
   handleOrgAccessFailure,
   ORG_READ_ROLES,
   resolveOrganizationIdForUpload,
-} from './_lib/assertOrgAccess';
-import { createServiceClient } from './_lib/serviceClient';
-import { fetchLatestCohortPayloadForOrg, fetchLatestCohortPayloadAny } from './_lib/latestCohortPayload';
+} from './_lib/assertOrgAccess.js';
+import { createServiceClient } from './_lib/serviceClient.js';
+import { fetchLatestCohortPayloadForOrg, fetchLatestCohortPayloadAny } from './_lib/latestCohortPayload.js';
 
 const ROUTE = '/api/list-uploads';
 

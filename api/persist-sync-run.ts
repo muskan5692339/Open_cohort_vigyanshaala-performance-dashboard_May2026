@@ -5,7 +5,7 @@ import {
   handleOrgAccessFailure,
   ORG_READ_ROLES,
   ORG_UPLOAD_ROLES,
-} from './_lib/assertOrgAccess';
+} from './_lib/assertOrgAccess.js';
 
 const ROUTE = '/api/persist-sync-run';
 
