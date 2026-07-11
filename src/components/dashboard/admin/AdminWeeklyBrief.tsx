@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Legend,
   Line,
@@ -17,10 +19,18 @@ import {
   buildSnapshotChartSeries,
   computeWeeklyUploadMetrics,
   findInterventionColumn,
-  formatUploadLabel,
   pctChange,
   type SnapshotChartPoint,
 } from '../../../services/weeklyAdminMetrics';
+import {
+  ACTIVITY_CHART_LEVELS,
+  compareTwoWeeks,
+  computeWeeklyBreakdown,
+  listWeeklyCategoryOptions,
+  WEEKLY_CHART_COLORS,
+  type WeeklyBreakdownPoint,
+} from '../../../services/weeklyBreakdownMetrics';
+import { ACTIVITY_COLORS } from '../../../services/programOverviewMetrics';
 
 interface Props {
   rows: Record<string, string>[];
@@ -40,6 +50,48 @@ function StatCard({ label, value, hint, delta }: { label: string; value: string 
       <div style={{ fontSize: 24, fontWeight: 800, color: BRAND.navy, marginTop: 4 }}>{value}</div>
       {delta && <div style={{ fontSize: 11, fontWeight: 700, color: delta.startsWith('+') ? BRAND.green : BRAND.red, marginTop: 4 }}>{delta} vs last upload</div>}
       {hint && <div style={{ fontSize: 11, color: BRAND.textMuted, marginTop: 4 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function WeeklyLineChart({
+  title,
+  hint,
+  data,
+  lines,
+}: {
+  title: string;
+  hint: string;
+  data: WeeklyBreakdownPoint[];
+  lines: { key: keyof WeeklyBreakdownPoint; name: string; color: string }[];
+}) {
+  return (
+    <div style={{ background: BRAND.card, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 12 }}>{hint}</div>
+      <div style={{ height: 240 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
+            <XAxis dataKey="week" fontSize={11} stroke={BRAND.textLight} />
+            <YAxis fontSize={11} stroke={BRAND.textLight} allowDecimals={false} />
+            <Tooltip />
+            <Legend />
+            {lines.map(line => (
+              <Line
+                key={line.key as string}
+                type="monotone"
+                dataKey={line.key as string}
+                name={line.name}
+                stroke={line.color}
+                strokeWidth={2.5}
+                dot={{ r: 4 }}
+                connectNulls
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -112,6 +164,37 @@ export default function AdminWeeklyBrief({ rows, headers, mapping, fileName, pub
   const [valueMode, setValueMode] = useState<ValueMode>('absolute');
   const [timelineMode, setTimelineMode] = useState<TimelineMode>('each-upload');
 
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [compareWeekA, setCompareWeekA] = useState('');
+  const [compareWeekB, setCompareWeekB] = useState('');
+
+  const categoryOptions = useMemo(
+    () => listWeeklyCategoryOptions(rows, headers, mapping),
+    [rows, headers, mapping],
+  );
+
+  const weeklyBreakdown = useMemo(
+    () => computeWeeklyBreakdown(rows, headers, mapping, categoryFilter),
+    [rows, headers, mapping, categoryFilter],
+  );
+
+  const weekLabels = weeklyBreakdown.map(p => p.week);
+
+  useEffect(() => {
+    if (weekLabels.length >= 2 && !compareWeekA) {
+      setCompareWeekA(weekLabels[0]);
+      setCompareWeekB(weekLabels[weekLabels.length - 1]);
+    }
+  }, [weekLabels, compareWeekA]);
+
+  const comparison = useMemo(
+    () => (compareEnabled && compareWeekA && compareWeekB
+      ? compareTwoWeeks(weeklyBreakdown, compareWeekA, compareWeekB)
+      : []),
+    [compareEnabled, compareWeekA, compareWeekB, weeklyBreakdown],
+  );
+
   const current = useMemo(
     () => computeWeeklyUploadMetrics(rows, headers, mapping),
     [rows, headers, mapping],
@@ -156,12 +239,15 @@ export default function AdminWeeklyBrief({ rows, headers, mapping, fileName, pub
     return `${p > 0 ? '+' : ''}${p}%`;
   };
 
+  const categoryLabel = categoryOptions.find(c => c.value === categoryFilter)?.label ?? 'All categories';
+
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gap: 20 }}>
+      {/* ── WK column breakdown (from Excel headers) ── */}
       <div style={{ background: '#f0f4ff', border: `1px solid ${BRAND.border}`, borderRadius: 10, padding: '12px 16px', fontSize: 13 }}>
-        <strong>Weekly change tracker</strong> — each time you update Data Sources, metrics are recorded with timestamp for line graphs.
+        <strong>Weekly program breakdown</strong> — sums columns tagged WK0, WK1, WK2… from your monitoring sheet.
         {publishedAt && (
-          <span style={{ color: BRAND.textLight }}> · Latest: {formatUploadLabel(publishedAt, fileName ?? undefined)}</span>
+          <span style={{ color: BRAND.textLight }}> · Data from latest upload{fileName ? `: ${fileName}` : ''}</span>
         )}
       </div>
 
@@ -169,145 +255,244 @@ export default function AdminWeeklyBrief({ rows, headers, mapping, fileName, pub
         <label style={{ fontSize: 12, fontWeight: 600 }}>
           Student category
           <select
-            value={interventionFilter}
-            onChange={e => setInterventionFilter(e.target.value)}
-            style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13, minWidth: 160 }}
           >
-            <option value="all">All categories</option>
-            {groups.map((g: WeeklyInterventionStats) => (
-              <option key={g.group} value={g.group}>{g.group} ({g.studentCount})</option>
+            {categoryOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label} ({opt.count})</option>
             ))}
           </select>
         </label>
 
-        <label style={{ fontSize: 12, fontWeight: 600 }}>
-          Timeline
-          <select
-            value={timelineMode}
-            onChange={e => setTimelineMode(e.target.value as TimelineMode)}
-            style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
-          >
-            <option value="each-upload">Each data upload</option>
-            <option value="weekly">Weekly view (latest per week)</option>
-          </select>
+        <label style={{ fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={compareEnabled}
+            onChange={e => setCompareEnabled(e.target.checked)}
+          />
+          Compare two weeks
         </label>
 
-        <label style={{ fontSize: 12, fontWeight: 600 }}>
-          Chart values
-          <select
-            value={valueMode}
-            onChange={e => setValueMode(e.target.value as ValueMode)}
-            style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
-          >
-            <option value="absolute">Actual values</option>
-            <option value="improvement">% improvement vs previous</option>
-          </select>
-        </label>
-
-        {interventionCol && (
-          <span style={{ fontSize: 11, color: BRAND.textLight }}>Category column: {interventionCol}</span>
+        {compareEnabled && weekLabels.length >= 2 && (
+          <>
+            <label style={{ fontSize: 12, fontWeight: 600 }}>
+              Week A
+              <select
+                value={compareWeekA}
+                onChange={e => setCompareWeekA(e.target.value)}
+                style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
+              >
+                {weekLabels.map(w => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 12, fontWeight: 600 }}>
+              Week B
+              <select
+                value={compareWeekB}
+                onChange={e => setCompareWeekB(e.target.value)}
+                style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
+              >
+                {weekLabels.map(w => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </label>
+          </>
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
-        <StatCard label="Students" value={display.students} hint="In selected category" />
-        <StatCard label="Avg attendance" value={`${display.attendance}%`} delta={fmtDelta(display.attendance, prevDisplay?.attendance)} />
-        <StatCard label="Avg program hrs" value={display.programHours} delta={fmtDelta(display.programHours, prevDisplay?.programHours)} />
-        <StatCard label="Avg quiz score" value={`${display.quiz}%`} delta={fmtDelta(display.quiz, prevDisplay?.quiz)} />
-        <StatCard label="Submitted" value={display.submitted} delta={fmtDelta(display.submitted, prevDisplay?.submitted)} />
-        <StatCard label="Reviewed" value={display.reviewed} delta={fmtDelta(display.reviewed, prevDisplay?.reviewed)} />
-      </div>
-
-      {chartData.length > 1 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
-          <TrendChart
-            title="Attendance change"
-            hint="Average attendance % after each upload"
-            data={chartData}
-            valueMode={valueMode}
-            valueKey="attendance"
-            pctKey="attendancePct"
-            valueSuffix="%"
-            color={BRAND.green}
-          />
-          <TrendChart
-            title="Program hours change"
-            hint="Average program hours per student"
-            data={chartData}
-            valueMode={valueMode}
-            valueKey="programHours"
-            pctKey="programHoursPct"
-            valueSuffix=" hrs"
-            color={BRAND.navy}
-          />
-          <TrendChart
-            title="Quiz score change"
-            hint="Average quiz score % across quiz columns"
-            data={chartData}
-            valueMode={valueMode}
-            valueKey="quizScore"
-            pctKey="quizScorePct"
-            valueSuffix="%"
-            color={BRAND.blue}
-          />
-          <TrendChart
-            title="Assignments submitted"
-            hint="Total assignment slots marked submitted"
-            data={chartData}
-            valueMode={valueMode}
-            valueKey="submitted"
-            pctKey="submittedPct"
-            valueSuffix=""
-            color="#d97706"
-          />
-          <TrendChart
-            title="Assignments reviewed"
-            hint="Accepted + rejected (facilitator reviewed)"
-            data={chartData}
-            valueMode={valueMode}
-            valueKey="reviewed"
-            pctKey="reviewedPct"
-            valueSuffix=""
-            color={BRAND.yellowDark}
-          />
+      {weeklyBreakdown.length === 0 ? (
+        <div style={{ fontSize: 13, color: BRAND.textLight, padding: 16, border: `1px dashed ${BRAND.border}`, borderRadius: 10 }}>
+          No WK-tagged columns found. Add session columns like <code>WK0_SUK_Saturday</code>, <code>WK1_WS_Monday</code>, or <code>Pre-recorded_WK3_V1</code> in your Excel sheet.
         </div>
       ) : (
-        <div style={{ fontSize: 13, color: BRAND.textLight, padding: 12, border: `1px dashed ${BRAND.border}`, borderRadius: 10 }}>
-          Upload your workbook in <strong>Data Sources</strong> at least twice to see weekly trend lines and % improvement.
-          {allSnapshots.length === 1 && (
-            <span> First snapshot recorded at {formatUploadLabel(allSnapshots[0].uploadedAt, allSnapshots[0].fileName)}.</span>
+        <>
+          {compareEnabled && comparison.length > 0 && (
+            <div style={{ background: BRAND.card, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                {compareWeekA} vs {compareWeekB} — {categoryLabel}
+              </div>
+              <div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 12 }}>Side-by-side comparison for the selected category</div>
+              <div style={{ height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={comparison} margin={{ top: 8, right: 12, left: 0, bottom: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
+                    <XAxis dataKey="metric" fontSize={10} stroke={BRAND.textLight} angle={-20} textAnchor="end" height={60} />
+                    <YAxis fontSize={11} stroke={BRAND.textLight} allowDecimals={false} />
+                    <Tooltip formatter={(v, name) => [v, name === compareWeekA ? compareWeekA : compareWeekB]} />
+                    <Legend />
+                    <Bar dataKey="weekA" name={compareWeekA} fill={BRAND.navy} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="weekB" name={compareWeekB} fill={BRAND.blue} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           )}
-        </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+            <WeeklyLineChart
+              title="Weekly attendance"
+              hint={`Students with session hours &gt; 0 · ${categoryLabel}`}
+              data={weeklyBreakdown}
+              lines={[{ key: 'attendanceCount', name: 'Students attended', color: WEEKLY_CHART_COLORS.attendance }]}
+            />
+            <WeeklyLineChart
+              title="Assignments submitted"
+              hint="All statuses except no-submission"
+              data={weeklyBreakdown}
+              lines={[{ key: 'assignmentsSubmitted', name: 'Submitted', color: WEEKLY_CHART_COLORS.submitted }]}
+            />
+            <WeeklyLineChart
+              title="Assignments accepted"
+              hint="Accepted out of submitted slots"
+              data={weeklyBreakdown}
+              lines={[{ key: 'assignmentsAccepted', name: 'Accepted', color: WEEKLY_CHART_COLORS.accepted }]}
+            />
+            <WeeklyLineChart
+              title="Quiz submissions"
+              hint="Non-empty quiz cells per week"
+              data={weeklyBreakdown}
+              lines={[{ key: 'quizSubmissions', name: 'Quiz submissions', color: WEEKLY_CHART_COLORS.quiz }]}
+            />
+          </div>
+
+          <WeeklyLineChart
+            title="Activity levels by week"
+            hint="Highly Active / Active / Partially Active — students who attended that week (from current status column)"
+            data={weeklyBreakdown}
+            lines={[
+              { key: 'highlyActive', name: 'Highly Active', color: ACTIVITY_COLORS['Highly Active'] },
+              { key: 'active', name: 'Active', color: ACTIVITY_COLORS.Active },
+              { key: 'partiallyActive', name: 'Partially Active', color: ACTIVITY_COLORS['Partially Active'] },
+            ]}
+          />
+
+          <div style={{ background: BRAND.card, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14, overflowX: 'auto' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Weekly breakdown table — {categoryLabel}</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 720 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: `2px solid ${BRAND.border}` }}>
+                  {['Week', 'Attended', 'Submitted', 'Accepted', 'Quiz', ...ACTIVITY_CHART_LEVELS].map(h => (
+                    <th key={h} style={{ padding: '8px 6px' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {weeklyBreakdown.map(w => (
+                  <tr key={w.week} style={{ borderBottom: `1px solid ${BRAND.borderLight}` }}>
+                    <td style={{ padding: '8px 6px', fontWeight: 700 }}>{w.week}</td>
+                    <td style={{ padding: '8px 6px' }}>{w.attendanceCount}</td>
+                    <td style={{ padding: '8px 6px' }}>{w.assignmentsSubmitted}</td>
+                    <td style={{ padding: '8px 6px' }}>{w.assignmentsAccepted}</td>
+                    <td style={{ padding: '8px 6px' }}>{w.quizSubmissions}</td>
+                    <td style={{ padding: '8px 6px', color: ACTIVITY_COLORS['Highly Active'] }}>{w.highlyActive}</td>
+                    <td style={{ padding: '8px 6px', color: ACTIVITY_COLORS.Active }}>{w.active}</td>
+                    <td style={{ padding: '8px 6px', color: ACTIVITY_COLORS['Partially Active'] }}>{w.partiallyActive}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
-      <div style={{ background: BRAND.card, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14, overflowX: 'auto' }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Engagement by student category (this upload)</div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 720 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: `2px solid ${BRAND.border}` }}>
-              <th style={{ padding: '8px 6px' }}>Category</th>
-              <th style={{ padding: '8px 6px' }}>Students</th>
-              <th style={{ padding: '8px 6px' }}>Attendance</th>
-              <th style={{ padding: '8px 6px' }}>Program hrs</th>
-              <th style={{ padding: '8px 6px' }}>Quiz avg</th>
-              <th style={{ padding: '8px 6px' }}>Submitted</th>
-              <th style={{ padding: '8px 6px' }}>Reviewed</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((g: WeeklyInterventionStats) => (
-              <tr key={g.group} style={{ borderBottom: `1px solid ${BRAND.borderLight}` }}>
-                <td style={{ padding: '8px 6px', fontWeight: 600 }}>{g.group}</td>
-                <td style={{ padding: '8px 6px' }}>{g.studentCount}</td>
-                <td style={{ padding: '8px 6px' }}>{g.avgAttendance}%</td>
-                <td style={{ padding: '8px 6px' }}>{g.avgProgramHours}</td>
-                <td style={{ padding: '8px 6px' }}>{g.avgQuizScore}%</td>
-                <td style={{ padding: '8px 6px' }}>{g.assignmentsSubmitted}</td>
-                <td style={{ padding: '8px 6px' }}>{g.assignmentsReviewed}</td>
+      {/* ── Upload-over-time tracker (existing) ── */}
+      <div style={{ borderTop: `2px solid ${BRAND.border}`, paddingTop: 16 }}>
+        <div style={{ background: '#fafafa', border: `1px solid ${BRAND.border}`, borderRadius: 10, padding: '12px 16px', fontSize: 13 }}>
+          <strong>Upload change tracker</strong> — trend lines when you re-upload Data Sources over time.
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginTop: 12 }}>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>
+            Snapshot category
+            <select
+              value={interventionFilter}
+              onChange={e => setInterventionFilter(e.target.value)}
+              style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
+            >
+              <option value="all">All categories</option>
+              {groups.map((g: WeeklyInterventionStats) => (
+                <option key={g.group} value={g.group}>{g.group} ({g.studentCount})</option>
+              ))}
+            </select>
+          </label>
+
+          <label style={{ fontSize: 12, fontWeight: 600 }}>
+            Timeline
+            <select
+              value={timelineMode}
+              onChange={e => setTimelineMode(e.target.value as TimelineMode)}
+              style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
+            >
+              <option value="each-upload">Each data upload</option>
+              <option value="weekly">Weekly view (latest per week)</option>
+            </select>
+          </label>
+
+          <label style={{ fontSize: 12, fontWeight: 600 }}>
+            Chart values
+            <select
+              value={valueMode}
+              onChange={e => setValueMode(e.target.value as ValueMode)}
+              style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, fontSize: 13 }}
+            >
+              <option value="absolute">Actual values</option>
+              <option value="improvement">% improvement vs previous</option>
+            </select>
+          </label>
+
+          {interventionCol && (
+            <span style={{ fontSize: 11, color: BRAND.textLight }}>Category column: {interventionCol}</span>
+          )}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginTop: 12 }}>
+          <StatCard label="Students" value={display.students} hint="In selected category" />
+          <StatCard label="Avg attendance" value={`${display.attendance}%`} delta={fmtDelta(display.attendance, prevDisplay?.attendance)} />
+          <StatCard label="Avg program hrs" value={display.programHours} delta={fmtDelta(display.programHours, prevDisplay?.programHours)} />
+          <StatCard label="Avg quiz score" value={`${display.quiz}%`} delta={fmtDelta(display.quiz, prevDisplay?.quiz)} />
+          <StatCard label="Submitted" value={display.submitted} delta={fmtDelta(display.submitted, prevDisplay?.submitted)} />
+          <StatCard label="Reviewed" value={display.reviewed} delta={fmtDelta(display.reviewed, prevDisplay?.reviewed)} />
+        </div>
+
+        {chartData.length > 1 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginTop: 12 }}>
+            <TrendChart title="Attendance change" hint="Average attendance % after each upload" data={chartData} valueMode={valueMode} valueKey="attendance" pctKey="attendancePct" valueSuffix="%" color={BRAND.green} />
+            <TrendChart title="Program hours change" hint="Average program hours per student" data={chartData} valueMode={valueMode} valueKey="programHours" pctKey="programHoursPct" valueSuffix=" hrs" color={BRAND.navy} />
+            <TrendChart title="Quiz score change" hint="Average quiz score % across quiz columns" data={chartData} valueMode={valueMode} valueKey="quizScore" pctKey="quizScorePct" valueSuffix="%" color={BRAND.blue} />
+            <TrendChart title="Assignments submitted" hint="Total assignment slots marked submitted" data={chartData} valueMode={valueMode} valueKey="submitted" pctKey="submittedPct" valueSuffix="" color="#d97706" />
+            <TrendChart title="Assignments reviewed" hint="Accepted + rejected (facilitator reviewed)" data={chartData} valueMode={valueMode} valueKey="reviewed" pctKey="reviewedPct" valueSuffix="" color={BRAND.yellowDark} />
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: BRAND.textLight, padding: 12, border: `1px dashed ${BRAND.border}`, borderRadius: 10, marginTop: 12 }}>
+            Upload your workbook in <strong>Data Sources</strong> at least twice to see upload trend lines.
+          </div>
+        )}
+
+        <div style={{ background: BRAND.card, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14, overflowX: 'auto', marginTop: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Engagement by student category (this upload)</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 720 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: `2px solid ${BRAND.border}` }}>
+                {['Category', 'Students', 'Attendance', 'Program hrs', 'Quiz avg', 'Submitted', 'Reviewed'].map(h => (
+                  <th key={h} style={{ padding: '8px 6px' }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {groups.map((g: WeeklyInterventionStats) => (
+                <tr key={g.group} style={{ borderBottom: `1px solid ${BRAND.borderLight}` }}>
+                  <td style={{ padding: '8px 6px', fontWeight: 600 }}>{g.group}</td>
+                  <td style={{ padding: '8px 6px' }}>{g.studentCount}</td>
+                  <td style={{ padding: '8px 6px' }}>{g.avgAttendance}%</td>
+                  <td style={{ padding: '8px 6px' }}>{g.avgProgramHours}</td>
+                  <td style={{ padding: '8px 6px' }}>{g.avgQuizScore}%</td>
+                  <td style={{ padding: '8px 6px' }}>{g.assignmentsSubmitted}</td>
+                  <td style={{ padding: '8px 6px' }}>{g.assignmentsReviewed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
