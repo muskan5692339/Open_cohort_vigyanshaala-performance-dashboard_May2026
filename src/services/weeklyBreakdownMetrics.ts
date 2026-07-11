@@ -1,6 +1,7 @@
 import type { ColumnMapping } from '../types/dynamicSchema';
 import {
-  classifyAssignmentStatus,
+  isAssignmentAccepted,
+  isAssignmentSubmitted,
   listAssignmentStatusColumns,
 } from './studentAssignmentDisplay';
 import { isPreRecordedColumnHeader, isSessionColumnHeader, normalizeSessionHours } from './classWiseAttendance';
@@ -172,16 +173,11 @@ export function buildWeeklyColumnGroups(headers: string[]): WeeklyColumnGroup[] 
 }
 
 function isSubmittedAssignment(value: string): boolean {
-  const kind = classifyAssignmentStatus(value);
-  return kind !== 'pending';
+  return isAssignmentSubmitted(value);
 }
 
 function isAcceptedAssignment(value: string): boolean {
-  const s = value.toLowerCase().trim();
-  if (!s || s.length > 56) return false;
-  if (s.includes('rejected') || s.includes('no submission')) return false;
-  if (s.includes('submitted') && !s.includes('accepted')) return false;
-  return s.includes('accepted') || s.includes('complete') || s.includes('completed') || s.includes('pass');
+  return isAssignmentAccepted(value);
 }
 
 function isQuizSubmitted(value: string): boolean {

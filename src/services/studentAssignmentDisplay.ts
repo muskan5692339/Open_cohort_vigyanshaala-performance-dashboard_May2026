@@ -62,8 +62,17 @@ export function isLongFeedbackText(value: string): boolean {
   return value.trim().length > 56;
 }
 
+export function isAssignmentSubmitted(value: string): boolean {
+  return classifyAssignmentStatus(value) !== 'pending';
+}
+
+/** Accepted / completed only — excludes plain "Submitted" and rejections. */
 export function isAssignmentAccepted(value: string): boolean {
-  return classifyAssignmentStatus(value) === 'accepted';
+  const s = value.toLowerCase().trim();
+  if (!s || s.length > 56) return false;
+  if (s.includes('rejected') || s.includes('no submission')) return false;
+  if (s.includes('submitted') && !s.includes('accepted')) return false;
+  return s.includes('accepted') || s.includes('complete') || s.includes('completed') || s.includes('pass');
 }
 
 export function listAssignmentStatusColumns(cols: string[], allRowCols: string[] = cols): string[] {

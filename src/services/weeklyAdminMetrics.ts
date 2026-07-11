@@ -1,7 +1,13 @@
 import type { ColumnMapping } from '../types/dynamicSchema';
 import type { UploadSnapshot, WeeklyInterventionStats } from '../types/intelligenceTypes';
 import {
+  findActivityStatusColumn,
+  normalizeActivityStatus,
+} from './programOverviewMetrics';
+import {
   classifyAssignmentStatus,
+  isAssignmentAccepted,
+  isAssignmentSubmitted,
   listAssignmentStatusColumns,
 } from './studentAssignmentDisplay';
 
@@ -16,6 +22,12 @@ export interface WeeklyUploadMetrics {
   assignmentsAccepted: number;
   assignmentsPending: number;
   assignmentSlots: number;
+  attendanceCount: number;
+  quizSubmissions: number;
+  highlyActive: number;
+  active: number;
+  partiallyActive: number;
+  inactive: number;
   interventionBreakdown: WeeklyInterventionStats[];
 }
 
@@ -138,12 +150,24 @@ function listMetricColumns(headers: string[], mapping: ColumnMapping | undefined
 }
 
 function slotStats(value: string): { submitted: number; reviewed: number; accepted: number; pending: number } {
-  const kind = classifyAssignmentStatus(value);
-  if (kind === 'pending') return { submitted: 0, reviewed: 0, accepted: 0, pending: 1 };
-  if (kind === 'accepted') return { submitted: 1, reviewed: 1, accepted: 1, pending: 0 };
-  if (kind === 'rejected') return { submitted: 1, reviewed: 1, accepted: 0, pending: 0 };
-  if (kind === 'other' && value.trim()) return { submitted: 1, reviewed: 0, accepted: 0, pending: 0 };
-  return { submitted: 0, reviewed: 0, accepted: 0, pending: 1 };
+  const trimmed = value.trim();
+  if (!isAssignmentSubmitted(trimmed)) {
+    return { submitted: 0, reviewed: 0, accepted: 0, pending: 1 };
+  }
+  const kind = classifyAssignmentStatus(trimmed);
+  const accepted = isAssignmentAccepted(trimmed) ? 1 : 0;
+  const reviewed = kind === 'accepted' || kind === 'rejected' ? 1 : 0;
+  return { submitted: 1, reviewed, accepted, pending: 0 };
+}
+
+function isQuizSubmitted(value: string): boolean {
+  const s = (value ?? '').trim();
+  if (!s) return false;
+  const lower = s.toLowerCase();
+  if (['no submission', 'not submitted', 'pending', 'n/a', 'na', '-'].some(k => lower.includes(k))) return false;
+  const n = parseNumeric(s);
+  if (n != null && n > 0) return true;
+  return s.length > 0;
 }
 
 function emptyGroup(group: string): WeeklyInterventionStats {
@@ -157,6 +181,12 @@ function emptyGroup(group: string): WeeklyInterventionStats {
     assignmentsReviewed: 0,
     assignmentsAccepted: 0,
     assignmentsPending: 0,
+    attendanceCount: 0,
+    quizSubmissions: 0,
+    highlyActive: 0,
+    active: 0,
+    partiallyActive: 0,
+    inactive: 0,
   };
 }
 
@@ -171,6 +201,7 @@ export function computeWeeklyUploadMetrics(
 ): WeeklyUploadMetrics {
   const assignmentCols = listAssignmentColumns(headers, mapping);
   const interventionCol = findInterventionColumn(headers, mapping);
+  const statusCol = findActivityStatusColumn(headers, mapping);
   const { attendanceCols, quizCols, programHoursCols } = listMetricColumns(headers, mapping);
 
   const groupMap = new Map<string, WeeklyInterventionStats & {
@@ -191,6 +222,12 @@ export function computeWeeklyUploadMetrics(
     assignmentsAccepted: 0,
     assignmentsPending: 0,
     assignmentSlots: 0,
+    attendanceCount: 0,
+    quizSubmissions: 0,
+    highlyActive: 0,
+    active: 0,
+    partiallyActive: 0,
+    inactive: 0,
     attSum: 0, attN: 0, hrsSum: 0, hrsN: 0, quizSum: 0, quizN: 0,
   };
 
@@ -203,6 +240,10 @@ export function computeWeeklyUploadMetrics(
     if (att != null) {
       g.attSum += att; g.attN += 1;
       totals.attSum += att; totals.attN += 1;
+      if (att > 0) {
+        g.attendanceCount = (g.attendanceCount ?? 0) + 1;
+        totals.attendanceCount += 1;
+      }
     }
     const hrs = avgFromCols(row, programHoursCols, false);
     if (hrs != null) {
@@ -214,6 +255,19 @@ export function computeWeeklyUploadMetrics(
       g.quizSum += quiz; g.quizN += 1;
       totals.quizSum += quiz; totals.quizN += 1;
     }
+
+    for (const col of quizCols) {
+      if (isQuizSubmitted(row[col] ?? '')) {
+        g.quizSubmissions = (g.quizSubmissions ?? 0) + 1;
+        totals.quizSubmissions += 1;
+      }
+    }
+
+    const tier = normalizeActivityStatus(statusCol ? row[statusCol] : '');
+    if (tier === 'Highly Active') { g.highlyActive = (g.highlyActive ?? 0) + 1; totals.highlyActive += 1; }
+    else if (tier === 'Active') { g.active = (g.active ?? 0) + 1; totals.active += 1; }
+    else if (tier === 'Partially Active') { g.partiallyActive = (g.partiallyActive ?? 0) + 1; totals.partiallyActive += 1; }
+    else { g.inactive = (g.inactive ?? 0) + 1; totals.inactive += 1; }
 
     for (const col of assignmentCols) {
       const stats = slotStats((row[col] ?? '').trim());
@@ -239,6 +293,12 @@ export function computeWeeklyUploadMetrics(
     assignmentsReviewed: g.assignmentsReviewed,
     assignmentsAccepted: g.assignmentsAccepted,
     assignmentsPending: g.assignmentsPending,
+    attendanceCount: g.attendanceCount ?? 0,
+    quizSubmissions: g.quizSubmissions ?? 0,
+    highlyActive: g.highlyActive ?? 0,
+    active: g.active ?? 0,
+    partiallyActive: g.partiallyActive ?? 0,
+    inactive: g.inactive ?? 0,
   })).sort((a, b) => b.studentCount - a.studentCount);
 
   return {
@@ -250,6 +310,12 @@ export function computeWeeklyUploadMetrics(
     assignmentsAccepted: totals.assignmentsAccepted,
     assignmentsPending: totals.assignmentsPending,
     assignmentSlots: totals.assignmentSlots,
+    attendanceCount: totals.attendanceCount,
+    quizSubmissions: totals.quizSubmissions,
+    highlyActive: totals.highlyActive,
+    active: totals.active,
+    partiallyActive: totals.partiallyActive,
+    inactive: totals.inactive,
     interventionBreakdown,
   };
 }
@@ -279,6 +345,21 @@ export function formatUploadLabel(iso: string, fileName?: string): string {
     return fileName ? `${date} ${time} · ${fileName}` : `${date} ${time}`;
   } catch {
     return fileName ?? iso;
+  }
+}
+
+/** Short x-axis label for each data upload timestamp. */
+export function formatSnapshotAxisLabel(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
   }
 }
 
@@ -314,37 +395,96 @@ export interface SnapshotChartPoint {
   label: string;
   fullLabel: string;
   uploadedAt: string;
+  attendanceCount: number;
+  submitted: number;
+  accepted: number;
+  quizSubmissions: number;
+  highlyActive: number;
+  active: number;
+  partiallyActive: number;
   attendance: number;
   programHours: number;
   quizScore: number;
-  submitted: number;
   reviewed: number;
   attendancePct: number | null;
   programHoursPct: number | null;
   quizScorePct: number | null;
   submittedPct: number | null;
   reviewedPct: number | null;
+  acceptedPct: number | null;
 }
 
-function pickMetrics(
+function pickSnapshotMetrics(
   snap: UploadSnapshot,
   group: string | null,
 ): {
+  attendanceCount: number;
+  submitted: number;
+  accepted: number;
+  quizSubmissions: number;
+  highlyActive: number;
+  active: number;
+  partiallyActive: number;
   attendance: number;
   programHours: number;
   quizScore: number;
-  submitted: number;
   reviewed: number;
 } {
   const m = snap.metrics;
   const b = group ? m.interventionBreakdown?.find(x => x.group === group) : null;
   return {
+    attendanceCount: b?.attendanceCount ?? m.attendanceCount ?? 0,
+    submitted: b?.assignmentsSubmitted ?? m.assignmentsSubmitted ?? 0,
+    accepted: b?.assignmentsAccepted ?? m.assignmentsAccepted ?? 0,
+    quizSubmissions: b?.quizSubmissions ?? m.quizSubmissions ?? 0,
+    highlyActive: b?.highlyActive ?? m.highlyActive ?? 0,
+    active: b?.active ?? m.active ?? 0,
+    partiallyActive: b?.partiallyActive ?? m.partiallyActive ?? 0,
     attendance: b?.avgAttendance ?? m.avgAttendance ?? 0,
     programHours: b?.avgProgramHours ?? m.avgProgramHours ?? 0,
     quizScore: b?.avgQuizScore ?? m.avgQuizScore ?? m.avgAssessment ?? 0,
-    submitted: b?.assignmentsSubmitted ?? m.assignmentsSubmitted ?? 0,
     reviewed: b?.assignmentsReviewed ?? m.assignmentsReviewed ?? 0,
   };
+}
+
+export interface SnapshotComparisonRow {
+  metric: string;
+  updateA: number;
+  updateB: number;
+  delta: number;
+  deltaPct: number | null;
+}
+
+export function compareSnapshotUpdates(
+  snapshots: UploadSnapshot[],
+  snapshotIdA: string,
+  snapshotIdB: string,
+  categoryFilter: string,
+): SnapshotComparisonRow[] {
+  const group = categoryFilter === 'all' ? null : categoryFilter;
+  const a = snapshots.find(s => s.id === snapshotIdA);
+  const b = snapshots.find(s => s.id === snapshotIdB);
+  if (!a || !b) return [];
+
+  const ma = pickSnapshotMetrics(a, group);
+  const mb = pickSnapshotMetrics(b, group);
+  const metrics: { key: keyof typeof ma; label: string }[] = [
+    { key: 'attendanceCount', label: 'Students with attendance' },
+    { key: 'submitted', label: 'Assignments submitted' },
+    { key: 'accepted', label: 'Assignments accepted' },
+    { key: 'quizSubmissions', label: 'Quiz submissions' },
+    { key: 'highlyActive', label: 'Highly Active' },
+    { key: 'active', label: 'Active' },
+    { key: 'partiallyActive', label: 'Partially Active' },
+  ];
+
+  return metrics.map(({ key, label }) => {
+    const va = ma[key];
+    const vb = mb[key];
+    const delta = vb - va;
+    const deltaPct = va === 0 ? (vb > 0 ? 100 : 0) : Math.round((delta / va) * 1000) / 10;
+    return { metric: label, updateA: va, updateB: vb, delta, deltaPct };
+  });
 }
 
 export function buildSnapshotChartSeries(
@@ -352,33 +492,41 @@ export function buildSnapshotChartSeries(
   interventionFilter: string,
   weeklyRollup: boolean,
 ): SnapshotChartPoint[] {
-  const ordered = weeklyRollup ? rollupSnapshotsWeekly(snapshots) : [...snapshots].sort((a, b) => a.uploadedAt.localeCompare(b.uploadedAt));
+  const ordered = weeklyRollup
+    ? rollupSnapshotsWeekly(snapshots)
+    : [...snapshots].sort((a, b) => a.uploadedAt.localeCompare(b.uploadedAt));
   const group = interventionFilter === 'all' ? null : interventionFilter;
 
   return ordered.map((snap, idx) => {
     const prev = idx > 0 ? ordered[idx - 1] : null;
-    const cur = pickMetrics(snap, group);
-    const prevM = prev ? pickMetrics(prev, group) : null;
+    const cur = pickSnapshotMetrics(snap, group);
+    const prevM = prev ? pickSnapshotMetrics(prev, group) : null;
 
-    const d = new Date(snap.uploadedAt);
     const label = weeklyRollup
       ? isoWeekKey(snap.uploadedAt)
-      : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+      : formatSnapshotAxisLabel(snap.uploadedAt);
 
     return {
       label,
       fullLabel: formatUploadLabel(snap.uploadedAt, snap.fileName),
       uploadedAt: snap.uploadedAt,
+      attendanceCount: cur.attendanceCount,
+      submitted: cur.submitted,
+      accepted: cur.accepted,
+      quizSubmissions: cur.quizSubmissions,
+      highlyActive: cur.highlyActive,
+      active: cur.active,
+      partiallyActive: cur.partiallyActive,
       attendance: cur.attendance,
       programHours: cur.programHours,
       quizScore: cur.quizScore,
-      submitted: cur.submitted,
       reviewed: cur.reviewed,
       attendancePct: pctChange(cur.attendance, prevM?.attendance),
       programHoursPct: pctChange(cur.programHours, prevM?.programHours),
       quizScorePct: pctChange(cur.quizScore, prevM?.quizScore),
       submittedPct: pctChange(cur.submitted, prevM?.submitted),
       reviewedPct: pctChange(cur.reviewed, prevM?.reviewed),
+      acceptedPct: pctChange(cur.accepted, prevM?.accepted),
     };
   });
 }

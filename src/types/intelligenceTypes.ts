@@ -86,6 +86,12 @@ export interface WeeklyInterventionStats {
   assignmentsReviewed: number;
   assignmentsAccepted: number;
   assignmentsPending: number;
+  attendanceCount?: number;
+  quizSubmissions?: number;
+  highlyActive?: number;
+  active?: number;
+  partiallyActive?: number;
+  inactive?: number;
 }
 
 export interface UploadSnapshotMetrics {
@@ -103,6 +109,12 @@ export interface UploadSnapshotMetrics {
   assignmentsReviewed?: number;
   assignmentsAccepted?: number;
   assignmentsPending?: number;
+  attendanceCount?: number;
+  quizSubmissions?: number;
+  highlyActive?: number;
+  active?: number;
+  partiallyActive?: number;
+  inactive?: number;
   interventionBreakdown?: WeeklyInterventionStats[];
 }
 

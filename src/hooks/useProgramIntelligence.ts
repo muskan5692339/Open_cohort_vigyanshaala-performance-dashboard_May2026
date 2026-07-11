@@ -60,6 +60,12 @@ export function useProgramIntelligence(input: {
       assignmentsReviewed: weekly.assignmentsReviewed,
       assignmentsAccepted: weekly.assignmentsAccepted,
       assignmentsPending: weekly.assignmentsPending,
+      attendanceCount: weekly.attendanceCount,
+      quizSubmissions: weekly.quizSubmissions,
+      highlyActive: weekly.highlyActive,
+      active: weekly.active,
+      partiallyActive: weekly.partiallyActive,
+      inactive: weekly.inactive,
       interventionBreakdown: weekly.interventionBreakdown,
     };
     saveUploadSnapshot({ fileName, metrics });

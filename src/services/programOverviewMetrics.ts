@@ -136,8 +136,8 @@ export function findActivityStatusColumn(headers: string[], mapping?: ColumnMapp
     .map(col => {
       const nk = normCol(col);
       let score = 0;
-      if (nk === 'currentstatus') score = 100;
-      else if (nk.includes('currentstatus')) score = 90;
+      if (nk === 'currentstatus' || nk === 'currentstat') score = 100;
+      else if (nk.includes('currentstatus') || nk.includes('currentstat')) score = 90;
       else if (nk.includes('engagementstatus')) score = 80;
       else if (nk.includes('activitystatus')) score = 75;
       else if (nk === 'status') score = 50;
