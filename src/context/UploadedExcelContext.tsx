@@ -263,7 +263,9 @@ function applyLoadedState(
   payload: ParsedExcelPayload;
   meta: UploadedExcelMeta;
 } {
-  const enriched = enrichPayloadForStudentLookup(mergeClassWise(payload));
+  // Do not inject stale local class-wise onto a freshly published cloud roster.
+  const withClassWise = meta.source === 'cloud' ? payload : mergeClassWise(payload);
+  const enriched = enrichPayloadForStudentLookup(withClassWise);
   const finalMeta: UploadedExcelMeta = {
     ...meta,
     studentCount: getStudentLookupCount(enriched),

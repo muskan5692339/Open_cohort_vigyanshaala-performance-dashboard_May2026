@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!result) {
         return res.status(404).json({ error: 'No active upload with stored payload', code: 'not_found' });
       }
-      res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+      res.setHeader('Cache-Control', 'no-store');
       return res.status(200).json(result);
     } catch (e) {
       const message = (e as Error).message;

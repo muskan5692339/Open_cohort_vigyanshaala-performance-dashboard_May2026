@@ -99,6 +99,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         classWiseAttendanceColumns: body.classWiseAttendanceColumns ?? [],
         cohortName: body.cohortName,
         fileName: body.fileName,
+        publishedAt: new Date().toISOString(),
+        cacheVersion: 3,
       };
       const json = JSON.stringify(payloadObj);
       contentHash = hashPayload(json);

@@ -3,12 +3,24 @@ import type { ParsedStudent } from '../types/syncTypes';
 import type { ColumnMapping } from '../types/dynamicSchema';
 
 export function normalizeStudentEmail(email: string): string {
-  return email.trim().toLowerCase().replace(/^mailto:/i, '').trim();
+  return repairStudentEmail(email.trim().toLowerCase().replace(/^mailto:/i, '').trim());
+}
+
+/** Fix common Excel/hyperlink corruption (e.g. 1000025052dit@edu.in → 1000025052@dit.edu.in). */
+export function repairStudentEmail(email: string): string {
+  let e = email.trim().toLowerCase().replace(/^mailto:/i, '').trim();
+  const ditBroken = e.match(/^(\d+)dit@edu\.in$/) ?? e.match(/^(\d+)d@edu\.in$/);
+  if (ditBroken) return `${ditBroken[1]}@dit.edu.in`;
+  const eduOnly = e.match(/^(\d{7,})@edu\.in$/);
+  if (eduOnly) return `${eduOnly[1]}@dit.edu.in`;
+  return e;
 }
 
 function isValidStudentEmail(email: string): boolean {
   const normalized = normalizeStudentEmail(email);
-  return normalized.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+  if (!normalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return false;
+  if (/@edu\.in$/i.test(normalized)) return false;
+  return true;
 }
 
 function cellText(v: unknown): string {
@@ -44,21 +56,23 @@ function isEmailHeaderName(header: string): boolean {
   return false;
 }
 
-/** Prefer a header literally named "email" (any casing), then other email-like columns. */
+/** Prefer a header literally named "email" (any casing), then other email-like columns.
+ * Never fall back to an arbitrary identifier column (e.g. Student ID).
+ */
 export function resolveEmailColumnKey(payload: ParsedExcelPayload): string | null {
   const names = columnNamesFromPayload(payload);
 
   const exact = names.find(n => n.toLowerCase().replace(/^\uFEFF/, '').trim() === 'email');
   if (exact) return exact;
 
-  const mapping = payload.mapping ?? {};
-  const fromMapping = names.filter(
-    n => mapping[n]?.mappedType === 'identifier' || isEmailHeaderName(n),
-  );
-  if (fromMapping.length) return fromMapping[0];
+  const emailNamed = names.find(n => isEmailHeaderName(n));
+  if (emailNamed) return emailNamed;
 
-  const partial = names.find(n => isEmailHeaderName(n));
-  return partial ?? null;
+  const mapping = payload.mapping ?? {};
+  const mappedEmail = names.find(
+    n => mapping[n]?.mappedType === 'identifier' && isEmailHeaderName(n),
+  );
+  return mappedEmail ?? null;
 }
 
 function emailColumnsFromPayload(payload: ParsedExcelPayload): string[] {
@@ -73,14 +87,55 @@ function emailColumnsFromPayload(payload: ParsedExcelPayload): string[] {
 }
 
 function rowValueByKeywords(row: Record<string, unknown>, keywords: string[]): string {
-  for (const [key, value] of Object.entries(row)) {
-    const lk = key.toLowerCase();
-    if (keywords.some(k => lk.includes(k))) {
-      const text = cellText(value);
-      if (text) return text;
+  const entries = Object.entries(row);
+  // Prefer exact header matches first (avoids "Program Name" winning over "Name").
+  for (const keyword of keywords) {
+    const target = keyword.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const [key, value] of entries) {
+      const nk = key.toLowerCase().replace(/^\uFEFF/, '').replace(/[^a-z0-9]/g, '');
+      if (nk === target) {
+        const text = cellText(value);
+        if (text) return text;
+      }
+    }
+  }
+  for (const keyword of keywords) {
+    for (const [key, value] of entries) {
+      const lk = key.toLowerCase();
+      if (lk.includes(keyword)) {
+        const text = cellText(value);
+        if (text) return text;
+      }
     }
   }
   return '';
+}
+
+function addDeliverableEmail(map: Map<string, string>, raw: string): void {
+  const canonical = normalizeStudentEmail(raw);
+  if (isValidStudentEmail(canonical)) map.set(canonical, canonical);
+}
+
+function resolveDeliverableEmailFromRow(
+  row: Record<string, unknown>,
+  emailCol: string | null,
+  fallback?: string,
+): string | null {
+  const candidates: string[] = [];
+  if (fallback) candidates.push(fallback);
+  if (emailCol) candidates.push(cellText(row[emailCol]));
+  for (const val of Object.values(row)) {
+    const t = cellText(val);
+    if (t.includes('@')) candidates.push(t);
+  }
+  let fallbackValid: string | null = null;
+  for (const raw of candidates) {
+    const canonical = normalizeStudentEmail(raw);
+    if (!isValidStudentEmail(canonical)) continue;
+    if (canonical.endsWith('@dit.edu.in')) return canonical;
+    if (!fallbackValid) fallbackValid = canonical;
+  }
+  return fallbackValid;
 }
 
 /** All valid emails from the loaded dataset (parsed students + rawRows email column). */
@@ -88,44 +143,19 @@ export function getAllStudentEmails(payload: ParsedExcelPayload | null | undefin
   if (!payload) return [];
 
   const byNormalized = new Map<string, string>();
+  const col = resolveEmailColumnKey(payload);
 
   for (const student of payload.students ?? []) {
-    const email = cellText(student.email);
-    if (isValidStudentEmail(email)) {
-      byNormalized.set(normalizeStudentEmail(email), email);
-    }
+    addDeliverableEmail(byNormalized, cellText(student.email));
   }
 
-  const col = resolveEmailColumnKey(payload);
-  const rows = payload.rawRows ?? [];
-  if (col && rows.length) {
-    for (const row of rows) {
-      const email = cellText(row[col]);
-      if (isValidStudentEmail(email)) {
-        const key = normalizeStudentEmail(email);
-        if (!byNormalized.has(key)) byNormalized.set(key, email);
-      }
-    }
-  }
-
-  if (byNormalized.size === 0 && rows.length) {
-    for (const row of rows) {
-      for (const val of Object.values(row)) {
-        const email = cellText(val);
-        if (isValidStudentEmail(email)) {
-          const key = normalizeStudentEmail(email);
-          if (!byNormalized.has(key)) byNormalized.set(key, email);
-        }
-      }
-    }
+  for (const row of payload.rawRows ?? []) {
+    const resolved = resolveDeliverableEmailFromRow(row, col);
+    if (resolved) byNormalized.set(resolved, resolved);
   }
 
   for (const entry of payload.classWiseAttendance ?? []) {
-    const email = cellText(entry.student_email);
-    if (isValidStudentEmail(email)) {
-      const key = normalizeStudentEmail(email);
-      if (!byNormalized.has(key)) byNormalized.set(key, email);
-    }
+    addDeliverableEmail(byNormalized, cellText(entry.student_email));
   }
 
   return [...byNormalized.values()].sort((a, b) =>
@@ -229,7 +259,7 @@ function buildStudentFromRow(
 
   return {
     student_id: rowValueByKeywords(row, ['student id', 'student_id', 'vs id']) || resolvedEmail,
-    name: rowValueByKeywords(row, ['name', 'student name', 'full name']) || 'Unknown',
+    name: rowValueByKeywords(row, ['full name', 'student name', 'name']) || 'Unknown',
     email: resolvedEmail,
     college: rowValueByKeywords(row, ['college', 'university', 'institution']),
     program: rowValueByKeywords(row, ['program', 'degree', 'subject']),
@@ -256,19 +286,11 @@ export function findStudentRawRow(
     }
   }
 
+  // Whole-row email scan only — never match by name/student_id (duplicate names
+  // cause Student A to see Student B's metrics after re-uploads).
   for (const row of rows) {
     for (const val of Object.values(row)) {
       if (normalizeStudentEmail(cellText(val)) === key) return row;
-    }
-  }
-
-  const student = payload.students?.find(s => normalizeStudentEmail(s.email) === key);
-  if (!student) return null;
-
-  for (const row of rows) {
-    for (const val of Object.values(row)) {
-      const text = cellText(val);
-      if (text && (text === student.student_id || text === student.name)) return row;
     }
   }
 

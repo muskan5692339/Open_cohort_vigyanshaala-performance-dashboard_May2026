@@ -15,9 +15,11 @@ function parseStoredJson(stored: {
   classWiseAttendanceColumns?: string[];
   cohortName?: string;
   fileName?: string;
+  publishedAt?: string;
 }, fallback: { fileName: string; cohortName: string }) {
   if (!stored.rawRows?.length) return null;
   const classWiseAttendance = stored.classWiseAttendance ?? [];
+  const publishedAt = stored.publishedAt;
   return {
     payload: {
       cohortName: stored.cohortName ?? fallback.cohortName,
@@ -36,7 +38,8 @@ function parseStoredJson(stored: {
     meta: {
       fileName: stored.fileName ?? fallback.fileName,
       cohortName: stored.cohortName ?? fallback.cohortName,
-      loadedAt: new Date().toISOString(),
+      loadedAt: publishedAt ?? new Date().toISOString(),
+      publishedAt,
       studentCount: stored.rawRows.length,
       classWiseStudentCount: classWiseAttendance.length || undefined,
       source: 'cloud' as const,
@@ -121,6 +124,11 @@ async function fetchLatestActiveUpload(
 }
 
 export async function fetchLatestCohortPayloadForOrg(serviceDb: SupabaseClient, orgId: string) {
+  // Prefer public roster — updated on every Data Sources publish, even when
+  // workbooks persist lags, times out, or is skipped by content-hash dedupe.
+  const fromPublic = await fetchFromPublicRosterStorage(serviceDb, orgId);
+  if (fromPublic) return fromPublic;
+
   const upload = await fetchLatestActiveUpload(serviceDb, orgId);
   if (upload) {
     const version = await loadLatestVersion(serviceDb, upload.id);
@@ -129,11 +137,14 @@ export async function fetchLatestCohortPayloadForOrg(serviceDb: SupabaseClient, 
       if (fromWorkbooks) return fromWorkbooks;
     }
   }
-  return fetchFromPublicRosterStorage(serviceDb, orgId);
+  return null;
 }
 
 /** Single-tenant fallback when org id on student devices does not match admin upload. */
 export async function fetchLatestCohortPayloadAny(serviceDb: SupabaseClient) {
+  const fromPublic = await fetchFromPublicRosterStorage(serviceDb);
+  if (fromPublic) return fromPublic;
+
   const upload = await fetchLatestActiveUpload(serviceDb);
   if (upload) {
     const version = await loadLatestVersion(serviceDb, upload.id);
@@ -142,5 +153,5 @@ export async function fetchLatestCohortPayloadAny(serviceDb: SupabaseClient) {
       if (fromWorkbooks) return fromWorkbooks;
     }
   }
-  return fetchFromPublicRosterStorage(serviceDb);
+  return null;
 }

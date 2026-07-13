@@ -282,11 +282,14 @@ export async function listUploadVersions(
   }
 }
 
-/** Load latest cloud-persisted cohort for student email lookup (no auth). */
+/** Load latest cloud-persisted cohort for student email lookup (no auth).
+ * Prefer the public roster bucket (updated on every Apply Mapping) over the
+ * API/workbooks path, which can lag when persist-upload times out or dedupes.
+ */
 export async function fetchLatestCohortPayload(
   organizationId?: string,
   options?: { cacheBust?: boolean },
-): Promise<{ payload: ParsedExcelPayload; meta: { fileName: string; cohortName: string; loadedAt: string; studentCount: number; classWiseStudentCount?: number } } | null> {
+): Promise<{ payload: ParsedExcelPayload; meta: { fileName: string; cohortName: string; loadedAt: string; publishedAt?: string; studentCount: number; classWiseStudentCount?: number } } | null> {
   if (!isCloudPersistenceEnabled()) return null;
 
   const orgId = organizationId ?? getActiveOrganizationId();
@@ -301,6 +304,9 @@ export async function fetchLatestCohortPayload(
   };
 
   try {
+    const publicResult = await fetchPublicCohortPayload(orgId, options?.cacheBust);
+    if (publicResult?.payload?.rawRows?.length) return publicResult;
+
     let result = await tryUrl(base);
     if (result && 'misconfigured' in result) {
       throw new Error('cloud_misconfigured');
@@ -311,9 +317,7 @@ export async function fetchLatestCohortPayload(
         throw new Error('cloud_misconfigured');
       }
     }
-    if (result) return result;
-
-    return await fetchPublicCohortPayload(orgId, options?.cacheBust);
+    return result;
   } catch (e) {
     if ((e as Error).message === 'cloud_misconfigured') throw e;
     return fetchPublicCohortPayload(orgId, options?.cacheBust);

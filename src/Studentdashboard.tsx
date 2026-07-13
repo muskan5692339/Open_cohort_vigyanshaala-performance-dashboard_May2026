@@ -88,6 +88,14 @@ function parsePct(raw: unknown): number {
   return Math.max(0, Math.min(100, Math.round(pct)));
 }
 
+function parsePctOrNull(raw: unknown): number | null {
+  const text = stringifyCellValue(raw);
+  if (!text.trim()) return null;
+  const m = text.match(/-?\d+(\.\d+)?/);
+  if (!m) return null;
+  return parsePct(raw);
+}
+
 function isAccepted(value: string): boolean {
   const s = value.toLowerCase();
   return ['accepted', 'submitted', 'complete', 'completed', 'pass'].some(k => s.includes(k));
@@ -107,9 +115,23 @@ function columnKeyMatches(key: string, keyword: string): boolean {
 function getByKeywords(row: Record<string, unknown>, keywords: string[]): string {
   const entries = Object.entries(row);
   for (const keyword of keywords) {
+    const target = normalizeColumnKey(keyword);
+    for (const [key, value] of entries) {
+      if (normalizeColumnKey(key) === target) {
+        const out = stringifyCellValue(value);
+        if (out) return out;
+      }
+    }
+  }
+  for (const keyword of keywords) {
     for (const [key, value] of entries) {
       const lk = key.toLowerCase();
       if (lk.includes(keyword) || columnKeyMatches(key, keyword)) {
+        // Avoid loose "name" matching Program Name / College Name / etc.
+        if (keyword === 'name') {
+          const nk = normalizeColumnKey(key);
+          if (nk !== 'name' && nk !== 'fullname' && nk !== 'studentname') continue;
+        }
         const out = stringifyCellValue(value);
         if (out) return out;
       }
@@ -374,10 +396,21 @@ export default function StudentDashboard({ email, onBack }: Props) {
         return Math.round((done / rows.length) * 100);
       })();
   const quizScoreCols = quizCols.filter(col => !col.toLowerCase().includes('final score'));
-  const quizScores = quizScoreCols.map(col => parsePct(matched[col]));
-  const avgQuiz = quizScoreCols.length
-    ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScoreCols.length)
+  const quizBarData = quizScoreCols
+    .map(col => {
+      const score = parsePctOrNull(matched[col]);
+      if (score == null) return null;
+      return {
+        name: col.replace(/_/g, ' ').trim() || 'Quiz',
+        score,
+      };
+    })
+    .filter((x): x is { name: string; score: number } => x != null);
+  const quizData = quizBarData;
+  const avgQuiz = quizData.length
+    ? Math.round(quizData.reduce((a, b) => a + b.score, 0) / quizData.length)
     : 0;
+  const quizHighest = quizData.reduce((max, x) => Math.max(max, x.score), 0);
 
   const programHoursLabel =
     attendedHours > 0 && totalHours > 0
@@ -402,14 +435,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
           feedback: '',
           kind: classifyAssignmentStatus(a.status),
         }));
-
-  const quizBarData = quizScoreCols
-    .map(col => ({
-      name: col.replace(/_/g, ' ').trim() || 'Quiz',
-      score: parsePct(matched[col]),
-    }));
-  const quizData = quizBarData.length ? quizBarData : [{ name: 'Quiz', score: avgQuiz }];
-  const quizHighest = quizData.reduce((max, x) => Math.max(max, x.score), 0);
 
   const attendanceDonut = hoursAttendance
     ? buildAttendanceDonutFromHours(hoursAttendance.attendedPct, hoursAttendance.missedPct)
@@ -443,7 +468,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
     ? `${activeSessionTrend.length} classes · scroll sideways →`
     : `${activeSessionTrend.length} videos · scroll sideways →`;
 
-  const studentName = resolveField(matched, student.name, ['full name', 'name', 'student name']);
+  const studentName = resolveField(matched, student.name, ['full name', 'student name', 'name']);
   const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
   const studentEmail = resolveField(matched, student.email, ['email']);
   const phone = resolveField(matched, undefined, ['phone', 'mobile', 'contact']);
@@ -527,7 +552,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
               />
             </div>
             <div className={`metric-alert-wrap ${avgQuiz === 0 ? 'metric-alert-wrap--hot' : ''}`}>
-              <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizScoreCols.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
+              <StatCard label="Avg Quiz Score" value={`${avgQuiz}%`} subtitle={quizData.length ? 'From quiz columns' : 'No quiz data'} warn={avgQuiz === 0} />
               <AnimeMetricAlert
                 variant="quiz"
                 show={avgQuiz === 0}
@@ -568,40 +593,46 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <article className="panel-card panel-large panel-card-wrap">
               <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="quiz" delayMs={600} />
               <h3>Quiz performance</h3>
-              <ChartMobileFrame
-                chartKey="quiz"
-                height={220}
-                needsHorizontalScroll={quizNeedsScroll}
-                innerWidth={quizChartWidth}
-                showScrollLadder={quizNeedsScroll}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={quizData} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
-                    <XAxis
-                      dataKey="name"
-                      stroke="var(--sd-text-muted)"
-                      fontSize={isMobile ? 10 : 11}
-                      interval={0}
-                      angle={isMobile ? -20 : 0}
-                      textAnchor={isMobile ? 'end' : 'middle'}
-                      height={isMobile ? 52 : 30}
-                      tickFormatter={value => {
-                        const text = String(value ?? '');
-                        return text.length > (isMobile ? 18 : 26) ? `${text.slice(0, isMobile ? 18 : 26)}...` : text;
-                      }}
-                    />
-                    <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} width={isMobile ? 28 : 36} />
-                    <Tooltip />
-                    <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={isMobile ? 36 : 48}>
-                      {quizData.map((entry, idx) => (
-                        <Cell key={`${entry.name}-${idx}`} fill={entry.score >= 100 ? 'var(--sd-light-green)' : 'var(--sd-accent)'} />
-                      ))}
-                      <LabelList dataKey="score" position="top" fontSize={11} fill="var(--sd-text)" />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartMobileFrame>
+              {quizData.length === 0 ? (
+                <div style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--sd-text-muted)', fontSize: 13 }}>
+                  No quiz scores yet
+                </div>
+              ) : (
+                <ChartMobileFrame
+                  chartKey="quiz"
+                  height={220}
+                  needsHorizontalScroll={quizNeedsScroll}
+                  innerWidth={quizChartWidth}
+                  showScrollLadder={quizNeedsScroll}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={quizData} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                      <XAxis
+                        dataKey="name"
+                        stroke="var(--sd-text-muted)"
+                        fontSize={isMobile ? 10 : 11}
+                        interval={0}
+                        angle={isMobile ? -20 : 0}
+                        textAnchor={isMobile ? 'end' : 'middle'}
+                        height={isMobile ? 52 : 30}
+                        tickFormatter={value => {
+                          const text = String(value ?? '');
+                          return text.length > (isMobile ? 18 : 26) ? `${text.slice(0, isMobile ? 18 : 26)}...` : text;
+                        }}
+                      />
+                      <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} width={isMobile ? 28 : 36} />
+                      <Tooltip />
+                      <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={isMobile ? 36 : 48}>
+                        {quizData.map((entry, idx) => (
+                          <Cell key={`${entry.name}-${idx}`} fill={entry.score >= 100 ? 'var(--sd-light-green)' : 'var(--sd-accent)'} />
+                        ))}
+                        <LabelList dataKey="score" position="top" fontSize={11} fill="var(--sd-text)" />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartMobileFrame>
+              )}
               <div className="quiz-summary">
                 <MiniStat label="Average" value={`${avgQuiz}%`} />
                 <MiniStat label="Highest" value={`${quizHighest}%`} />
