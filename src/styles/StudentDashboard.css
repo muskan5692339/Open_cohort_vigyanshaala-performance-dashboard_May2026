@@ -212,6 +212,27 @@
   background: var(--sd-bg);
 }
 
+.session-trend-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 4px;
+}
+
+.session-trend-heading-row h3 {
+  margin: 0;
+}
+
+.session-trend-heading-row .chart-snapshot-actions {
+  margin: 0;
+}
+
+.session-trend-capture-root {
+  min-width: 0;
+}
+
 .session-trend-series-toggle {
   flex: 1 1 100%;
 }

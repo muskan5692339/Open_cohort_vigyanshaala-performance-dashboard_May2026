@@ -36,12 +36,14 @@ import AnimeMetricAlert from './components/student/AnimeMetricAlert';
 import AnimeHelpAssistant from './components/student/AnimeHelpAssistant';
 import ChartDataUpdatedBubble from './components/student/ChartDataUpdatedBubble';
 import ChartMobileFrame from './components/student/ChartMobileFrame';
+import ChartSnapshotActions from './components/student/ChartSnapshotActions';
 import StudentProfileEditPanel from './components/student/StudentProfileEditPanel';
 import WeeklyUpdateNotice from './components/student/WeeklyUpdateNotice';
 import './components/student/StudentProfileEditPanel.css';
 import './components/student/AnimeMetricAlert.css';
 import './components/student/ChartDataUpdatedBubble.css';
 import './components/student/ChartMobileFrame.css';
+import './components/student/ChartSnapshotActions.css';
 import {
   buildStudentAssignmentItems,
   classifyAssignmentStatus,
@@ -256,6 +258,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const { payload, meta } = useUploadedExcel();
   const mapping = (payload?.mapping ?? {}) as ColumnMapping;
   const sessionTrendScrollRef = useRef<HTMLDivElement>(null);
+  const sessionChartCaptureRef = useRef<HTMLDivElement>(null);
   const [sessionTrendFocus, setSessionTrendFocus] = useState<SessionTrendFocus>('start');
   const [sessionChartSeries, setSessionChartSeries] = useState<SessionChartSeries>('live');
   const isMobile = useMediaQuery('(max-width: 640px)');
@@ -695,7 +698,23 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
             <article className="panel-card panel-large session-trend-panel panel-card-wrap">
               <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="sessions" delayMs={1200} />
-              <h3>Session-wise trend</h3>
+              <div className="session-trend-heading-row">
+                <h3>Session-wise trend</h3>
+                {activeSessionTrend.length > 0 && (
+                  <ChartSnapshotActions
+                    chartRootRef={sessionChartCaptureRef}
+                    disabled={activeSessionTrend.length === 0}
+                    fileName={`session-wise-${sessionChartSeries}-${studentName.replace(/\s+/g, '-').toLowerCase() || 'chart'}.png`}
+                    meta={{
+                      title: `Session-wise trend · ${sessionChartSeries === 'live' ? 'Live classes' : 'Pre-recorded videos'}`,
+                      subtitle: [studentName !== '—' ? studentName : '', studentEmail !== '—' ? studentEmail : '']
+                        .filter(Boolean)
+                        .join(' · ') || undefined,
+                      footer: `VigyanShaala · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+                    }}
+                  />
+                )}
+              </div>
               {hasAnySessionTrend && (
                 <div className="session-trend-controls" role="group" aria-label="Session chart options">
                   <div className="session-trend-view-toggle session-trend-series-toggle">
@@ -748,90 +767,92 @@ export default function StudentDashboard({ email, onBack }: Props) {
                 </div>
               )}
               {activeSessionTrend.length > 0 ? (
-                <ChartMobileFrame
-                  chartKey="sessions"
-                  height={240}
-                  needsHorizontalScroll={sessionTrendNeedsScroll}
-                  innerWidth={sessionTrendChartWidth}
-                  scrollRef={sessionTrendScrollRef}
-                  showScrollLadder={sessionTrendNeedsScroll}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                      {sessionChartSeries === 'prerecorded' ? (
-                        <BarChart data={activeSessionTrend} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
-                          <XAxis
-                            dataKey="name"
-                            stroke="var(--sd-text-muted)"
-                            fontSize={10}
-                            interval={0}
-                            angle={-25}
-                            textAnchor="end"
-                            height={56}
-                          />
-                          <YAxis
-                            domain={[0, sessionTrendYMax]}
-                            stroke="var(--sd-text-muted)"
-                            fontSize={11}
-                            label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
-                          />
-                          <Tooltip
-                            formatter={(value, _name, item) => {
-                              const point = (item?.payload ?? {}) as { hoursCredit?: number; durationMin?: number | null };
-                              const hrs = point.hoursCredit ?? 0;
-                              const dur = point.durationMin ? `${Math.round(point.durationMin * 10) / 10} min · ` : '';
-                              return [`${Math.round(Number(value ?? 0))}% watched · ${dur}${hrs.toFixed(2)} hr credit`, 'Pre-recorded'];
-                            }}
-                          />
-                          <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>
-                            {activeSessionTrend.map((entry, idx) => (
-                              <Cell
-                                key={`${entry.name}-${idx}`}
-                                fill={sessionHoursIndicatorColor(Math.min(1, entry.value / 100))}
-                              />
-                            ))}
-                            <LabelList
-                              dataKey="value"
-                              position="top"
+                <div ref={sessionChartCaptureRef} className="session-trend-capture-root">
+                  <ChartMobileFrame
+                    chartKey="sessions"
+                    height={240}
+                    needsHorizontalScroll={sessionTrendNeedsScroll}
+                    innerWidth={sessionTrendChartWidth}
+                    scrollRef={sessionTrendScrollRef}
+                    showScrollLadder={sessionTrendNeedsScroll}
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                        {sessionChartSeries === 'prerecorded' ? (
+                          <BarChart data={activeSessionTrend} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                            <XAxis
+                              dataKey="name"
+                              stroke="var(--sd-text-muted)"
                               fontSize={10}
-                              fill="var(--sd-text-muted)"
-                              formatter={(value) => `${Math.round(Number(value ?? 0))}%`}
+                              interval={0}
+                              angle={-25}
+                              textAnchor="end"
+                              height={56}
                             />
-                          </Bar>
-                        </BarChart>
-                      ) : (
-                        <LineChart data={activeSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
-                          <XAxis
-                            dataKey="name"
-                            stroke="var(--sd-text-muted)"
-                            fontSize={10}
-                            interval={0}
-                            angle={-25}
-                            textAnchor="end"
-                            height={56}
-                          />
-                          <YAxis
-                            domain={[0, sessionTrendYMax]}
-                            stroke="var(--sd-text-muted)"
-                            fontSize={11}
-                            label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
-                          />
-                          <Tooltip
-                            formatter={(value) => [`${Number(value ?? 0).toFixed(2)} hrs`, 'Live class']}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="value"
-                            stroke="var(--sd-primary)"
-                            strokeWidth={2.5}
-                            dot={(props) => <SessionTrendDot {...props} scale="hours" />}
-                            activeDot={(props) => <SessionTrendDot {...props} scale="hours" active />}
-                          />
-                        </LineChart>
-                      )}
-                    </ResponsiveContainer>
-                </ChartMobileFrame>
+                            <YAxis
+                              domain={[0, sessionTrendYMax]}
+                              stroke="var(--sd-text-muted)"
+                              fontSize={11}
+                              label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                            />
+                            <Tooltip
+                              formatter={(value, _name, item) => {
+                                const point = (item?.payload ?? {}) as { hoursCredit?: number; durationMin?: number | null };
+                                const hrs = point.hoursCredit ?? 0;
+                                const dur = point.durationMin ? `${Math.round(point.durationMin * 10) / 10} min · ` : '';
+                                return [`${Math.round(Number(value ?? 0))}% watched · ${dur}${hrs.toFixed(2)} hr credit`, 'Pre-recorded'];
+                              }}
+                            />
+                            <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                              {activeSessionTrend.map((entry, idx) => (
+                                <Cell
+                                  key={`${entry.name}-${idx}`}
+                                  fill={sessionHoursIndicatorColor(Math.min(1, entry.value / 100))}
+                                />
+                              ))}
+                              <LabelList
+                                dataKey="value"
+                                position="top"
+                                fontSize={10}
+                                fill="var(--sd-text-muted)"
+                                formatter={(value) => `${Math.round(Number(value ?? 0))}%`}
+                              />
+                            </Bar>
+                          </BarChart>
+                        ) : (
+                          <LineChart data={activeSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                            <XAxis
+                              dataKey="name"
+                              stroke="var(--sd-text-muted)"
+                              fontSize={10}
+                              interval={0}
+                              angle={-25}
+                              textAnchor="end"
+                              height={56}
+                            />
+                            <YAxis
+                              domain={[0, sessionTrendYMax]}
+                              stroke="var(--sd-text-muted)"
+                              fontSize={11}
+                              label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                            />
+                            <Tooltip
+                              formatter={(value) => [`${Number(value ?? 0).toFixed(2)} hrs`, 'Live class']}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="value"
+                              stroke="var(--sd-primary)"
+                              strokeWidth={2.5}
+                              dot={(props) => <SessionTrendDot {...props} scale="hours" />}
+                              activeDot={(props) => <SessionTrendDot {...props} scale="hours" active />}
+                            />
+                          </LineChart>
+                        )}
+                      </ResponsiveContainer>
+                  </ChartMobileFrame>
+                </div>
               ) : hasAnySessionTrend ? (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
                   No pre-recorded video data for this student yet. Re-upload the workbook with

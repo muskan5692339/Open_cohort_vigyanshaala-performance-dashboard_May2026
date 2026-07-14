@@ -1,0 +1,50 @@
+.chart-snapshot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 10px;
+}
+
+.chart-snapshot-actions__btns {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-snapshot-btn {
+  border: 1px solid var(--sd-border);
+  background: var(--sd-surface);
+  color: var(--sd-text);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.chart-snapshot-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sd-primary) 45%, var(--sd-border));
+  color: var(--sd-primary);
+}
+
+.chart-snapshot-btn--secondary {
+  font-weight: 600;
+  color: var(--sd-text-muted);
+}
+
+.chart-snapshot-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.chart-snapshot-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sd-primary);
+}
+
+.chart-snapshot-status--error {
+  color: #b42318;
+}
