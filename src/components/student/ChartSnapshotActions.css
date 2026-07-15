@@ -2,14 +2,17 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  margin: 0 0 10px;
+  gap: 8px 10px;
+  margin: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .chart-snapshot-actions__btns {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
 }
 
 .chart-snapshot-btn {
@@ -17,11 +20,24 @@
   background: var(--sd-surface);
   color: var(--sd-text);
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 7px 12px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   line-height: 1.2;
+  white-space: nowrap;
+}
+
+.chart-snapshot-btn--primary {
+  background: var(--sd-primary);
+  border-color: var(--sd-primary);
+  color: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--sd-primary) 28%, transparent);
+}
+
+.chart-snapshot-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  color: #fff;
 }
 
 .chart-snapshot-btn:hover:not(:disabled) {
@@ -30,8 +46,9 @@
 }
 
 .chart-snapshot-btn--secondary {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--sd-text-muted);
+  padding-inline: 10px;
 }
 
 .chart-snapshot-btn:disabled {
@@ -43,8 +60,41 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--sd-primary);
+  flex: 1 1 100%;
 }
 
 .chart-snapshot-status--error {
   color: #b42318;
+}
+
+.chart-snapshot-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--sd-border);
+  background: var(--sd-surface);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+}
+
+.chart-snapshot-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--sd-text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.chart-snapshot-menu__item:hover {
+  background: color-mix(in srgb, var(--sd-primary) 10%, transparent);
+  color: var(--sd-primary);
 }

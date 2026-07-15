@@ -698,23 +698,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
             <article className="panel-card panel-large session-trend-panel panel-card-wrap">
               <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="sessions" delayMs={1200} />
-              <div className="session-trend-heading-row">
-                <h3>Session-wise trend</h3>
-                {activeSessionTrend.length > 0 && (
-                  <ChartSnapshotActions
-                    chartRootRef={sessionChartCaptureRef}
-                    disabled={activeSessionTrend.length === 0}
-                    fileName={`session-wise-${sessionChartSeries}-${studentName.replace(/\s+/g, '-').toLowerCase() || 'chart'}.png`}
-                    meta={{
-                      title: `Session-wise trend · ${sessionChartSeries === 'live' ? 'Live classes' : 'Pre-recorded videos'}`,
-                      subtitle: [studentName !== '—' ? studentName : '', studentEmail !== '—' ? studentEmail : '']
-                        .filter(Boolean)
-                        .join(' · ') || undefined,
-                      footer: `VigyanShaala · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`,
-                    }}
-                  />
-                )}
-              </div>
+              <h3>Session-wise trend</h3>
               {hasAnySessionTrend && (
                 <div className="session-trend-controls" role="group" aria-label="Session chart options">
                   <div className="session-trend-view-toggle session-trend-series-toggle">
@@ -736,6 +720,20 @@ export default function StudentDashboard({ email, onBack }: Props) {
                       Pre-recorded videos
                     </button>
                   </div>
+                  {activeSessionTrend.length > 0 && (
+                    <ChartSnapshotActions
+                      chartRootRef={sessionChartCaptureRef}
+                      disabled={activeSessionTrend.length === 0}
+                      fileName={`session-wise-${sessionChartSeries}-${studentName.replace(/\s+/g, '-').toLowerCase() || 'chart'}.png`}
+                      meta={{
+                        title: `Session-wise trend · ${sessionChartSeries === 'live' ? 'Live classes' : 'Pre-recorded videos'}`,
+                        subtitle: [studentName !== '—' ? studentName : '', studentEmail !== '—' ? studentEmail : '']
+                          .filter(Boolean)
+                          .join(' · ') || undefined,
+                        footer: `VigyanShaala · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+                      }}
+                    />
+                  )}
                   {sessionChartSeries === 'prerecorded' && (
                     <span className="session-trend-scroll-hint session-trend-explainer">
                       Short videos show % watched (100% = full video). Hover for program credit in hours.

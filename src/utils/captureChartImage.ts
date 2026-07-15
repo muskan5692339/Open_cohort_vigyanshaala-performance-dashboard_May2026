@@ -55,22 +55,25 @@ export async function captureChartPngBlob(
     chartRoot.querySelector<SVGSVGElement>('svg');
   if (!svg) throw new Error('Chart is not ready yet');
 
+  const inner = chartRoot.querySelector<HTMLElement>('.chart-mobile-inner');
   // Prefer the laid-out full chart width (important for sideways-scrolling session charts).
   const width = Math.max(
     1,
     Math.ceil(
-      svg.clientWidth ||
-        svg.getBoundingClientRect().width ||
+      inner?.offsetWidth ||
+        svg.clientWidth ||
         Number(svg.getAttribute('width')) ||
+        svg.getBoundingClientRect().width ||
         640,
     ),
   );
   const height = Math.max(
     1,
     Math.ceil(
-      svg.clientHeight ||
-        svg.getBoundingClientRect().height ||
+      inner?.offsetHeight ||
+        svg.clientHeight ||
         Number(svg.getAttribute('height')) ||
+        svg.getBoundingClientRect().height ||
         240,
     ),
   );
