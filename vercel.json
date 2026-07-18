@@ -30,8 +30,12 @@
       "schedule": "0 2 * * 1"
     },
     {
-      "path": "/api/reminders?slot=morning",
+      "path": "/api/reminders?slot=auto&schedule=sunday",
       "schedule": "0 4 * * 0"
+    },
+    {
+      "path": "/api/reminders?slot=auto&schedule=wednesday",
+      "schedule": "0 10 * * 3"
     }
   ],
   "functions": {
