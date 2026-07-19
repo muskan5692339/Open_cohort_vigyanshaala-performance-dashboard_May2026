@@ -121,6 +121,7 @@ export interface Filters {
 export type SidebarSection =
   | 'program-overview'
   | 'portal-analytics'
+  | 'reminder-status'
   | 'dashboard'
   | 'profile-approvals'
   | 'students'

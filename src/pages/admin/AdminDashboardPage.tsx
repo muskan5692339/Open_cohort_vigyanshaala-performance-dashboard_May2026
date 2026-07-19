@@ -23,6 +23,7 @@ const TelemetryPanel = lazyWithRetry(() => import('../../components/system/Telem
 const AdminWeeklyBrief = lazyWithRetry(() => import('../../components/dashboard/admin/AdminWeeklyBrief'));
 const AdminProgramOverview = lazyWithRetry(() => import('../../components/dashboard/admin/AdminProgramOverview'));
 const AdminStudentPortalAnalytics = lazyWithRetry(() => import('../../components/dashboard/admin/AdminStudentPortalAnalytics'));
+const AdminReminderStatus = lazyWithRetry(() => import('../../components/dashboard/admin/AdminReminderStatus'));
 const AdminProfileApprovals = lazyWithRetry(() => import('../../components/dashboard/admin/AdminProfileApprovals'));
 const ProgramIntelligenceHub = lazyWithRetry(() => import('../../components/dashboard/admin/intelligence/ProgramIntelligenceHub'));
 const SavedFilterViewsPanel = lazyWithRetry(() => import('../../components/dashboard/admin/SavedFilterViewsPanel'));
@@ -258,7 +259,8 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
   };
 
   const showDataBanner = section !== 'data-source' && !loading && !error && (activeAnalytics?.summary.totalRows ?? 0) > 0;
-  const showEmptyState = !loading && !error && (activeAnalytics?.summary.totalRows ?? 0) === 0 && section !== 'data-source';
+  const cloudOnlySections = section === 'data-source' || section === 'portal-analytics' || section === 'reminder-status' || section === 'profile-approvals';
+  const showEmptyState = !loading && !error && (activeAnalytics?.summary.totalRows ?? 0) === 0 && !cloudOnlySections;
 
   const riskRows = activeAnalytics?.riskMetrics.students ?? [];
   const atRiskRows = riskRows.filter(r => r.category === 'At Risk' || r.category === 'Critical Risk');
@@ -499,14 +501,14 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
   );
 
   const renderContent = () => {
-    if (loading && section !== 'data-source') {
+    if (loading && !cloudOnlySections) {
       return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: BRAND.textLight, fontSize: 14 }}>
           Loading dashboard data…
         </div>
       );
     }
-    if (error && section !== 'data-source') {
+    if (error && !cloudOnlySections) {
       return <LoadErrorState error={error} onRetry={refetch} />;
     }
     if (showEmptyState) {
@@ -528,6 +530,12 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
         return (
           <Suspense fallback={<ChartFallback />}>
             <AdminStudentPortalAnalytics />
+          </Suspense>
+        );
+      case 'reminder-status':
+        return (
+          <Suspense fallback={<ChartFallback />}>
+            <AdminReminderStatus />
           </Suspense>
         );
       case 'dashboard':

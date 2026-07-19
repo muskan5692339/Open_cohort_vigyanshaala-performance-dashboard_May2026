@@ -9,6 +9,7 @@ import {
   UserCheck,
   PieChart,
   MousePointerClick,
+  Mail,
 } from 'lucide-react';
 import type { SidebarSection } from '../../../types/adminTypes';
 import { BRAND } from '../../../types/adminTypes';
@@ -30,6 +31,7 @@ import { countPendingProfileCorrections } from '../../../services/studentProfile
 const NAV_ITEMS: NavItem[] = [
   { id: 'program-overview', label: 'Program Overview', icon: PieChart },
   { id: 'portal-analytics', label: 'Portal Analytics', icon: MousePointerClick },
+  { id: 'reminder-status', label: 'Weekly Reports', icon: Mail },
   { id: 'dashboard', label: 'Weekly Dashboard', icon: LayoutGrid },
   { id: 'profile-approvals', label: 'Student Updates', icon: UserCheck },
   { id: 'data-source', label: 'Data Sources', icon: Database },
