@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { runWeeklyStudentReminders, runTestStudentReminder, runPilotStudentReminders } from './_lib/runStudentReminders.js';
+import { handleReminderStatus } from './_lib/reminderStatusHandler.js';
 
 function createServiceClient() {
   const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -92,6 +93,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // Admin status UI — org JWT auth (not CRON_SECRET). Kept on this route to stay within Hobby's 12-function limit.
+  if (await handleReminderStatus(req, res)) return;
 
   if (!isAuthorized(req)) {
     return res.status(401).json({ error: 'Unauthorized' });

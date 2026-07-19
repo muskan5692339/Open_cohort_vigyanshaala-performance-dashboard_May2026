@@ -55,7 +55,7 @@ export async function fetchReminderStatus(
   }
   try {
     const qs = new URLSearchParams({ orgId: resolveOrgId(organizationId) });
-    const res = await fetch(`/api/reminder-status?${qs}`, {
+    const res = await fetch(`/api/reminders?slot=status&${qs}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     });

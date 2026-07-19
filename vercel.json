@@ -46,10 +46,6 @@
       "maxDuration": 120,
       "includeFiles": "api/_lib/**"
     },
-    "api/reminder-status.ts": {
-      "maxDuration": 60,
-      "includeFiles": "api/_lib/**"
-    },
     "api/list-uploads.ts": {
       "includeFiles": "api/_lib/**"
     },
