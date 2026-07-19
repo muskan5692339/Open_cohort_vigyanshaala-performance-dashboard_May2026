@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import type Transporter from 'nodemailer/lib/mailer';
 
 export interface SendMailInput {
   to: string;
@@ -6,6 +7,8 @@ export interface SendMailInput {
   text: string;
   html: string;
 }
+
+let cachedTransporter: Transporter | null = null;
 
 export function getGmailConfig(): { user: string; pass: string; fromName: string } | null {
   const user = process.env.GMAIL_USER?.trim();
@@ -18,16 +21,24 @@ export function getGmailConfig(): { user: string; pass: string; fromName: string
   };
 }
 
+function getTransporter(): Transporter {
+  if (cachedTransporter) return cachedTransporter;
+  const cfg = getGmailConfig();
+  if (!cfg) throw new Error('GMAIL_USER and GMAIL_APP_PASSWORD must be set');
+  cachedTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: cfg.user, pass: cfg.pass },
+    pool: true,
+    maxConnections: 1,
+  });
+  return cachedTransporter;
+}
+
 export async function sendGmailMessage(input: SendMailInput): Promise<void> {
   const cfg = getGmailConfig();
   if (!cfg) throw new Error('GMAIL_USER and GMAIL_APP_PASSWORD must be set');
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: cfg.user, pass: cfg.pass },
-  });
-
-  await transporter.sendMail({
+  await getTransporter().sendMail({
     from: `"${cfg.fromName}" <${cfg.user}>`,
     to: input.to,
     subject: input.subject,
