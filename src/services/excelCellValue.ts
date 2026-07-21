@@ -57,20 +57,38 @@ export interface ExcelReadableCell {
 }
 
 function cellDisplayText(cell: ExcelReadableCell): string {
-  const t = cell.text;
-  if (typeof t === 'string' && t.trim()) return t.trim();
-  if (t && typeof t === 'object' && Array.isArray(t.richText)) {
-    return t.richText.map(part => String(part?.text ?? '')).join('').trim();
+  try {
+    const t = cell.text;
+    if (typeof t === 'string' && t.trim()) return t.trim();
+    if (t && typeof t === 'object' && Array.isArray(t.richText)) {
+      return t.richText.map(part => String(part?.text ?? '')).join('').trim();
+    }
+  } catch {
+    // ExcelJS throws when reading .text on empty merged cells (MergeValue.toString).
   }
   return '';
 }
 
-/** Read a single ExcelJS cell — prefers formatted text, then formula result. */
-export function excelCellToString(cell: ExcelReadableCell): string {
+/** Read a single ExcelJS cell — prefers raw value/result, then formatted text. */
+export function excelCellToString(cell: ExcelReadableCell | null | undefined): string {
+  if (!cell) return '';
+
+  try {
+    const raw = cell.result ?? cell.value;
+    const fromValue = normalizeExcelCell(raw);
+    if (fromValue) return fromValue;
+  } catch {
+    // ignore value read failures
+  }
+
   const display = cellDisplayText(cell);
   if (display) return display;
-  const raw = cell.result ?? cell.value;
-  return normalizeExcelCell(raw);
+
+  try {
+    return normalizeExcelCell(cell.value);
+  } catch {
+    return '';
+  }
 }
 
 export interface ExcelReadableRow {
@@ -78,11 +96,22 @@ export interface ExcelReadableRow {
   getCell(col: number): ExcelReadableCell;
 }
 
+export function safeRowCellCount(row: ExcelReadableRow): number {
+  const n = row.cellCount;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 /** Read all populated columns in a row, optionally padding to a fixed width. */
 export function readExcelRow(row: ExcelReadableRow, minCols = 0): string[] {
-  const count = Math.max(row.cellCount, minCols);
+  const count = Math.max(safeRowCellCount(row), minCols);
   if (!count) return [];
-  return Array.from({ length: count }, (_, i) => excelCellToString(row.getCell(i + 1)));
+  return Array.from({ length: count }, (_, i) => {
+    try {
+      return excelCellToString(row.getCell(i + 1));
+    } catch {
+      return '';
+    }
+  });
 }
 
 /** True when a cell is a formula with no cached result in the workbook. */

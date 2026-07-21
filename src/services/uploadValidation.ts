@@ -148,8 +148,12 @@ export async function validateUploadFile(file: File): Promise<UploadValidationRe
       for (let r = 2; r <= sampleRows; r++) {
         const row = ws.getRow(r);
         row.eachCell(cell => {
-          if (isUncachedFormulaCell(cell.value) && !excelCellToString(cell).trim()) {
-            uncachedFormulaCells++;
+          try {
+            if (isUncachedFormulaCell(cell.value) && !excelCellToString(cell).trim()) {
+              uncachedFormulaCells++;
+            }
+          } catch {
+            // Empty merged cells can throw inside ExcelJS when reading formatted text.
           }
         });
       }
