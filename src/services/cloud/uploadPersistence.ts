@@ -141,7 +141,8 @@ export async function persistUploadToCloud(
     syncRunId: input.syncRunId,
   };
 
-  if (accessToken && body.rawRows?.length && body.headers?.length) {
+  // Student roster — public storage upload does not require admin sign-in.
+  if (body.rawRows?.length && body.headers?.length) {
     const direct = await publishRosterDirectToStorage({
       organizationId: body.organizationId,
       cohortName: body.cohortName,
@@ -154,14 +155,23 @@ export async function persistUploadToCloud(
       classWiseAttendanceColumns: body.classWiseAttendanceColumns,
     });
     if (direct.ok) {
-      try {
-        const api = await postPersistUpload(body, accessToken);
-        if (api.ok) return api;
-      } catch {
-        // Student roster is already in public storage; API metadata is optional.
+      if (accessToken) {
+        try {
+          const api = await postPersistUpload(body, accessToken);
+          if (api.ok) return api;
+        } catch {
+          // Roster already live for students.
+        }
       }
       return { ok: true };
     }
+    if (!accessToken) {
+      return { ok: false, error: direct.error ?? 'Could not publish roster to cloud storage.' };
+    }
+  }
+
+  if (!accessToken) {
+    return { ok: false, error: 'No roster rows to publish.' };
   }
 
   return postPersistUpload(body, accessToken);

@@ -42,20 +42,26 @@ function productionBaseUrl(): string {
   return 'https://open-cohort-vigyanshaala-performanc.vercel.app';
 }
 
-function queueNextReminderBatch(slot: string, limit?: number, weekKeySuffix?: string): void {
+async function queueNextReminderBatch(
+  slot: string,
+  weekKeySuffix?: string,
+): Promise<boolean> {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return;
+  if (!secret) return false;
   const params = new URLSearchParams({
     slot: slot === 'auto' ? 'morning' : slot,
     live: 'true',
     auto: '1',
-    limit: String(limit ?? Number(process.env.REMINDER_BATCH_SIZE ?? 25)),
   });
   if (weekKeySuffix) params.set('week', weekKeySuffix);
   const url = `${productionBaseUrl()}/api/reminders?${params.toString()}`;
-  void fetch(url, { headers: { Authorization: `Bearer ${secret}` } }).catch(err => {
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${secret}` } });
+    return res.ok;
+  } catch (err) {
     console.error('[api/reminders auto-chain]', err);
-  });
+    return false;
+  }
 }
 
 function shouldQueueNextBatch(
@@ -168,6 +174,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  if (req.query.slot === 'drain') {
+    const weekKeySuffix = typeof req.query.week === 'string' ? req.query.week.trim() : undefined;
+    const isoWeek = typeof req.query.isoWeek === 'string' ? req.query.isoWeek.trim() : undefined;
+    try {
+      const db = createServiceClient();
+      const result = await runWeeklyStudentReminders(db, 'morning', {
+        forceLive: true,
+        auto: true,
+        weekKeySuffix,
+        isoWeek,
+      });
+      const chainQueued = shouldQueueNextBatch(result, true);
+      if (chainQueued) await queueNextReminderBatch('morning', weekKeySuffix);
+      return res.status(200).json({
+        ok: true,
+        drain: true,
+        ...result,
+        chainQueued,
+        note: result.remaining > 0
+          ? (chainQueued ? 'Continuing automatically.' : 'Still pending — call ?slot=drain again.')
+          : 'All pending emails sent for this week key.',
+      });
+    } catch (e) {
+      const message = (e as Error).message;
+      console.error('[api/reminders drain]', e);
+      return res.status(500).json({ ok: false, error: message });
+    }
+  }
+
   if (req.query.slot === 'auto') {
     const scheduleKey = typeof req.query.schedule === 'string' ? req.query.schedule : undefined;
     let weekKeySuffix: string | undefined;
@@ -202,7 +237,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       const chainQueued = shouldQueueNextBatch(result, true);
       if (chainQueued) {
-        queueNextReminderBatch('morning', result.batchLimit ?? undefined, weekKeySuffix);
+        await queueNextReminderBatch('morning', weekKeySuffix);
       }
       const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
       return res.status(status).json({
@@ -244,7 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const weekKeySuffix = typeof req.query.week === 'string' ? req.query.week.trim() : undefined;
     const result = await runWeeklyStudentReminders(db, slot, { limit, offset, forceLive, auto, weekKeySuffix });
     const chainQueued = shouldQueueNextBatch(result, auto);
-    if (chainQueued) queueNextReminderBatch(slot ?? 'morning', result.batchLimit ?? limit, weekKeySuffix);
+    if (chainQueued) await queueNextReminderBatch(slot ?? 'morning', weekKeySuffix);
     const status = result.failed > 0 && result.sent === 0 ? 500 : 200;
     return res.status(status).json({
       ok: status === 200,

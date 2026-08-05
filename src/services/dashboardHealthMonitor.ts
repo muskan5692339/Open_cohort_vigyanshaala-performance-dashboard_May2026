@@ -28,7 +28,11 @@ function read(): DashboardHealthMetrics {
 }
 
 function write(m: DashboardHealthMetrics) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(m));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(m));
+  } catch {
+    // quota — keep in-memory metrics for this session only
+  }
 }
 
 function rate(successes: number, attempts: number): number {

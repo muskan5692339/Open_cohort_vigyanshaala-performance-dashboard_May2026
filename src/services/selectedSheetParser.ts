@@ -8,6 +8,7 @@ import {
   inferColumnType,
   inferDisplayGroup,
 } from './schemaInference';
+import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 
 function hashSignature(input: string): string {
   let h = 5381;
@@ -65,6 +66,7 @@ export async function parseWorkbookSheet(
   file: File,
   sheetName: string,
   cohort: string,
+  cachedBuffer?: ArrayBuffer,
 ): Promise<{
   students: { data: ParsedStudent[]; errors: SyncError[] };
   attendance: { data: ParsedAttendance[]; errors: SyncError[] };
@@ -80,9 +82,8 @@ export async function parseWorkbookSheet(
   classWiseAttendance?: ClassWiseAttendanceEntry[];
   classWiseAttendanceColumns?: string[];
 }> {
-  const ExcelJS = await import('exceljs');
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(await file.arrayBuffer());
+  const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
+  const wb = await loadWorkbookFromBuffer(buffer);
   const actualNames = wb.worksheets.map(ws => ws.name);
   const ws = wb.getWorksheet(sheetName);
   if (!ws) {

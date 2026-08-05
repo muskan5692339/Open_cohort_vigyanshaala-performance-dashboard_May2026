@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { X } from 'lucide-react';
 import { BRAND } from '../../../types/adminTypes';
 import { useAuth } from '../../../context/AuthContext';
+import { clearDashboardStorage, isStorageQuotaError, recoverBrowserStorage } from '../../../services/storageRecovery';
 
 interface Props {
   open: boolean;
@@ -31,6 +32,7 @@ export default function AdminSignInModal({ open, onClose }: Props) {
 
     setSubmitting(true);
     try {
+      recoverBrowserStorage();
       if (mode === 'magic') {
         const { error: err } = await signInWithMagicLink(trimmed);
         if (err) {
@@ -47,7 +49,11 @@ export default function AdminSignInModal({ open, onClose }: Props) {
       }
       const { error: err, session } = await signInWithPassword(trimmed, password);
       if (err) {
-        setError(err);
+        setError(
+          isStorageQuotaError(err)
+            ? `${err} — click "Clear browser data" below, then sign in again.`
+            : err,
+        );
         return;
       }
       if (!session?.user) {
@@ -202,7 +208,33 @@ export default function AdminSignInModal({ open, onClose }: Props) {
             </div>
           )}
           {error && (
-            <div style={{ fontSize: 12, color: BRAND.red, marginBottom: 12, lineHeight: 1.5 }}>{error}</div>
+            <div style={{ fontSize: 12, color: BRAND.red, marginBottom: 12, lineHeight: 1.5 }}>
+              {error}
+              {isStorageQuotaError(error) && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearDashboardStorage();
+                      window.location.reload();
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: `1px solid ${BRAND.border}`,
+                      background: '#fff',
+                      color: BRAND.navy,
+                      fontWeight: 600,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    Clear browser data & reload
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {magicSent && (
             <div style={{ fontSize: 12, color: BRAND.green, marginBottom: 12, lineHeight: 1.5 }}>

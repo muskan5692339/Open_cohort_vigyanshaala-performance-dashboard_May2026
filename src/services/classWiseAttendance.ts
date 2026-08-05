@@ -141,6 +141,9 @@ export function isSessionColumnHeader(header: string): boolean {
   if (!h) return false;
   if (isPreRecordedColumnHeader(h)) return false;
   if (/^WK\d/i.test(h)) return true;
+  // WK_MC_Saturday 18th, WK_WS_..., etc. (track code without a week number)
+  if (/^WK_(MC|WS|SUK|PR)/i.test(h)) return true;
+  if (/^WS\d*[_\s]/i.test(h)) return true;
   if (/^W\d{1,2}[_\s]/i.test(h)) return true;
   if (/^week\s*\d/i.test(h)) return true;
   if (/^session\s*\d/i.test(h)) return true;
@@ -346,10 +349,13 @@ export function readClassWiseAttendanceFromWorkbook(
   return null;
 }
 
-export async function loadClassWiseAttendanceFromFile(file: File): Promise<ClassWiseAttendanceData | null> {
-  const ExcelJS = await import('exceljs');
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(await file.arrayBuffer());
+export async function loadClassWiseAttendanceFromFile(
+  file: File,
+  cachedBuffer?: ArrayBuffer,
+): Promise<ClassWiseAttendanceData | null> {
+  const { loadWorkbookFromBuffer, readFileAsArrayBuffer } = await import('./workbookBuffer');
+  const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
+  const wb = await loadWorkbookFromBuffer(buffer);
   return readClassWiseAttendanceFromWorkbook(wb);
 }
 

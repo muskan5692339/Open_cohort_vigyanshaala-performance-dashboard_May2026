@@ -17,19 +17,6 @@ import {
 import { useUploadedExcel } from './context/UploadedExcelContext';
 import type { ColumnMapping } from './types/dynamicSchema';
 import {
-  buildSessionTrendFromClassWise,
-  buildPreRecordedTrendFromClassWise,
-  buildAttendanceDonutFromHours,
-  computeHoursBasedAttendance,
-  countAttendedSessions,
-  countMissedSessions,
-  getClassWiseAttendanceForStudent,
-  parseProgramHours,
-  sessionHoursIndicatorColor,
-  sessionHoursIndicatorFill,
-} from './services/classWiseAttendance';
-import { normalizeExcelCell } from './services/excelCellValue';
-import {
   lookupStudentByEmail,
 } from './services/studentEmailLookup';
 import AnimeMetricAlert from './components/student/AnimeMetricAlert';
@@ -45,15 +32,21 @@ import './components/student/ChartDataUpdatedBubble.css';
 import './components/student/ChartMobileFrame.css';
 import './components/student/ChartSnapshotActions.css';
 import {
-  buildStudentAssignmentItems,
-  classifyAssignmentStatus,
   getAssignmentStatusExplanation,
-  isAssignmentAccepted,
   isAssignmentCommentColumn,
-  listAssignmentStatusColumns,
   resolveAssignmentDisplayFields,
   REJECTED_ASSIGNMENT_STEPS,
 } from './services/studentAssignmentDisplay';
+import {
+  buildSessionTrendFromClassWise,
+  buildPreRecordedTrendFromClassWise,
+  buildAttendanceDonutFromHours,
+  getClassWiseAttendanceForStudent,
+  sessionHoursIndicatorColor,
+  sessionHoursIndicatorFill,
+} from './services/classWiseAttendance';
+import { buildStudentDashboardView } from './services/studentDashboardData';
+import { isClassWiseOnlySheet } from './services/sheetSelection';
 import { adminDataUpdatedAt } from './utils/formatAdminUpdateTime';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import './styles/StudentDashboard.css';
@@ -69,95 +62,6 @@ const SESSION_TREND_SLOT_WIDTH = 72;
 const QUIZ_SLOT_WIDTH = 108;
 type SessionTrendFocus = 'start' | 'latest';
 type SessionChartSeries = 'live' | 'prerecorded';
-
-type MappingEntry = ColumnMapping[string];
-
-function stringifyCellValue(v: unknown): string {
-  if (v == null) return '';
-  if (typeof v === 'string' && v.trim().startsWith('{"formula"')) {
-    return normalizeExcelCell(JSON.parse(v) as unknown);
-  }
-  return normalizeExcelCell(v);
-}
-
-function parsePct(raw: unknown): number {
-  const text = stringifyCellValue(raw);
-  const m = text.match(/-?\d+(\.\d+)?/);
-  if (!m) return 0;
-  const n = Number(m[0]);
-  if (!Number.isFinite(n)) return 0;
-  const pct = text.includes('%') ? n : n <= 1 && n >= 0 ? n * 100 : n;
-  return Math.max(0, Math.min(100, Math.round(pct)));
-}
-
-function parsePctOrNull(raw: unknown): number | null {
-  const text = stringifyCellValue(raw);
-  if (!text.trim()) return null;
-  const m = text.match(/-?\d+(\.\d+)?/);
-  if (!m) return null;
-  return parsePct(raw);
-}
-
-function isAccepted(value: string): boolean {
-  const s = value.toLowerCase();
-  return ['accepted', 'submitted', 'complete', 'completed', 'pass'].some(k => s.includes(k));
-}
-
-function normalizeColumnKey(key: string): string {
-  return key.replace(/^\uFEFF/, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function columnKeyMatches(key: string, keyword: string): boolean {
-  const k = normalizeColumnKey(key);
-  const kw = normalizeColumnKey(keyword);
-  if (!k || !kw) return false;
-  return k.includes(kw) || kw.includes(k);
-}
-
-function getByKeywords(row: Record<string, unknown>, keywords: string[]): string {
-  const entries = Object.entries(row);
-  for (const keyword of keywords) {
-    const target = normalizeColumnKey(keyword);
-    for (const [key, value] of entries) {
-      if (normalizeColumnKey(key) === target) {
-        const out = stringifyCellValue(value);
-        if (out) return out;
-      }
-    }
-  }
-  for (const keyword of keywords) {
-    for (const [key, value] of entries) {
-      const lk = key.toLowerCase();
-      if (lk.includes(keyword) || columnKeyMatches(key, keyword)) {
-        // Avoid loose "name" matching Program Name / College Name / etc.
-        if (keyword === 'name') {
-          const nk = normalizeColumnKey(key);
-          if (nk !== 'name' && nk !== 'fullname' && nk !== 'studentname') continue;
-        }
-        const out = stringifyCellValue(value);
-        if (out) return out;
-      }
-    }
-  }
-  return '—';
-}
-
-function resolveField(
-  row: Record<string, unknown>,
-  fallback: string | undefined,
-  keywords: string[],
-): string {
-  const fromRow = getByKeywords(row, keywords);
-  if (fromRow !== '—') return fromRow;
-  if (fallback?.trim()) return fallback.trim();
-  return '—';
-}
-
-function getMappedColumns(mapping: ColumnMapping, predicate: (entry: MappingEntry, col: string) => boolean): string[] {
-  return Object.entries(mapping)
-    .filter(([col, entry]) => predicate(entry, col))
-    .map(([col]) => col);
-}
 
 function studentToDisplayRow(student: {
   student_id: string;
@@ -270,9 +174,25 @@ export default function StudentDashboard({ email, onBack }: Props) {
     return lookup.rawRow ?? studentToDisplayRow(lookup.student);
   }, [lookup]);
 
+  const dataRow = useMemo(() => {
+    if (!lookup?.rawRow || !matched) return matched;
+    return { ...lookup.rawRow, ...matched };
+  }, [lookup, matched]);
+
   const classWiseEntry = useMemo(
     () => getClassWiseAttendanceForStudent(payload, email),
     [payload, email],
+  );
+
+  const rosterHeaders = useMemo(() => {
+    const fromPayload = payload?.headers ?? [];
+    const fromRows = payload?.rawRows?.[0] ? Object.keys(payload.rawRows[0]) : [];
+    return [...new Set([...fromPayload, ...fromRows])];
+  }, [payload]);
+
+  const attendanceOnlyRoster = useMemo(
+    () => Boolean(classWiseEntry && isClassWiseOnlySheet(rosterHeaders)),
+    [classWiseEntry, rosterHeaders],
   );
   const liveTrendLength = classWiseEntry?.sessions.length ?? 0;
   const preRecordedTrendLength = classWiseEntry?.preRecorded?.length ?? 0;
@@ -311,7 +231,19 @@ export default function StudentDashboard({ email, onBack }: Props) {
     };
   }, [sessionTrendFocus, activeTrendLength, email, sessionChartSeries, isMobile]);
 
-  if (!payload || !matched || !lookup) {
+  const dashboardView = useMemo(() => {
+    if (!payload || !dataRow || !lookup) return null;
+    return buildStudentDashboardView({
+      payload,
+      email,
+      student: lookup.student,
+      matched: dataRow,
+      mapping,
+      classWise: classWiseEntry,
+    });
+  }, [payload, dataRow, lookup, email, mapping, classWiseEntry]);
+
+  if (!payload || !dataRow || !lookup || !dashboardView) {
     return (
       <div className="student-page">
         <div className="student-shell student-empty">
@@ -324,123 +256,36 @@ export default function StudentDashboard({ email, onBack }: Props) {
     );
   }
 
-  const student = lookup.student;
-  const classWise = getClassWiseAttendanceForStudent(payload, email);
+  const classWise = classWiseEntry;
+  const {
+    profile,
+    attendancePct,
+    missedAttendancePct,
+    assignmentSubmissionPct,
+    assignmentAcceptancePct,
+    avgQuiz,
+    quizHighest,
+    finalScore,
+    finalScoreLabel,
+    engagementLabel,
+    quizBarData: quizData,
+    assignmentRows,
+    programHoursLabel,
+    sessions,
+    attendedHours,
+    totalHours,
+    attendedSessionCount,
+    missedSessionCount,
+  } = dashboardView;
 
-  const attendanceCols = getMappedColumns(mapping, (entry, col) => entry.mappedRole === 'attendance' || col.toLowerCase().includes('attendance'));
-  const mappedAssignmentCols = getMappedColumns(mapping, (entry, col) => entry.mappedRole === 'assignment' || col.toLowerCase().includes('assignment'));
-  const rowAssignmentCols = Object.keys(matched).filter(col => {
-    const l = col.toLowerCase();
-    return l.includes('assignment') || ['swot', 'resume', 'career exploration', 'career planner', 'vision board', 'endline'].some(k => l.includes(k));
-  });
-  const assignmentCols = Array.from(new Set([...mappedAssignmentCols, ...rowAssignmentCols]));
-  const mappedQuizCols = getMappedColumns(mapping, (entry, col) => entry.mappedRole === 'assessment' || col.toLowerCase().includes('quiz'));
-  const rowQuizCols = Object.keys(matched).filter(col => col.toLowerCase().includes('quiz'));
-  const quizCols = Array.from(new Set([...mappedQuizCols, ...rowQuizCols]));
+  const assignmentPct = assignmentSubmissionPct;
+  const assignmentSubtitle =
+    assignmentAcceptancePct !== assignmentSubmissionPct
+      ? `${assignmentAcceptancePct}% accepted · ${assignmentRows.length} items`
+      : `${assignmentRows.length} tracked items`;
 
-  const rowAttendancePctCols = Object.keys(matched).filter(col => {
-    const l = col.toLowerCase();
-    return (l.includes('attendance') && l.includes('%')) || l.includes('attendance percent') || l.includes('attendance percentage');
-  });
-  const attendancePctCol = rowAttendancePctCols[0]
-    ?? attendanceCols.find(col => col.toLowerCase().includes('%'))
-    ?? attendanceCols[0];
-
-  const classesAttendedRaw = getByKeywords(matched, ['no. of classes attended', 'classes attended', 'no of classes attended']);
-  const totalClassesRaw = getByKeywords(matched, ['program hours', 'total classes', 'no. of classes', 'sessions']);
-  const programHoursFromRow = getByKeywords(matched, ['program hours', 'programme hours', 'total hours']);
-  const programHoursParsed = parseProgramHours(programHoursFromRow);
-  const sessionSlotCount = classWise?.sessions.length ?? 0;
-  // Total program hours = number of class-wise session slots (e.g. 6), not master-sheet decimals.
-  const totalProgramHours =
-    sessionSlotCount > 0
-      ? sessionSlotCount
-      : programHoursParsed ?? null;
-
-  const sessions = classWise
-    ? classWise.sessions.length
-    : Math.max(0, parseInt(classesAttendedRaw, 10) || parseInt(totalClassesRaw, 10) || 0);
-  const attendedSessionCount = classWise
-    ? countAttendedSessions(classWise)
-    : Math.max(0, parseInt(classesAttendedRaw, 10) || 0);
-  const missedSessionCount = classWise
-    ? countMissedSessions(classWise)
-    : Math.max(0, sessions - attendedSessionCount);
-
-  const hoursAttendance = classWise
-    ? computeHoursBasedAttendance(classWise, totalProgramHours)
-    : null;
-
-  const attendedHours = hoursAttendance?.attendedHours ?? 0;
-  const totalHours = hoursAttendance?.totalHours ?? totalProgramHours ?? sessions;
-
-  const attendancePct = hoursAttendance
-    ? hoursAttendance.attendedPct
-    : student.imported_attendance_pct != null
-      ? Math.round(student.imported_attendance_pct * 100) / 100
-      : attendancePctCol
-        ? parsePct(matched[attendancePctCol])
-        : totalHours > 0
-          ? Math.round((attendedHours / totalHours) * 10000) / 100
-          : sessions > 0
-            ? Math.round((attendedSessionCount / sessions) * 100)
-            : 0;
-
-  const missedAttendancePct = hoursAttendance
-    ? hoursAttendance.missedPct
-    : Math.max(0, Math.round((100 - attendancePct) * 100) / 100);
-  const assignmentStatusCols = listAssignmentStatusColumns(assignmentCols, Object.keys(matched));
-  const assignmentPct = assignmentStatusCols.length
-    ? Math.round((assignmentStatusCols.filter(col => isAssignmentAccepted(stringifyCellValue(matched[col]))).length / assignmentStatusCols.length) * 100) || 0
-    : (() => {
-        const rows = (payload.assignments ?? []).filter(a => a.student_email.toLowerCase() === student.email.toLowerCase());
-        if (!rows.length) return 0;
-        const done = rows.filter(a => isAccepted(a.status)).length;
-        return Math.round((done / rows.length) * 100);
-      })();
-  const quizScoreCols = quizCols.filter(col => !col.toLowerCase().includes('final score'));
-  const quizBarData = quizScoreCols
-    .map(col => {
-      const score = parsePctOrNull(matched[col]);
-      if (score == null) return null;
-      return {
-        name: col.replace(/_/g, ' ').trim() || 'Quiz',
-        score,
-      };
-    })
-    .filter((x): x is { name: string; score: number } => x != null);
-  const quizData = quizBarData;
-  const avgQuiz = quizData.length
-    ? Math.round(quizData.reduce((a, b) => a + b.score, 0) / quizData.length)
-    : 0;
-  const quizHighest = quizData.reduce((max, x) => Math.max(max, x.score), 0);
-
-  const programHoursLabel =
-    attendedHours > 0 && totalHours > 0
-      ? `${attendedHours.toFixed(2)} / ${Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(2)} hrs`
-      : programHoursFromRow !== '—'
-        ? programHoursFromRow
-        : '—';
-
-  // Weighted engagement score: Attendance 40%, Assignments 40%, Quiz 20%
-  const avgEngagement = Math.round(attendancePct * 0.4 + assignmentPct * 0.4 + avgQuiz * 0.2);
-  const engagementLabel = avgEngagement >= 70 ? 'High Engagement' : avgEngagement >= 40 ? 'Medium Engagement' : 'Low Engagement';
-
-  const assignmentRows = assignmentCols.length
-    ? buildStudentAssignmentItems(matched, assignmentCols, Object.keys(matched))
-    : (payload.assignments ?? [])
-        .filter(a => a.student_email.toLowerCase() === student.email.toLowerCase())
-        .slice(0, 8)
-        .map(a => ({
-          name: a.assignment_name,
-          date: a.due_date ? new Date(a.due_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : '—',
-          status: a.status,
-          feedback: '',
-          kind: classifyAssignmentStatus(a.status),
-        }));
-
-  const attendanceDonut = hoursAttendance
-    ? buildAttendanceDonutFromHours(hoursAttendance.attendedPct, hoursAttendance.missedPct)
+  const attendanceDonut = classWise && dashboardView.attendedHours >= 0
+    ? buildAttendanceDonutFromHours(attendancePct, missedAttendancePct)
     : attendedSessionCount > 0 || missedSessionCount > 0
       ? buildAttendanceDonutFromHours(
           totalHours > 0 ? Math.round((attendedSessionCount / totalHours) * 10000) / 100 : attendancePct,
@@ -471,31 +316,17 @@ export default function StudentDashboard({ email, onBack }: Props) {
     ? `${activeSessionTrend.length} classes · scroll sideways →`
     : `${activeSessionTrend.length} videos · scroll sideways →`;
 
-  const studentName = resolveField(matched, student.name, ['full name', 'student name', 'name']);
-  const studentId = resolveField(matched, student.student_id, ['student id', 'student_id', 'vs id', 'id']);
-  const studentEmail = resolveField(matched, student.email, ['email']);
-  const phone = resolveField(matched, undefined, ['phone', 'mobile', 'contact']);
-  const studentCourse = resolveField(matched, student.program, [
-    'course',
-    'program',
-    'programme',
-    'program name',
-    'degree',
-    'currently pursuing degree',
-    'currently_pursuing_degree',
-  ]);
-  const pursuingYear = resolveField(matched, undefined, [
-    'current pursuing year',
-    'pursuing year',
-    'current year',
-    'academic year',
-    'year of study',
-    'year',
-  ]);
-
-  const cohort = resolveField(matched, student.cohort || payload.cohortName, ['cohort', 'batch', 'program cohort']);
-  const college = resolveField(matched, student.college, ['college', 'university', 'institution']);
-  const studentCategory = resolveField(matched, undefined, ['student_cat', 'student category', 'college category', 'institution category']);
+  const {
+    name: studentName,
+    id: studentId,
+    email: studentEmail,
+    phone,
+    course: studentCourse,
+    year: pursuingYear,
+    cohort,
+    college,
+    studentCategory,
+  } = profile;
   const adminUpdatedAt = adminDataUpdatedAt(meta);
 
   return (
@@ -503,6 +334,12 @@ export default function StudentDashboard({ email, onBack }: Props) {
       <section className="student-shell">
         <div className="student-notice-strip">
           <WeeklyUpdateNotice />
+          {attendanceOnlyRoster && (
+            <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--sd-text-muted)', lineHeight: 1.5 }}>
+              Attendance and sessions are up to date. Assignment and quiz scores will appear after your admin re-publishes
+              the main performance sheet (not the Class-wise Attendance sheet only).
+            </p>
+          )}
         </div>
         <header className="student-header">
           <div className="student-header-top">
@@ -546,7 +383,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
           <div className="stat-row">
             <StatCard label="Attendance" value={`${attendancePct.toFixed(1)}%`} subtitle={programHoursLabel} warn={attendancePct === 0} />
             <div className={`metric-alert-wrap ${assignmentPct === 0 ? 'metric-alert-wrap--hot' : ''}`}>
-              <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={`${assignmentRows.length} tracked items`} warn={assignmentPct === 0} />
+              <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={assignmentSubtitle} warn={assignmentPct === 0} />
               <AnimeMetricAlert
                 variant="assignment"
                 show={assignmentPct === 0}
@@ -570,6 +407,12 @@ export default function StudentDashboard({ email, onBack }: Props) {
               warn={attendedHours === 0 && sessions === 0}
             />
           </div>
+
+          {finalScore != null && (
+            <div className="final-score-strip">
+              <strong>{finalScoreLabel ?? 'Final Score'}:</strong> {finalScore}%
+            </div>
+          )}
 
           <div className="charts-grid">
             <article className="panel-card panel-large panel-card-wrap">

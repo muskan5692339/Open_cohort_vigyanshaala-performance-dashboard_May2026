@@ -13,6 +13,7 @@ import {
 } from './schemaInference';
 import { readClassWiseAttendanceFromWorkbook } from './classWiseAttendance';
 import type { ClassWiseAttendanceEntry } from './classWiseAttendance';
+import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 import { readExcelRow } from './excelCellValue';
 
 /* ── helpers ──────────────────────────────────────────── */
@@ -45,6 +46,49 @@ function findAttendancePctColumn(headers: string[]): number {
   const best = scored.filter(s => s.score >= 5).sort((a, b) => b.score - a.score)[0];
   if (best) return best.idx;
   return col(headers, 'attendance %', 'attendance percent', 'attendance percentage', 'percent attendance');
+}
+
+/** Header names for wide-format perf sheets — same rules as parseWideFormatSheet. */
+export function resolveWideFormatColumnHeaders(headers: string[]): {
+  assignmentHeaders: string[];
+  quizHeaders: string[];
+  finalScoreHeader: string | null;
+} {
+  const h = headers;
+  const indices = {
+    assignCE: col(h, 'assignment_career_exploration', 'career exploration', 'career_exploration'),
+    assignSWOT: col(h, 'assignment_swot', 'swot', 'swot analysis'),
+    assignCP: col(h, 'assignment_career_planner', 'career planner', 'career_planner'),
+    assignCVB: col(h, 'assignment_career_vision_board', 'career vision board', 'vision board', 'career_vision_board'),
+    assignCV: col(h, 'assignment_cv_resume', 'cv/resume', 'cv resume', 'resume', 'cv  resume'),
+    endline: col(h, 'endline form', 'endline'),
+    finalScore: col(h, 'final score >=60%', 'final score', 'final selection variable', 'final assessment'),
+  };
+
+  const assignmentHeaders = (
+    [
+      indices.assignCE,
+      indices.assignSWOT,
+      indices.assignCP,
+      indices.assignCVB,
+      indices.assignCV,
+      indices.endline,
+    ] as number[]
+  )
+    .filter(idx => idx !== -1)
+    .map(idx => h[idx]);
+
+  const finalScoreHeader = indices.finalScore !== -1 ? h[indices.finalScore] : null;
+
+  const quizHeaders = headers.filter(header => {
+    const l = header.toLowerCase();
+    if (l.includes('final score') || l.includes('final selection') || l.includes('final assessment')) {
+      return false;
+    }
+    return l.includes('quiz') || l.includes('assessment') || l.includes('mcq') || /_quiz_/i.test(header);
+  });
+
+  return { assignmentHeaders, quizHeaders, finalScoreHeader };
 }
 
 /** Parse attendance % from Excel cell (75, "75%", 0.75, "18/20"). */
@@ -332,7 +376,7 @@ export function parseQuiz(rows: string[][]): { data: ParsedQuiz[]; errors: SyncE
 
 /* ── Wide-format parser (Student_Wise_Perf style) ─────── */
 
-function isSubmittedVal(v: string): boolean {
+export function isSubmittedVal(v: string): boolean {
   const s = v.toLowerCase().trim();
   if (!s) return false;
   // Date-like value means "submitted on that date"
@@ -350,7 +394,7 @@ function isLateVal(v: string): boolean {
 }
 
 /** Parse a percentage or score from Excel (handles 0.75, 75, 75%, pass/fail). */
-function parsePercentOrScore(raw: string): number {
+export function parsePercentOrScore(raw: string): number {
   const s = (raw ?? '').replace('%', '').trim();
   if (!s) return 0;
   const num = parseFloat(s);
@@ -559,6 +603,7 @@ export async function parseUploadedFile(
   file: File,
   sheetNames: { students: string; attendance: string; assignments: string; quiz: string },
   cohort = 'Incubator 11.0',
+  cachedBuffer?: ArrayBuffer,
 ): Promise<{
   students:    { data: ParsedStudent[];    errors: SyncError[] };
   attendance:  { data: ParsedAttendance[]; errors: SyncError[] };
@@ -574,9 +619,8 @@ export async function parseUploadedFile(
   classWiseAttendance?: ClassWiseAttendanceEntry[];
   classWiseAttendanceColumns?: string[];
 }> {
-  const ExcelJS = await import('exceljs');
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(await file.arrayBuffer());
+  const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
+  const wb = await loadWorkbookFromBuffer(buffer);
 
   const classWiseData = readClassWiseAttendanceFromWorkbook(wb);
   const classWiseExtras = {

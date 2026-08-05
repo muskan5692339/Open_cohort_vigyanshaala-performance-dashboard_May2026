@@ -31,6 +31,8 @@ import { useSyncContext } from '../../hooks/useSyncContext';
 import { persistSchemaProfileToCloud, persistUploadToCloud } from '../../services/cloud/uploadPersistence';
 import { getActiveOrganizationId, isCloudPersistenceEnabled } from '../../services/cloud/cloudConfig';
 import { useAdminSignIn } from '../../context/AdminSignInContext';
+import { readFileAsArrayBuffer } from '../../services/workbookBuffer';
+import { findPerformanceSheetName, isClassWiseOnlySheet } from '../../services/sheetSelection';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -125,6 +127,7 @@ export default function ExcelUpload({ onDataImported }: Props) {
   const [fuzzyMatchCount, setFuzzyMatchCount] = useState(0);
   const [schemaMigration, setSchemaMigration] = useState<SchemaMigrationSummary | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFileBuffer, setPendingFileBuffer] = useState<ArrayBuffer | null>(null);
   const [validationResult, setValidationResult] = useState<UploadValidationResult | null>(null);
   const [workbookPreview, setWorkbookPreview] = useState<WorkbookPreview | null>(null);
   const [selectedSheet, setSelectedSheet] = useState('');
@@ -194,6 +197,7 @@ export default function ExcelUpload({ onDataImported }: Props) {
     setFuzzyMatchCount(0);
     setSchemaMigration(null);
     setPendingFile(null);
+    setPendingFileBuffer(null);
     setValidationResult(null);
     setWorkbookPreview(null);
     setSelectedSheet('');
@@ -212,7 +216,10 @@ export default function ExcelUpload({ onDataImported }: Props) {
     setError(null);
 
     try {
-      const validation = await validateUploadFile(file);
+      const buffer = await readFileAsArrayBuffer(file);
+      setPendingFileBuffer(buffer);
+
+      const validation = await validateUploadFile(file, buffer);
       setValidationResult(validation);
 
       if (!validation.valid) {
@@ -223,7 +230,7 @@ export default function ExcelUpload({ onDataImported }: Props) {
         return;
       }
 
-      const preview = await previewWorkbook(file);
+      const preview = await previewWorkbook(file, buffer);
       setWorkbookPreview(preview);
       setSelectedSheet(preview.recommendedSheet ?? preview.sheetNames[0] ?? '');
     } catch (e) {
@@ -235,20 +242,50 @@ export default function ExcelUpload({ onDataImported }: Props) {
   }, [cohortName, resetUploadFlow, syncCtx]);
 
   const handleConfirmImport = useCallback(async () => {
-    if (!pendingFile || !selectedSheet || !cohortName.trim()) return;
+    if (!pendingFile || !pendingFileBuffer || !selectedSheet || !cohortName.trim()) {
+      if (pendingFile && !pendingFileBuffer) {
+        setError('File session expired. Please choose the Excel file again.');
+      }
+      return;
+    }
     setConfirming(true);
     setParsing(true);
     setError(null);
     const t0 = performance.now();
+    const buffer = pendingFileBuffer;
 
     try {
-      let p = await parseWorkbookSheet(pendingFile, selectedSheet, cohortName.trim());
-
-      if (!p.rawRows.length || p.students.errors.some(e => e.message.includes('not found'))) {
-        p = await parseUploadedFile(pendingFile, sheetNames, cohortName.trim());
+      let sheetToParse = selectedSheet;
+      if (workbookPreview && isClassWiseOnlySheet(
+        workbookPreview.sheets.find(s => s.name === selectedSheet)?.headers ?? [],
+      )) {
+        const perfSheet = findPerformanceSheetName(workbookPreview);
+        if (perfSheet && perfSheet !== selectedSheet) {
+          sheetToParse = perfSheet;
+          setSelectedSheet(perfSheet);
+        }
       }
 
-      const classWise = await loadClassWiseAttendanceFromFile(pendingFile);
+      let p = await parseWorkbookSheet(pendingFile, sheetToParse, cohortName.trim(), buffer);
+
+      if (isClassWiseOnlySheet(p.headers ?? [])) {
+        const altSheet = (p._sheetsFound ?? []).find(name => {
+          if (name === sheetToParse) return false;
+          const previewSheet = workbookPreview?.sheets.find(s => s.name === name);
+          return previewSheet ? !isClassWiseOnlySheet(previewSheet.headers) : false;
+        });
+        if (altSheet) {
+          sheetToParse = altSheet;
+          setSelectedSheet(altSheet);
+          p = await parseWorkbookSheet(pendingFile, altSheet, cohortName.trim(), buffer);
+        }
+      }
+
+      if (!p.rawRows.length || p.students.errors.some(e => e.message.includes('not found'))) {
+        p = await parseUploadedFile(pendingFile, sheetNames, cohortName.trim(), buffer);
+      }
+
+      const classWise = await loadClassWiseAttendanceFromFile(pendingFile, buffer);
       p = {
         ...p,
         classWiseAttendance: classWise?.entries ?? p.classWiseAttendance ?? [],
@@ -256,6 +293,11 @@ export default function ExcelUpload({ onDataImported }: Props) {
       };
 
       setParsed(p);
+      if (isClassWiseOnlySheet(p.headers ?? [])) {
+        setError(
+          'This sheet only has session attendance columns. Choose your main Student Performance / Overall sheet (with assignments and quiz scores), then import again.',
+        );
+      }
       const discovered = p.discoveredColumns ?? [];
       const headers = p.headers ?? [];
       const resolved = resolveProfileForUpload(p.fileSignature, headers);
@@ -298,7 +340,7 @@ export default function ExcelUpload({ onDataImported }: Props) {
       setParsing(false);
       setConfirming(false);
     }
-  }, [pendingFile, selectedSheet, cohortName, sheetNames, fileName, syncCtx]);
+  }, [pendingFile, pendingFileBuffer, selectedSheet, cohortName, sheetNames, fileName, syncCtx]);
 
   const handleLoadDemo = useCallback(() => {
     if (!cohortName.trim()) {
@@ -387,8 +429,8 @@ export default function ExcelUpload({ onDataImported }: Props) {
 
     let classWiseAttendance = parsed.classWiseAttendance ?? [];
     let classWiseAttendanceColumns = parsed.classWiseAttendanceColumns ?? [];
-    if (!classWiseAttendance.length && pendingFile) {
-      const classWise = await loadClassWiseAttendanceFromFile(pendingFile);
+    if (!classWiseAttendance.length && pendingFile && pendingFileBuffer) {
+      const classWise = await loadClassWiseAttendanceFromFile(pendingFile, pendingFileBuffer);
       classWiseAttendance = classWise?.entries ?? [];
       classWiseAttendanceColumns = classWise?.sessionColumns ?? [];
       if (classWiseAttendance.length) {
@@ -420,38 +462,31 @@ export default function ExcelUpload({ onDataImported }: Props) {
       setMappingApplied(true);
 
       if (isCloudPersistenceEnabled()) {
-        if (!cloudToken) {
+        const publish = await syncToCloud({
+          fileName,
+          cohortName: cohortName.trim(),
+          source: 'excel',
+          schemaSignature: parsed.fileSignature,
+          sheetName: selectedSheet || Object.values(parsed._sheetMapping)[0],
+          rowCount: parsed.rawRows?.length ?? 0,
+          changedColumns: schemaMigration?.changes ?? [],
+          headers: parsed.headers,
+          rawRows: parsed.rawRows,
+          mapping,
+          discoveredColumns: schemaColumns,
+          classWiseAttendance,
+          classWiseAttendanceColumns,
+        });
+        if (publish?.ok) {
           setCloudPublishStatus({
-            tone: 'warn',
-            text: 'Saved in this browser only. Sign in to your admin account, then click Apply Mapping again to publish the roster for students.',
+            tone: 'ok',
+            text: `Roster published for students (${parsed.rawRows?.length ?? 0} rows). They can open the student page without uploading again.${!cloudToken ? ' Sign-in is optional — only needed for upload history metadata.' : ''}`,
           });
         } else {
-          const publish = await syncToCloud({
-            fileName,
-            cohortName: cohortName.trim(),
-            source: 'excel',
-            schemaSignature: parsed.fileSignature,
-            sheetName: selectedSheet || Object.values(parsed._sheetMapping)[0],
-            rowCount: parsed.rawRows?.length ?? 0,
-            changedColumns: schemaMigration?.changes ?? [],
-            headers: parsed.headers,
-            rawRows: parsed.rawRows,
-            mapping,
-            discoveredColumns: schemaColumns,
-            classWiseAttendance,
-            classWiseAttendanceColumns,
+          setCloudPublishStatus({
+            tone: 'err',
+            text: `Cloud publish failed${publish?.error ? `: ${publish.error}` : ''}. Try Incognito or clear browser storage, then Apply Mapping again.`,
           });
-          if (publish?.ok) {
-            setCloudPublishStatus({
-              tone: 'ok',
-              text: `Roster published for students (${parsed.rawRows?.length ?? 0} rows). They can open the student page without uploading again.`,
-            });
-          } else {
-            setCloudPublishStatus({
-              tone: 'err',
-              text: `Cloud publish failed${publish?.error ? `: ${publish.error}` : ''}. Students will not see this upload until publish succeeds.`,
-            });
-          }
         }
       }
     } catch (e) {
@@ -651,6 +686,15 @@ export default function ExcelUpload({ onDataImported }: Props) {
         <div style={{ background: BRAND.redBg, border: `1px solid ${BRAND.redBorder}`, borderRadius: 10, padding: '12px 16px', color: BRAND.red, fontSize: 13, marginBottom: 14 }}>
           <strong>Error: </strong>{error}
           <button onClick={() => setError(null)} style={{ marginLeft: 10, background: 'none', border: 'none', color: BRAND.red, cursor: 'pointer', fontSize: 13, textDecoration: 'underline' }}>Dismiss</button>
+          {(error.includes('read') || error.includes('expired') || error.includes('Parse error')) && (
+            <button
+              type="button"
+              onClick={resetUploadFlow}
+              style={{ marginLeft: 10, background: 'none', border: 'none', color: BRAND.red, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'underline' }}
+            >
+              Choose file again
+            </button>
+          )}
         </div>
       )}
 
@@ -757,24 +801,24 @@ export default function ExcelUpload({ onDataImported }: Props) {
                 </div>
               )}
               {cloudEnabled && !session && !cloudPublishStatus && (
-                <div style={{ flex: '1 1 100%', fontSize: 12, color: BRAND.yellow, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span>Sign in before Apply Mapping so the roster is saved for all students.</span>
+                <div style={{ flex: '1 1 100%', fontSize: 12, color: BRAND.textLight, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span>Sign-in is optional. Apply Mapping publishes the roster for students without signing in.</span>
                   <button
                     type="button"
                     onClick={openSignIn}
                     style={{
                       padding: '6px 12px',
                       borderRadius: 6,
-                      border: 'none',
-                      background: BRAND.navy,
-                      color: '#fff',
+                      border: `1px solid ${BRAND.border}`,
+                      background: '#fff',
+                      color: BRAND.navy,
                       fontWeight: 700,
                       fontSize: 12,
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
                   >
-                    Sign in
+                    Sign in (optional)
                   </button>
                 </div>
               )}

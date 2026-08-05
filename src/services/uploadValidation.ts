@@ -1,5 +1,6 @@
 import type { UploadValidationIssue, UploadValidationResult } from '../types/productionTypes';
 import { excelCellToString, isUncachedFormulaCell } from './excelCellValue';
+import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_ROWS_WARNING = 10_000;
@@ -14,7 +15,7 @@ function issue(
   return { code, severity, message, suggestion };
 }
 
-export async function validateUploadFile(file: File): Promise<UploadValidationResult> {
+export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer): Promise<UploadValidationResult> {
   const issues: UploadValidationIssue[] = [];
 
   if (!file) {
@@ -54,9 +55,8 @@ export async function validateUploadFile(file: File): Promise<UploadValidationRe
 
   let workbookOk = false;
   try {
-    const ExcelJS = await import('exceljs');
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(await file.arrayBuffer());
+    const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
+    const wb = await loadWorkbookFromBuffer(buffer);
     workbookOk = true;
 
     if (wb.worksheets.length === 0) {

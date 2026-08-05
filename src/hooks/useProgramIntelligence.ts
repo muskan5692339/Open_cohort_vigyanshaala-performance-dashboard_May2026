@@ -68,17 +68,21 @@ export function useProgramIntelligence(input: {
       inactive: weekly.inactive,
       interventionBreakdown: weekly.interventionBreakdown,
     };
-    saveUploadSnapshot({ fileName, metrics });
+    try {
+      saveUploadSnapshot({ fileName, metrics });
 
-    const bundle = generateProgramIntelligence({
-      analytics,
-      rows,
-      mapping: mapping!,
-      dataQuality,
-      previousSnapshot: getPreviousSnapshot() ?? null,
-    });
-    if (bundle.interventions.length) {
-      appendRecommendationHistory(bundle.interventions);
+      const bundle = generateProgramIntelligence({
+        analytics,
+        rows,
+        mapping: mapping!,
+        dataQuality,
+        previousSnapshot: getPreviousSnapshot() ?? null,
+      });
+      if (bundle.interventions.length) {
+        appendRecommendationHistory(bundle.interventions);
+      }
+    } catch {
+      // Storage quota or snapshot errors must not block the admin dashboard.
     }
   }, [analytics, fileName, dataQuality, rows, mapping]);
 

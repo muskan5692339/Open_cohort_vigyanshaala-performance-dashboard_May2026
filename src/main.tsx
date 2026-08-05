@@ -4,8 +4,10 @@ import { Analytics } from '@vercel/analytics/react'
 import './index.css'
 import App from './App.tsx'
 import { installChunkLoadRecovery } from './utils/lazyWithRetry'
+import { recoverBrowserStorage } from './services/storageRecovery'
 
 installChunkLoadRecovery()
+recoverBrowserStorage()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -85,14 +85,20 @@ export async function runWeeklyStudentReminders(
     offset?: number;
     forceLive?: boolean;
     weekKeySuffix?: string;
+    isoWeek?: string;
     auto?: boolean;
     preview?: boolean;
+    timeBudgetMs?: number;
   },
 ): Promise<ReminderRunResult> {
   const slot = resolveReminderSlot(slotInput);
-  const weekKey = options?.weekKeySuffix
-    ? `${reminderLogKey(slot).replace(/-(morning|evening)$/, '')}-${options.weekKeySuffix}`
-    : reminderLogKey(slot);
+  const weekKey = options?.isoWeek?.trim()
+    ? (options.weekKeySuffix
+      ? `${options.isoWeek.trim()}-${options.weekKeySuffix}`
+      : `${options.isoWeek.trim()}-${slot}`)
+    : options?.weekKeySuffix
+      ? `${reminderLogKey(slot).replace(/-(morning|evening)$/, '')}-${options.weekKeySuffix}`
+      : reminderLogKey(slot);
   const dryRun = options?.preview
     ? true
     : options?.forceLive
@@ -100,12 +106,7 @@ export async function runWeeklyStudentReminders(
       : process.env.REMINDER_DRY_RUN === 'true';
   const usePendingQueue = options?.auto === true;
   const batchOffset = usePendingQueue ? 0 : Math.max(0, options?.offset ?? 0);
-  const defaultBatchSize = Number(process.env.REMINDER_BATCH_SIZE ?? 25);
-  const batchLimit = options?.limit && options.limit > 0
-    ? options.limit
-    : usePendingQueue && Number.isFinite(defaultBatchSize) && defaultBatchSize > 0
-      ? defaultBatchSize
-      : null;
+  const batchLimit = options?.limit && options.limit > 0 ? options.limit : null;
   const dashboardUrl =
     process.env.STUDENT_DASHBOARD_URL?.trim()
     || 'https://open-cohort-vigyanshaala-performanc.vercel.app/student-view';
@@ -161,7 +162,7 @@ export async function runWeeklyStudentReminders(
   const alreadySent = await loadAlreadySentEmails(db, weekKey);
   const pending = allSnapshots.filter(s => !alreadySent.has(s.email.toLowerCase()));
   const snapshots = usePendingQueue
-    ? pending.slice(0, batchLimit ?? 25)
+    ? pending
     : allSnapshots.slice(batchOffset, batchLimit ? batchOffset + batchLimit : undefined);
   let sent = 0;
   let skippedAlreadySent = 0;
@@ -169,7 +170,8 @@ export async function runWeeklyStudentReminders(
   let processed = 0;
   const errors: Array<{ email: string; message: string }> = [];
   const startedAt = Date.now();
-  const timeBudgetMs = 50_000;
+  const timeBudgetMs = options?.timeBudgetMs
+    ?? (usePendingQueue ? 95_000 : 50_000);
 
   for (const snapshot of snapshots) {
     if (Date.now() - startedAt > timeBudgetMs) break;
@@ -191,7 +193,7 @@ export async function runWeeklyStudentReminders(
       await sendGmailMessage({ to: snapshot.email, ...mail });
       await logReminderSent(db, snapshot, weekKey, cohortName);
       sent++;
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 150));
     } catch (err) {
       failed++;
       errors.push({

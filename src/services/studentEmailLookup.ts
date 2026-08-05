@@ -272,6 +272,7 @@ function buildStudentFromRow(
 export function findStudentRawRow(
   payload: ParsedExcelPayload,
   email: string,
+  hints?: { studentName?: string },
 ): Record<string, unknown> | null {
   const key = normalizeStudentEmail(email);
   if (!key) return null;
@@ -292,6 +293,15 @@ export function findStudentRawRow(
     for (const val of Object.values(row)) {
       if (normalizeStudentEmail(cellText(val)) === key) return row;
     }
+  }
+
+  const nameHint = hints?.studentName?.trim();
+  if (nameHint && nameHint.toLowerCase() !== 'unknown') {
+    const target = nameHint.toLowerCase();
+    const nameMatches = rows.filter(row =>
+      Object.values(row).some(v => cellText(v).toLowerCase().trim() === target),
+    );
+    if (nameMatches.length === 1) return nameMatches[0];
   }
 
   return null;
@@ -349,9 +359,17 @@ export function lookupStudentByEmail(
   const student = findParsedStudent(payload, email);
   if (!student) return null;
 
+  const key = normalizeStudentEmail(email);
+  const classWiseEntry = payload.classWiseAttendance?.find(
+    e => normalizeStudentEmail(cellText(e.student_email)) === key,
+  );
+  let rawRow = findStudentRawRow(payload, email, {
+    studentName: classWiseEntry?.student_name ?? student.name,
+  });
+
   return {
     student,
-    rawRow: findStudentRawRow(payload, email),
+    rawRow,
     studentCount,
     emailColumn,
   };

@@ -1,4 +1,4 @@
-import type { ColumnMapping } from '../types/dynamicSchema';
+import type { ColumnMapping, DiscoveredColumn } from '../types/dynamicSchema';
 import { classifyAssignmentStatus, listAssignmentStatusColumns } from './studentAssignmentDisplay';
 import { findInterventionColumn } from './weeklyAdminMetrics';
 
@@ -31,7 +31,70 @@ const STATUS_COLUMN_HINTS = [
 ];
 
 const ATTENDANCE_HINTS = ['attendance', 'attendance %', 'attendance percent'];
-const QUIZ_HINTS = ['quiz', 'assessment'];
+const QUIZ_HINTS = ['quiz', 'assessment', 'mcq'];
+
+function colsFromDiscovered(
+  discovered: DiscoveredColumn[] | undefined,
+  role: string,
+): string[] {
+  if (!discovered?.length) return [];
+  return discovered.filter(c => c.mappedRole === role).map(c => c.name);
+}
+
+function isAssignmentHeader(col: string): boolean {
+  const l = col.toLowerCase();
+  return (
+    l.includes('assignment')
+    || /_assignment_/i.test(col)
+    || ['swot', 'resume', 'career exploration', 'career planner', 'vision board', 'endline', 'career_exploration', 'career_planner'].some(k => l.includes(k))
+  );
+}
+
+function isQuizHeader(col: string): boolean {
+  const l = col.toLowerCase();
+  if (l.includes('final score') || l.includes('final selection') || l.includes('final assessment')) {
+    return false;
+  }
+  return QUIZ_HINTS.some(h => l.includes(h)) || /_quiz_/i.test(col);
+}
+
+export function listAssignmentColumns(
+  headers: string[],
+  mapping: ColumnMapping | undefined,
+  discoveredColumns?: DiscoveredColumn[],
+): string[] {
+  const fromMapping = mapping
+    ? Object.entries(mapping)
+        .filter(([, e]) => e.mappedRole === 'assignment' || e.mappedRole === 'academic')
+        .map(([col]) => col)
+    : [];
+  const fromDiscovered = colsFromDiscovered(discoveredColumns, 'assignment');
+  const fromHeaders = headers.filter(isAssignmentHeader);
+  return listAssignmentStatusColumns(Array.from(new Set([...fromMapping, ...fromDiscovered, ...fromHeaders])), headers);
+}
+
+export function listQuizColumns(
+  headers: string[],
+  mapping: ColumnMapping | undefined,
+  discoveredColumns?: DiscoveredColumn[],
+): string[] {
+  return Array.from(new Set([
+    ...colsByRole(mapping, 'assessment', ['percentage', 'numeric']),
+    ...colsFromDiscovered(discoveredColumns, 'assessment'),
+    ...headers.filter(isQuizHeader),
+  ]));
+}
+
+export function listAttendanceColumns(
+  headers: string[],
+  mapping: ColumnMapping | undefined,
+  _discoveredColumns?: DiscoveredColumn[],
+): string[] {
+  return Array.from(new Set([
+    ...colsByRole(mapping, 'attendance', ['percentage', 'numeric']),
+    ...colsMatching(headers, ATTENDANCE_HINTS),
+  ]));
+}
 
 function normCol(key: string): string {
   return key.replace(/^\uFEFF/, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -72,39 +135,6 @@ function colsByRole(mapping: ColumnMapping | undefined, role: string, types: str
   return Object.entries(mapping)
     .filter(([, e]) => e.mappedRole === role && types.includes(e.mappedType))
     .map(([col]) => col);
-}
-
-function listAssignmentColumns(headers: string[], mapping: ColumnMapping | undefined): string[] {
-  const fromMapping = mapping
-    ? Object.entries(mapping)
-        .filter(([, e]) => e.mappedRole === 'assignment' || e.mappedRole === 'academic')
-        .map(([col]) => col)
-    : [];
-  const fromHeaders = headers.filter(col => {
-    const l = col.toLowerCase();
-    return (
-      l.includes('assignment')
-      || ['swot', 'resume', 'career exploration', 'career planner', 'vision board', 'endline'].some(k => l.includes(k))
-    );
-  });
-  return listAssignmentStatusColumns(Array.from(new Set([...fromMapping, ...fromHeaders])), headers);
-}
-
-function listQuizColumns(headers: string[], mapping: ColumnMapping | undefined): string[] {
-  return Array.from(new Set([
-    ...colsByRole(mapping, 'assessment', ['percentage', 'numeric']),
-    ...headers.filter(c => {
-      const l = c.toLowerCase();
-      return QUIZ_HINTS.some(h => l.includes(h)) && !l.includes('final score');
-    }),
-  ]));
-}
-
-function listAttendanceColumns(headers: string[], mapping: ColumnMapping | undefined): string[] {
-  return Array.from(new Set([
-    ...colsByRole(mapping, 'attendance', ['percentage', 'numeric']),
-    ...colsMatching(headers, ATTENDANCE_HINTS),
-  ]));
 }
 
 function slotStats(value: string): { submitted: number; accepted: number } {

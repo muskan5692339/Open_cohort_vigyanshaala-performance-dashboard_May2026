@@ -7,6 +7,7 @@ import { getActiveOrganizationId, setActiveOrganizationId } from '../services/cl
 import { setOrgIdResolver } from '../services/orgScopedStorage';
 import { hydrateAllRepositories } from '../hooks/useSyncContext';
 import { installOfflineRecoveryListeners, runOfflineRecovery } from '../services/offlineRecovery';
+import { recoverBrowserStorage } from '../services/storageRecovery';
 
 interface AuthContextValue {
   session: Session | null;
@@ -163,13 +164,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [cloudEnabled]);
 
   const signInWithPassword = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    if (!data.session) {
-      return { error: 'Sign-in did not return a session. Confirm the user in Supabase Auth (Auto Confirm User).' };
+    try {
+      recoverBrowserStorage();
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: error.message };
+      if (!data.session) {
+        return { error: 'Sign-in did not return a session. Confirm the user in Supabase Auth (Auto Confirm User).' };
+      }
+      try {
+        await hydrate(data.session);
+      } catch (e) {
+        return { error: (e as Error).message };
+      }
+      return { error: undefined, session: data.session };
+    } catch (e) {
+      return { error: (e as Error).message };
     }
-    await hydrate(data.session);
-    return { error: undefined, session: data.session };
   }, [hydrate]);
 
   const signInWithMagicLink = useCallback(async (email: string) => {

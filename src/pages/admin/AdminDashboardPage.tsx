@@ -13,6 +13,7 @@ import { useUploadedExcel } from '../../context/UploadedExcelContext';
 import { AdminSignInProvider } from '../../context/AdminSignInContext';
 import { activeFilterChips } from '../../services/globalFilters';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
+import { pruneLegacyRecommendationStorage } from '../../services/recommendationHistoryStore';
 
 const DataSourcePage = lazyWithRetry(() => import('./DataSourcePage'));
 const HelpCenterPage = lazyWithRetry(() => import('./HelpCenterPage'));
@@ -206,6 +207,7 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
   } = useAdminData();
   const [lastSync, setLastSync] = useState('');
   useEffect(() => { if (dataLastSync) setLastSync(dataLastSync); }, [dataLastSync]);
+  useEffect(() => { pruneLegacyRecommendationStorage(); }, []);
 
   const mapping = payload?.mapping;
   const rawRows = payload?.rawRows ?? [];

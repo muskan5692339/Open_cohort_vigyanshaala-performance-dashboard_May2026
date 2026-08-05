@@ -1,10 +1,11 @@
 import type { SheetPreview, WorkbookPreview } from '../types/productionTypes';
 import { readExcelRow } from './excelCellValue';
+import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
+import { recommendImportSheet } from './sheetSelection';
 
-export async function previewWorkbook(file: File): Promise<WorkbookPreview> {
-  const ExcelJS = await import('exceljs');
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(await file.arrayBuffer());
+export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): Promise<WorkbookPreview> {
+  const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
+  const wb = await loadWorkbookFromBuffer(buffer);
 
   const sheets: SheetPreview[] = wb.worksheets.map(ws => {
     const rowCount = Math.max(0, (ws.rowCount ?? 0) - 1);
@@ -25,11 +26,11 @@ export async function previewWorkbook(file: File): Promise<WorkbookPreview> {
     };
   });
 
-  const recommended =
-    sheets.find(s => !s.isEmpty && s.columnCount >= 3 && /student|data|perf|monitor|summary/i.test(s.name))?.name ??
-    sheets.find(s => !s.isEmpty)?.name ??
-    sheets[0]?.name ??
-    null;
+  const recommended = recommendImportSheet({
+    sheetNames: sheets.map(s => s.name),
+    sheets,
+    recommendedSheet: null,
+  });
 
   return {
     sheetNames: sheets.map(s => s.name),

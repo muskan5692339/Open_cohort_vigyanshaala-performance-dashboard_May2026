@@ -27,7 +27,14 @@ const samplePayload: ParsedExcelPayload = {
       Email: 'ravi@example.com',
       'Attendance %': '92',
       Assignment_1: 'Submitted',
-      Quiz_1: '80',
+      Quiz_1: '95',
+    },
+    {
+      Name: 'Dead Roster',
+      Email: 'dead@example.com',
+      'Attendance %': '0',
+      Assignment_1: 'No Submission',
+      Quiz_1: '',
     },
   ],
   headers: ['Name', 'Email', 'Attendance %', 'Assignment_1', 'Quiz_1'],
@@ -43,13 +50,18 @@ describe('studentReminderMetrics', () => {
     expect(needing[0].reasons).toContain('assignment');
   });
 
+  it('excludes dead students with no dashboard activity', () => {
+    const snap = buildStudentReminderSnapshot(samplePayload, 'dead@example.com');
+    expect(snap).toBeNull();
+  });
+
   it('builds reminder email with dashboard link', () => {
     const snap = buildStudentReminderSnapshot(samplePayload, 'asha@example.com');
     expect(snap).not.toBeNull();
     const mail = buildReminderEmail(snap!, 'https://example.com/student-view');
-    expect(mail.subject).toContain('reminder');
+    expect(mail.subject).toContain('weekly report');
     expect(mail.text).toContain('https://example.com/student-view');
-    expect(mail.html).toContain('Asha Kumar');
+    expect(mail.html).toContain('Hi Asha!');
   });
 
   it('formats iso week keys', () => {
