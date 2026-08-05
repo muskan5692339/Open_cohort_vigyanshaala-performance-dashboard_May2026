@@ -310,8 +310,13 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionTrendYLabel = sessionChartSeries === 'prerecorded' ? 'Completion %' : 'Hours';
   const sessionTrendChartWidth = Math.max(activeSessionTrend.length * SESSION_TREND_SLOT_WIDTH, isMobile ? 300 : 320);
   const sessionTrendNeedsScroll = activeSessionTrend.length > (isMobile ? 1 : 4);
-  const quizChartWidth = Math.max(quizData.length * QUIZ_SLOT_WIDTH, isMobile ? 300 : 320);
-  const quizNeedsScroll = quizData.length > (isMobile ? 1 : 3);
+  const quizChartData = quizData.map(entry => ({
+    ...entry,
+    chartScore: entry.score ?? 0,
+  }));
+  const scoredQuizCount = quizData.filter(entry => entry.score != null).length;
+  const quizChartWidth = Math.max(quizChartData.length * QUIZ_SLOT_WIDTH, isMobile ? 300 : 320);
+  const quizNeedsScroll = quizChartData.length > (isMobile ? 1 : 3);
   const sessionTrendScrollHint = sessionChartSeries === 'live'
     ? `${activeSessionTrend.length} classes · scroll sideways →`
     : `${activeSessionTrend.length} videos · scroll sideways →`;
@@ -439,7 +444,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <article className="panel-card panel-large panel-card-wrap">
               <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="quiz" delayMs={600} />
               <h3>Quiz performance</h3>
-              {quizData.length === 0 ? (
+              {quizChartData.length === 0 ? (
                 <div style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--sd-text-muted)', fontSize: 13 }}>
                   No quiz scores yet
                 </div>
@@ -452,7 +457,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                   showScrollLadder={quizNeedsScroll}
                 >
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={quizData} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
+                    <BarChart data={quizChartData} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
                       <XAxis
                         dataKey="name"
@@ -468,12 +473,31 @@ export default function StudentDashboard({ email, onBack }: Props) {
                         }}
                       />
                       <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} width={isMobile ? 28 : 36} />
-                      <Tooltip />
-                      <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={isMobile ? 36 : 48}>
-                        {quizData.map((entry, idx) => (
-                          <Cell key={`${entry.name}-${idx}`} fill={entry.score >= 100 ? 'var(--sd-light-green)' : 'var(--sd-accent)'} />
+                      <Tooltip
+                        formatter={(value, _name, item) => {
+                          const row = item.payload as { display?: string; score?: number | null };
+                          return [row.display ?? value, 'Score'];
+                        }}
+                      />
+                      <Bar dataKey="chartScore" radius={[6, 6, 0, 0]} barSize={isMobile ? 36 : 48}>
+                        {quizChartData.map((entry, idx) => (
+                          <Cell
+                            key={`${entry.name}-${idx}`}
+                            fill={
+                              entry.score == null
+                                ? 'var(--sd-border)'
+                                : entry.score >= 100
+                                  ? 'var(--sd-light-green)'
+                                  : 'var(--sd-accent)'
+                            }
+                          />
                         ))}
-                        <LabelList dataKey="score" position="top" fontSize={11} fill="var(--sd-text)" />
+                        <LabelList
+                          dataKey="display"
+                          position="top"
+                          fontSize={11}
+                          fill="var(--sd-text)"
+                        />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -482,7 +506,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
               <div className="quiz-summary">
                 <MiniStat label="Average" value={`${avgQuiz}%`} />
                 <MiniStat label="Highest" value={`${quizHighest}%`} />
-                <MiniStat label="Count" value={String(quizData.length)} />
+                <MiniStat label="Count" value={String(scoredQuizCount || quizChartData.length)} />
               </div>
             </article>
 

@@ -96,3 +96,63 @@ export function formatAssignmentLabel(col: string): string {
   }
   return col.replace(/_/g, ' ').trim();
 }
+
+const KNOWN_CATEGORY_SCORE_LEAKS = new Set([
+  'individual',
+  'uk colleges',
+  'uk_colleges',
+  'usf',
+  'ffe',
+  'avanti fellows',
+  'christ university',
+  'sashakth fellow',
+]);
+
+/** Quiz 1 column often contains student_category text instead of a numeric score. */
+export function isLikelyCategoryNotQuizScore(value: string, studentCategory?: string): boolean {
+  const text = value.trim();
+  if (!text) return false;
+  if (/^-?\d+(\.\d+)?%?$/.test(text.replace(/,/g, ''))) return false;
+
+  if (studentCategory && text.toLowerCase() === studentCategory.toLowerCase()) return true;
+
+  const norm = text.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (KNOWN_CATEGORY_SCORE_LEAKS.has(norm)) return true;
+  if (norm.includes('college') || norm.includes('university') || norm.includes('fellow')) return true;
+
+  return false;
+}
+
+export function parseQuizScoreCell(
+  raw: string,
+  options?: { studentCategory?: string },
+): { score: number | null; display: string } {
+  const text = raw.trim();
+  if (!text) return { score: null, display: '—' };
+
+  if (isLikelyCategoryNotQuizScore(text, options?.studentCategory)) {
+    return { score: null, display: 'N/A' };
+  }
+
+  const numeric = text.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+  if (!numeric) {
+    return { score: null, display: text.length > 14 ? `${text.slice(0, 14)}…` : text };
+  }
+
+  const num = parseFloat(text.replace(/,/g, '').replace('%', ''));
+  if (!Number.isFinite(num)) return { score: null, display: '—' };
+  const score = num > 0 && num <= 1 ? Math.round(num * 100) : Math.min(100, Math.round(num));
+  return { score, display: String(score) };
+}
+
+export function avgNumericQuizScores(
+  cols: string[],
+  row: Record<string, string>,
+  studentCategory?: string,
+): number {
+  const scores = cols
+    .map(col => parseQuizScoreCell(row[col] ?? '', { studentCategory }).score)
+    .filter((s): s is number => s != null);
+  if (!scores.length) return 0;
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}

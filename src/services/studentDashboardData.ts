@@ -21,7 +21,7 @@ import {
   listQuizColumns,
 } from './programOverviewMetrics';
 import { findInterventionColumn } from './weeklyAdminMetrics';
-import { formatQuizLabel, mergeAssessmentColumns } from './assessmentColumnOrder';
+import { formatQuizLabel, mergeAssessmentColumns, parseQuizScoreCell } from './assessmentColumnOrder';
 
 function stringifyCellValue(v: unknown): string {
   if (v == null) return '';
@@ -180,7 +180,7 @@ export interface StudentDashboardView {
   finalScoreLabel: string | null;
   engagementScore: number;
   engagementLabel: string;
-  quizBarData: { name: string; score: number }[];
+  quizBarData: { name: string; score: number | null; display: string }[];
   assignmentRows: StudentAssignmentItem[];
   programHoursLabel: string;
   sessions: number;
@@ -275,19 +275,27 @@ export function buildStudentDashboardView(input: {
       : assignmentSubmissionPctFromRow(matched, assignmentCols));
   const assignmentAcceptancePct = overviewRecord?.assignmentAcceptancePct ?? assignmentSubmissionPct;
 
-  const quizBarData = quizCols
-    .map(col => {
-      const score = parsePctOrNull(matched[col]);
-      if (score == null) return null;
-      return { name: formatQuizLabel(col), score };
-    })
-    .filter((x): x is { name: string; score: number } => x != null);
+  const studentCategoryForQuiz = stringRow['student_category']?.trim()
+    || stringRow['Student Category']?.trim()
+    || '';
 
-  const avgQuiz = quizBarData.length
-    ? Math.round(quizBarData.reduce((a, b) => a + b.score, 0) / quizBarData.length)
+  const quizBarData = quizCols.map(col => {
+    const parsed = parseQuizScoreCell(stringifyCellValue(matched[col]), {
+      studentCategory: studentCategoryForQuiz,
+    });
+    return { name: formatQuizLabel(col), score: parsed.score, display: parsed.display };
+  });
+
+  const numericQuizScores = quizBarData
+    .map(q => q.score)
+    .filter((s): s is number => s != null);
+  const avgQuiz = numericQuizScores.length
+    ? Math.round(numericQuizScores.reduce((a, b) => a + b, 0) / numericQuizScores.length)
     : (overviewRecord?.quizScoreAvg
       ?? (student.imported_quiz_pct != null ? Math.round(student.imported_quiz_pct) : 0));
-  const quizHighest = quizBarData.reduce((max, x) => Math.max(max, x.score), avgQuiz);
+  const quizHighest = numericQuizScores.length
+    ? Math.max(...numericQuizScores)
+    : avgQuiz;
 
   const finalScore = finalScoreCol ? parsePctOrNull(matched[finalScoreCol]) : null;
   const finalScoreLabel = finalScoreCol?.replace(/_/g, ' ').trim() ?? null;

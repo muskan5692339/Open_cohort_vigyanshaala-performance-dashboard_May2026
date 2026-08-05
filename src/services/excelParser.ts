@@ -18,6 +18,7 @@ import { readExcelRow } from './excelCellValue';
 import {
   discoverNumberedAssignmentHeaders,
   discoverQuizScoreHeaders,
+  parseQuizScoreCell,
 } from './assessmentColumnOrder';
 
 /* ── helpers ──────────────────────────────────────────── */
@@ -544,11 +545,16 @@ export function parseWideFormatSheet(
 
     let importedQuizPct: number | undefined;
     if (quizScoreHeaders.length) {
+      const categoryVal = (() => {
+        const catIdx = col(h, 'student_category', 'student category');
+        return catIdx !== -1 ? (r[catIdx] ?? '').trim() : '';
+      })();
       const scores = quizScoreHeaders
         .map(colName => {
           const idx = h.indexOf(colName);
           const raw = idx >= 0 ? (r[idx] ?? '').trim() : '';
-          return raw ? parsePercentOrScore(raw) : null;
+          if (!raw) return null;
+          return parseQuizScoreCell(raw, { studentCategory: categoryVal }).score;
         })
         .filter((v): v is number => v != null);
       if (scores.length) {
@@ -595,18 +601,23 @@ export function parseWideFormatSheet(
 
     // Quiz — individual quiz scores when present, else final score fallback
     if (quizScoreHeaders.length) {
+      const categoryVal = (() => {
+        const catIdx = col(h, 'student_category', 'student category');
+        return catIdx !== -1 ? (r[catIdx] ?? '').trim() : '';
+      })();
       for (const colName of quizScoreHeaders) {
         const idx = h.indexOf(colName);
         const raw = idx >= 0 ? (r[idx] ?? '').trim() : '';
         if (!raw) continue;
-        const pct = parsePercentOrScore(raw);
+        const parsed = parseQuizScoreCell(raw, { studentCategory: categoryVal });
+        if (parsed.score == null) continue;
         quiz.push({
           student_email: email,
           quiz_name: colName.replace(/_/g, ' ').trim(),
           quiz_date: importDate,
-          score: pct,
+          score: parsed.score,
           total_marks: 100,
-          percentage: pct,
+          percentage: parsed.score,
         });
       }
     } else if (c.finalScore !== -1) {

@@ -6,6 +6,7 @@ import {
   formatAssignmentLabel,
   formatQuizLabel,
   sortAssessmentColumns,
+  parseQuizScoreCell,
 } from './assessmentColumnOrder';
 import { findCommentColumnForAssignment } from './studentAssignmentDisplay';
 
@@ -77,5 +78,16 @@ describe('assessmentColumnOrder', () => {
   it('sortAssessmentColumns respects sheet order when numbers tie', () => {
     const cols = ['Quiz B', 'Quiz A'];
     expect(sortAssessmentColumns(cols, cols)).toEqual(['Quiz B', 'Quiz A']);
+  });
+
+  it('treats student_category text in Quiz 1 as missing score', () => {
+    const parsed = parseQuizScoreCell('Individual', { studentCategory: 'Individual' });
+    expect(parsed.score).toBeNull();
+    expect(parsed.display).toBe('N/A');
+  });
+
+  it('parses numeric quiz scores normally', () => {
+    expect(parseQuizScoreCell('100', { studentCategory: 'Individual' }).score).toBe(100);
+    expect(parseQuizScoreCell('90', { studentCategory: 'USF' }).score).toBe(90);
   });
 });

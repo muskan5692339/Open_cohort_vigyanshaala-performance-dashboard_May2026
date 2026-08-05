@@ -7,6 +7,7 @@ import {
   discoverQuizScoreHeaders,
   isNumberedAssignmentColumn,
   isQuizLikeColumn,
+  parseQuizScoreCell,
   sortAssessmentColumns,
 } from './assessmentColumnOrder';
 
@@ -334,10 +335,14 @@ export function computeProgramOverview(
     const assignmentSubmissionPct = totalSlots > 0 ? round1((submitted / totalSlots) * 100) : 0;
     const assignmentAcceptancePct = submitted > 0 ? round1((accepted / submitted) * 100) : 0;
 
-    const quizFilled = quizCols.filter(c => (row[c] ?? '').trim() !== '').length;
+    const studentCategory = (row['student_category'] ?? row['Student Category'] ?? '').trim();
+    const quizScores = quizCols
+      .map(col => parseQuizScoreCell((row[col] ?? '').trim(), { studentCategory }).score)
+      .filter((s): s is number => s != null);
+    const quizFilled = quizScores.length;
     const quizSubmissionPct = quizCols.length > 0 ? round1((quizFilled / quizCols.length) * 100) : 0;
-    const quizScoreAvg = quizCols.length > 0
-      ? round1(quizCols.map(c => parsePct(row[c] ?? '')).reduce((a, b) => a + b, 0) / quizCols.length)
+    const quizScoreAvg = quizScores.length > 0
+      ? round1(quizScores.reduce((a, b) => a + b, 0) / quizScores.length)
       : 0;
 
     const attVals = attendanceCols
