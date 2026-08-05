@@ -15,6 +15,10 @@ import { readClassWiseAttendanceFromWorkbook } from './classWiseAttendance';
 import type { ClassWiseAttendanceEntry } from './classWiseAttendance';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 import { readExcelRow } from './excelCellValue';
+import {
+  discoverNumberedAssignmentHeaders,
+  discoverQuizScoreHeaders,
+} from './assessmentColumnOrder';
 
 /* ── helpers ──────────────────────────────────────────── */
 
@@ -55,17 +59,18 @@ export function resolveWideFormatColumnHeaders(headers: string[]): {
   finalScoreHeader: string | null;
 } {
   const h = headers;
+  const numberedAssignments = discoverNumberedAssignmentHeaders(h);
   const indices = {
-    assignCE: col(h, 'assignment_career_exploration', 'career exploration', 'career_exploration'),
-    assignSWOT: col(h, 'assignment_swot', 'swot', 'swot analysis'),
-    assignCP: col(h, 'assignment_career_planner', 'career planner', 'career_planner'),
-    assignCVB: col(h, 'assignment_career_vision_board', 'career vision board', 'vision board', 'career_vision_board'),
+    assignCE: col(h, 'assignment_career_exploration', 'assignment1_career_exploration', 'career exploration', 'career_exploration'),
+    assignSWOT: col(h, 'assignment_swot', 'assignment2_swot', 'swot', 'swot analysis'),
+    assignCP: col(h, 'assignment_career_planner', 'assignment3_career_planner', 'career planner', 'career_planner'),
+    assignCVB: col(h, 'assignment_career_vision_board', 'assignment4_career_vision_board', 'career vision board', 'vision board', 'career_vision_board'),
     assignCV: col(h, 'assignment_cv_resume', 'cv/resume', 'cv resume', 'resume', 'cv  resume'),
     endline: col(h, 'endline form', 'endline'),
     finalScore: col(h, 'final score >=60%', 'final score', 'final selection variable', 'final assessment'),
   };
 
-  const assignmentHeaders = (
+  const legacyAssignmentHeaders = (
     [
       indices.assignCE,
       indices.assignSWOT,
@@ -78,15 +83,13 @@ export function resolveWideFormatColumnHeaders(headers: string[]): {
     .filter(idx => idx !== -1)
     .map(idx => h[idx]);
 
+  const assignmentHeaders = numberedAssignments.length >= 2
+    ? numberedAssignments
+    : legacyAssignmentHeaders;
+
   const finalScoreHeader = indices.finalScore !== -1 ? h[indices.finalScore] : null;
 
-  const quizHeaders = headers.filter(header => {
-    const l = header.toLowerCase();
-    if (l.includes('final score') || l.includes('final selection') || l.includes('final assessment')) {
-      return false;
-    }
-    return l.includes('quiz') || l.includes('assessment') || l.includes('mcq') || /_quiz_/i.test(header);
-  });
+  const quizHeaders = discoverQuizScoreHeaders(h);
 
   return { assignmentHeaders, quizHeaders, finalScoreHeader };
 }
@@ -484,13 +487,21 @@ export function parseWideFormatSheet(
   const quiz:        ParsedQuiz[]       = [];
   const studentErrors: SyncError[]      = [];
 
-  const assignmentCols: [number, string][] = [
-    [c.assignCE,   'Career Exploration'],
-    [c.assignSWOT, 'SWOT Analysis'],
-    [c.assignCP,   'Career Planner'],
-    [c.assignCVB,  'Career Vision Board'],
-    [c.assignCV,   'CV / Resume'],
-  ];
+  const assignmentCols: [number, string][] = (() => {
+    const numbered = discoverNumberedAssignmentHeaders(h);
+    if (numbered.length >= 2) {
+      return numbered.map(colName => [h.indexOf(colName), colName.replace(/_/g, ' ').trim()] as [number, string]);
+    }
+    return [
+      [c.assignCE,   'Career Exploration'],
+      [c.assignSWOT, 'SWOT Analysis'],
+      [c.assignCP,   'Career Planner'],
+      [c.assignCVB,  'Career Vision Board'],
+      [c.assignCV,   'CV / Resume'],
+    ];
+  })();
+
+  const quizScoreHeaders = discoverQuizScoreHeaders(h);
 
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
@@ -532,7 +543,18 @@ export function parseWideFormatSheet(
         : undefined;
 
     let importedQuizPct: number | undefined;
-    if (c.finalScore !== -1) {
+    if (quizScoreHeaders.length) {
+      const scores = quizScoreHeaders
+        .map(colName => {
+          const idx = h.indexOf(colName);
+          const raw = idx >= 0 ? (r[idx] ?? '').trim() : '';
+          return raw ? parsePercentOrScore(raw) : null;
+        })
+        .filter((v): v is number => v != null);
+      if (scores.length) {
+        importedQuizPct = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+      }
+    } else if (c.finalScore !== -1) {
       const fsRaw = (r[c.finalScore] ?? '').trim();
       if (fsRaw) importedQuizPct = parsePercentOrScore(fsRaw);
     }
@@ -571,8 +593,23 @@ export function parseWideFormatSheet(
       assignments.push({ student_email: email, assignment_name: aName, due_date: importDate, status });
     }
 
-    // Quiz — numeric score when possible, else pass/fail fallback
-    if (c.finalScore !== -1) {
+    // Quiz — individual quiz scores when present, else final score fallback
+    if (quizScoreHeaders.length) {
+      for (const colName of quizScoreHeaders) {
+        const idx = h.indexOf(colName);
+        const raw = idx >= 0 ? (r[idx] ?? '').trim() : '';
+        if (!raw) continue;
+        const pct = parsePercentOrScore(raw);
+        quiz.push({
+          student_email: email,
+          quiz_name: colName.replace(/_/g, ' ').trim(),
+          quiz_date: importDate,
+          score: pct,
+          total_marks: 100,
+          percentage: pct,
+        });
+      }
+    } else if (c.finalScore !== -1) {
       const fsRaw = (r[c.finalScore] ?? '').trim();
       if (fsRaw) {
         const pct = parsePercentOrScore(fsRaw);

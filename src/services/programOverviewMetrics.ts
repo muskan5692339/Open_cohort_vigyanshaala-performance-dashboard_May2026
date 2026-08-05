@@ -1,6 +1,14 @@
 import type { ColumnMapping, DiscoveredColumn } from '../types/dynamicSchema';
 import { classifyAssignmentStatus, listAssignmentStatusColumns } from './studentAssignmentDisplay';
 import { findInterventionColumn } from './weeklyAdminMetrics';
+import {
+  dedupePreserveOrder,
+  discoverNumberedAssignmentHeaders,
+  discoverQuizScoreHeaders,
+  isNumberedAssignmentColumn,
+  isQuizLikeColumn,
+  sortAssessmentColumns,
+} from './assessmentColumnOrder';
 
 type RawRow = Record<string, string>;
 
@@ -31,7 +39,6 @@ const STATUS_COLUMN_HINTS = [
 ];
 
 const ATTENDANCE_HINTS = ['attendance', 'attendance %', 'attendance percent'];
-const QUIZ_HINTS = ['quiz', 'assessment', 'mcq'];
 
 function colsFromDiscovered(
   discovered: DiscoveredColumn[] | undefined,
@@ -51,11 +58,7 @@ function isAssignmentHeader(col: string): boolean {
 }
 
 function isQuizHeader(col: string): boolean {
-  const l = col.toLowerCase();
-  if (l.includes('final score') || l.includes('final selection') || l.includes('final assessment')) {
-    return false;
-  }
-  return QUIZ_HINTS.some(h => l.includes(h)) || /_quiz_/i.test(col);
+  return isQuizLikeColumn(col);
 }
 
 export function listAssignmentColumns(
@@ -70,7 +73,13 @@ export function listAssignmentColumns(
     : [];
   const fromDiscovered = colsFromDiscovered(discoveredColumns, 'assignment');
   const fromHeaders = headers.filter(isAssignmentHeader);
-  return listAssignmentStatusColumns(Array.from(new Set([...fromMapping, ...fromDiscovered, ...fromHeaders])), headers);
+  const merged = dedupePreserveOrder([...fromMapping, ...fromDiscovered, ...fromHeaders]);
+  const statusCols = listAssignmentStatusColumns(merged, headers);
+  const numbered = discoverNumberedAssignmentHeaders(headers);
+  const cols = numbered.length >= 2
+    ? statusCols.filter(c => isNumberedAssignmentColumn(c))
+    : statusCols;
+  return sortAssessmentColumns(cols.length ? cols : statusCols, headers);
 }
 
 export function listQuizColumns(
@@ -78,11 +87,21 @@ export function listQuizColumns(
   mapping: ColumnMapping | undefined,
   discoveredColumns?: DiscoveredColumn[],
 ): string[] {
-  return Array.from(new Set([
+  const scoreCols = discoverQuizScoreHeaders(headers);
+  if (scoreCols.length) return scoreCols;
+
+  const merged = dedupePreserveOrder([
     ...colsByRole(mapping, 'assessment', ['percentage', 'numeric']),
     ...colsFromDiscovered(discoveredColumns, 'assessment'),
     ...headers.filter(isQuizHeader),
-  ]));
+  ]);
+  return sortAssessmentColumns(
+    merged.filter(c => {
+      const l = c.toLowerCase();
+      return !l.includes('final score') && !l.includes('final selection') && !l.includes('final assessment');
+    }),
+    headers,
+  );
 }
 
 export function listAttendanceColumns(

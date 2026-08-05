@@ -21,6 +21,7 @@ import {
   listQuizColumns,
 } from './programOverviewMetrics';
 import { findInterventionColumn } from './weeklyAdminMetrics';
+import { formatQuizLabel, mergeAssessmentColumns } from './assessmentColumnOrder';
 
 function stringifyCellValue(v: unknown): string {
   if (v == null) return '';
@@ -109,10 +110,10 @@ function mergeAssignmentColumns(
   payload: ParsedExcelPayload,
 ): string[] {
   const wide = resolveWideFormatColumnHeaders(headers);
-  return [...new Set([
-    ...listAssignmentColumns(headers, mapping, payload.discoveredColumns),
-    ...wide.assignmentHeaders,
-  ])];
+  return mergeAssessmentColumns([
+    listAssignmentColumns(headers, mapping, payload.discoveredColumns),
+    wide.assignmentHeaders,
+  ], headers);
 }
 
 function mergeQuizColumns(
@@ -121,10 +122,10 @@ function mergeQuizColumns(
   payload: ParsedExcelPayload,
 ): string[] {
   const wide = resolveWideFormatColumnHeaders(headers);
-  return [...new Set([
-    ...listQuizColumns(headers, mapping, payload.discoveredColumns),
-    ...wide.quizHeaders,
-  ])];
+  return mergeAssessmentColumns([
+    listQuizColumns(headers, mapping, payload.discoveredColumns),
+    wide.quizHeaders,
+  ], headers);
 }
 
 function assignmentSubmissionPctFromRow(
@@ -278,7 +279,7 @@ export function buildStudentDashboardView(input: {
     .map(col => {
       const score = parsePctOrNull(matched[col]);
       if (score == null) return null;
-      return { name: col.replace(/_/g, ' ').trim() || 'Quiz', score };
+      return { name: formatQuizLabel(col), score };
     })
     .filter((x): x is { name: string; score: number } => x != null);
 

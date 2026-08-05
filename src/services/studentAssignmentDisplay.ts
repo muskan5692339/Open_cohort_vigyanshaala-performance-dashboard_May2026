@@ -1,4 +1,5 @@
 import { normalizeExcelCell } from './excelCellValue';
+import { formatAssignmentLabel } from './assessmentColumnOrder';
 
 export type AssignmentDisplayKind = 'accepted' | 'rejected' | 'pending' | 'other';
 
@@ -24,11 +25,16 @@ export function isAssignmentCommentColumn(col: string): boolean {
 }
 
 export function normalizeAssignmentKey(col: string): string {
-  return col
+  let s = col
     .replace(/^\uFEFF/, '')
     .toLowerCase()
-    .replace(/[\s_-]*(comments?|feedback|remarks?|notes?)\s*$/i, '')
-    .replace(/[^a-z0-9]/g, '');
+    .trim();
+  s = s.replace(/^comments?[\s_.-]+/i, '');
+  s = s.replace(/^assignment\s*\d+[\s_.-]*/i, '');
+  s = s.replace(/^assignment(\d+)[\s_.-]*/i, '');
+  s = s.replace(/^assignment[\s_.-]+/i, '');
+  s = s.replace(/[\s_.-]*(comments?|feedback|remarks?|notes?)\s*$/i, '');
+  return s.replace(/[^a-z0-9]/g, '');
 }
 
 export function findCommentColumnForAssignment(assignmentCol: string, columns: string[]): string | null {
@@ -157,7 +163,7 @@ export function buildStudentAssignmentItems(
     const commentCol = findCommentColumnForAssignment(col, allRowCols);
     const feedback = commentCol ? stringifyCellValue(matched[commentCol]) : '';
     return {
-      name: col.replace(/_/g, ' ').trim(),
+      name: formatAssignmentLabel(col),
       date: '—',
       status,
       feedback,
