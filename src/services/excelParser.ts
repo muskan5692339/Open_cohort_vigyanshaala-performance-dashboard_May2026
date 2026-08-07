@@ -18,7 +18,7 @@ import { readExcelRow } from './excelCellValue';
 import {
   discoverNumberedAssignmentHeaders,
   discoverQuizScoreHeaders,
-  parseQuizScoreCell,
+  buildQuizBarData,
 } from './assessmentColumnOrder';
 
 /* ── helpers ──────────────────────────────────────────── */
@@ -549,14 +549,9 @@ export function parseWideFormatSheet(
         const catIdx = col(h, 'student_category', 'student category');
         return catIdx !== -1 ? (r[catIdx] ?? '').trim() : '';
       })();
-      const scores = quizScoreHeaders
-        .map(colName => {
-          const idx = h.indexOf(colName);
-          const raw = idx >= 0 ? (r[idx] ?? '').trim() : '';
-          if (!raw) return null;
-          return parseQuizScoreCell(raw, { studentCategory: categoryVal }).score;
-        })
-        .filter((v): v is number => v != null);
+      const rowRecord = Object.fromEntries(h.map((header, idx) => [header, (r[idx] ?? '').trim()]));
+      const quizBars = buildQuizBarData(quizScoreHeaders, rowRecord, categoryVal);
+      const scores = quizBars.map(b => b.score).filter((s): s is number => s != null);
       if (scores.length) {
         importedQuizPct = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
       }
@@ -605,19 +600,19 @@ export function parseWideFormatSheet(
         const catIdx = col(h, 'student_category', 'student category');
         return catIdx !== -1 ? (r[catIdx] ?? '').trim() : '';
       })();
-      for (const colName of quizScoreHeaders) {
-        const idx = h.indexOf(colName);
-        const raw = idx >= 0 ? (r[idx] ?? '').trim() : '';
-        if (!raw) continue;
-        const parsed = parseQuizScoreCell(raw, { studentCategory: categoryVal });
-        if (parsed.score == null) continue;
+      const rowRecord = Object.fromEntries(h.map((header, idx) => [header, (r[idx] ?? '').trim()]));
+      const quizBars = buildQuizBarData(quizScoreHeaders, rowRecord, categoryVal);
+      for (let i = 0; i < quizBars.length; i++) {
+        const bar = quizBars[i];
+        if (bar.score == null) continue;
+        const colName = quizScoreHeaders[i];
         quiz.push({
           student_email: email,
           quiz_name: colName.replace(/_/g, ' ').trim(),
           quiz_date: importDate,
-          score: parsed.score,
+          score: bar.score,
           total_marks: 100,
-          percentage: parsed.score,
+          percentage: bar.score,
         });
       }
     } else if (c.finalScore !== -1) {

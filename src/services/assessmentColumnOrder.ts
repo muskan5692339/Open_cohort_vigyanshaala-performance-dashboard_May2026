@@ -150,9 +150,79 @@ export function avgNumericQuizScores(
   row: Record<string, string>,
   studentCategory?: string,
 ): number {
-  const scores = cols
-    .map(col => parseQuizScoreCell(row[col] ?? '', { studentCategory }).score)
-    .filter((s): s is number => s != null);
+  const bars = buildQuizBarData(cols, row, studentCategory);
+  const scores = bars.map(b => b.score).filter((s): s is number => s != null);
   if (!scores.length) return 0;
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
+export function detectQuizOneCategoryContamination(
+  rows: Record<string, string>[],
+): { contaminatedRows: number; totalRows: number; pct: number } {
+  let contaminatedRows = 0;
+  let totalRows = 0;
+  for (const row of rows) {
+    const q1 = String(row['Quiz 1 Score'] ?? '').trim();
+    if (!q1) continue;
+    totalRows++;
+    const category = String(row.student_category ?? row['Student Category'] ?? '').trim();
+    if (isLikelyCategoryNotQuizScore(q1, category)) contaminatedRows++;
+  }
+  return {
+    contaminatedRows,
+    totalRows,
+    pct: totalRows ? Math.round((contaminatedRows / totalRows) * 100) : 0,
+  };
+}
+
+function inferQuizOneFromOtherScores(
+  parsed: { score: number | null; display: string }[],
+): number | null {
+  const others = parsed
+    .slice(1)
+    .map(entry => entry.score)
+    .filter((s): s is number => s != null);
+  if (!others.length) return null;
+  return Math.round(others.reduce((a, b) => a + b, 0) / others.length);
+}
+
+/** Parse quiz columns for one student row; repairs Quiz 1 when it contains student_category text. */
+export function buildQuizBarData(
+  quizCols: string[],
+  row: Record<string, string>,
+  studentCategory?: string,
+): { name: string; score: number | null; display: string }[] {
+  const category = studentCategory
+    ?? String(row.student_category ?? row['Student Category'] ?? '').trim();
+
+  const parsed = quizCols.map(col => {
+    const raw = String(row[col] ?? '').trim();
+    return { col, ...parseQuizScoreCell(raw, { studentCategory: category }) };
+  });
+
+  const quizOneIdx = parsed.findIndex(
+    entry => extractAssessmentNumber(entry.col) === 1 && /quiz/i.test(entry.col),
+  );
+  if (quizOneIdx >= 0) {
+    const q1Raw = String(row[parsed[quizOneIdx].col] ?? '').trim();
+    if (
+      parsed[quizOneIdx].score == null
+      && isLikelyCategoryNotQuizScore(q1Raw, category)
+    ) {
+      const inferred = inferQuizOneFromOtherScores(parsed);
+      if (inferred != null) {
+        parsed[quizOneIdx] = {
+          ...parsed[quizOneIdx],
+          score: inferred,
+          display: String(inferred),
+        };
+      }
+    }
+  }
+
+  return parsed.map(entry => ({
+    name: formatQuizLabel(entry.col),
+    score: entry.score,
+    display: entry.display,
+  }));
 }

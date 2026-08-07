@@ -21,7 +21,7 @@ import {
   listQuizColumns,
 } from './programOverviewMetrics';
 import { findInterventionColumn } from './weeklyAdminMetrics';
-import { formatQuizLabel, mergeAssessmentColumns, parseQuizScoreCell } from './assessmentColumnOrder';
+import { mergeAssessmentColumns, buildQuizBarData } from './assessmentColumnOrder';
 
 function stringifyCellValue(v: unknown): string {
   if (v == null) return '';
@@ -279,12 +279,7 @@ export function buildStudentDashboardView(input: {
     || stringRow['Student Category']?.trim()
     || '';
 
-  const quizBarData = quizCols.map(col => {
-    const parsed = parseQuizScoreCell(stringifyCellValue(matched[col]), {
-      studentCategory: studentCategoryForQuiz,
-    });
-    return { name: formatQuizLabel(col), score: parsed.score, display: parsed.display };
-  });
+  const quizBarData = buildQuizBarData(quizCols, stringRow, studentCategoryForQuiz);
 
   const numericQuizScores = quizBarData
     .map(q => q.score)

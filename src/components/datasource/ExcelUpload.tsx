@@ -33,6 +33,7 @@ import { getActiveOrganizationId, isCloudPersistenceEnabled } from '../../servic
 import { useAdminSignIn } from '../../context/AdminSignInContext';
 import { readFileAsArrayBuffer } from '../../services/workbookBuffer';
 import { findPerformanceSheetName, isClassWiseOnlySheet } from '../../services/sheetSelection';
+import { detectQuizOneCategoryContamination } from '../../services/assessmentColumnOrder';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -293,6 +294,12 @@ export default function ExcelUpload({ onDataImported }: Props) {
       };
 
       setParsed(p);
+      const quizOneLeak = detectQuizOneCategoryContamination(p.rawRows ?? []);
+      if (quizOneLeak.pct >= 30) {
+        setError(
+          `Quiz 1 Score looks wrong for ${quizOneLeak.pct}% of rows (values like Individual/FFE/USF — same as student_category, not quiz scores). Fix the Quiz 1 column in Excel, then Apply Mapping again so students see correct Quiz 1 scores.`,
+        );
+      }
       if (isClassWiseOnlySheet(p.headers ?? [])) {
         setError(
           'This sheet only has session attendance columns. Choose your main Student Performance / Overall sheet (with assignments and quiz scores), then import again.',

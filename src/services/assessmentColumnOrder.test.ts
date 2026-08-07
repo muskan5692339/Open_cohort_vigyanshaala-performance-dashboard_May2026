@@ -7,6 +7,8 @@ import {
   formatQuizLabel,
   sortAssessmentColumns,
   parseQuizScoreCell,
+  buildQuizBarData,
+  detectQuizOneCategoryContamination,
 } from './assessmentColumnOrder';
 import { findCommentColumnForAssignment } from './studentAssignmentDisplay';
 
@@ -89,5 +91,30 @@ describe('assessmentColumnOrder', () => {
   it('parses numeric quiz scores normally', () => {
     expect(parseQuizScoreCell('100', { studentCategory: 'Individual' }).score).toBe(100);
     expect(parseQuizScoreCell('90', { studentCategory: 'USF' }).score).toBe(90);
+  });
+
+  it('infers Quiz 1 from Quiz 2-7 when Quiz 1 contains student_category (Avani case)', () => {
+    const row = {
+      student_category: 'FFE',
+      'Quiz 1 Score': 'FFE',
+      'Quiz 2 Score': '100',
+      'Quiz 3 Score': '100',
+      'Quiz 4 Score': '100',
+      'Quiz 5 Score': '100',
+      'Quiz 6 Score': '100',
+      'Quiz 7 Score': '100',
+    };
+    const cols = discoverQuizScoreHeaders(Object.keys(row));
+    const bars = buildQuizBarData(cols, row, 'FFE');
+    expect(bars[0]).toEqual({ name: 'Quiz 1', score: 100, display: '100' });
+  });
+
+  it('detects Quiz 1 category contamination in bulk rows', () => {
+    const stats = detectQuizOneCategoryContamination([
+      { 'Quiz 1 Score': 'Individual', student_category: 'Individual' },
+      { 'Quiz 1 Score': '100', student_category: 'Individual' },
+    ]);
+    expect(stats.contaminatedRows).toBe(1);
+    expect(stats.totalRows).toBe(2);
   });
 });

@@ -385,7 +385,7 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
         if (studentRoute && isCloudPersistenceEnabled()) {
           for (let attempt = 0; attempt < 3; attempt++) {
             try {
-              const result = await fetchLatestCohortPayload();
+              const result = await fetchLatestCohortPayload(undefined, { cacheBust: true });
               if (result?.payload && getStudentLookupCount(result.payload) > 0) {
                 applyCloudResult(result);
                 return;
@@ -424,7 +424,7 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
 
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            const result = await fetchLatestCohortPayload();
+            const result = await fetchLatestCohortPayload(undefined, { cacheBust: true });
             if (result?.payload && getStudentLookupCount(result.payload) > 0) {
               applyCloudResult(result);
               return;
