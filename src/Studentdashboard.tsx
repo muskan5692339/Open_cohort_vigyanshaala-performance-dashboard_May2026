@@ -270,12 +270,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
     engagementLabel,
     quizBarData: quizData,
     assignmentRows,
-    programHoursLabel,
     sessions,
-    attendedHours,
-    totalHours,
     attendedSessionCount,
-    missedSessionCount,
   } = dashboardView;
 
   const assignmentPct = assignmentSubmissionPct;
@@ -284,16 +280,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
       ? `${assignmentAcceptancePct}% accepted · ${assignmentRows.length} items`
       : `${assignmentRows.length} tracked items`;
 
-  const attendanceDonut = classWise && dashboardView.attendedHours >= 0
-    ? buildAttendanceDonutFromHours(attendancePct, missedAttendancePct)
-    : attendedSessionCount > 0 || missedSessionCount > 0
-      ? buildAttendanceDonutFromHours(
-          totalHours > 0 ? Math.round((attendedSessionCount / totalHours) * 10000) / 100 : attendancePct,
-          missedAttendancePct,
-        )
-      : attendancePct > 0
-        ? buildAttendanceDonutFromHours(attendancePct, missedAttendancePct)
-        : buildAttendanceDonutFromHours(0, 0);
+  const attendanceDonut = buildAttendanceDonutFromHours(attendancePct, missedAttendancePct);
 
   const sessionTrend = classWise ? buildSessionTrendFromClassWise(classWise) : [];
   const preRecordedTrend = classWise ? buildPreRecordedTrendFromClassWise(classWise) : [];
@@ -386,7 +373,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
         <div className="section-body">
           <div className="stat-row">
-            <StatCard label="Attendance" value={`${attendancePct.toFixed(1)}%`} subtitle={programHoursLabel} warn={attendancePct === 0} />
+            <StatCard label="Attendance" value={`${attendancePct.toFixed(2)}%`} subtitle="From data source" warn={attendancePct === 0} />
             <div className={`metric-alert-wrap ${assignmentPct === 0 ? 'metric-alert-wrap--hot' : ''}`}>
               <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={assignmentSubtitle} warn={assignmentPct === 0} />
               <AnimeMetricAlert
@@ -407,9 +394,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
             </div>
             <StatCard
               label="Sessions"
-              value={attendedHours > 0 || totalHours > 0 ? `${attendedHours.toFixed(2)} hrs` : String(sessions || 0)}
-              subtitle={totalHours > 0 ? `${totalHours} program hrs` : `${sessions || 0} total sessions`}
-              warn={attendedHours === 0 && sessions === 0}
+              value={String(attendedSessionCount || 0)}
+              subtitle={`${sessions || 0} total sessions`}
+              warn={attendedSessionCount === 0 && sessions === 0}
             />
           </div>
 
