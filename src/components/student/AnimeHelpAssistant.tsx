@@ -15,7 +15,7 @@ const OPTIONS: HelpOption[] = [
   {
     id: 'attendance',
     label: 'Attendance looks wrong',
-    tip: 'Attendance is calculated from class-wise session hours (max 1 hr per session). Refresh the page to load the latest roster. If it still looks off, ask your program coordinator to re-publish the Excel file.',
+    tip: 'Attendance % comes from the Overall sheet Attendance % column. Sessions shows the sum of live class hours (each class capped at 1 hr) from Class-wise Attendance. Refresh to load the latest roster.',
   },
   {
     id: 'quiz',
@@ -25,7 +25,7 @@ const OPTIONS: HelpOption[] = [
   {
     id: 'assignment',
     label: 'Assignment not updated',
-    tip: 'Assignments show as complete only when marked Accepted/Submitted in the cohort sheet. Finish pending items and wait for the admin upload to refresh.',
+    tip: 'Your Assignments % counts only Accepted work. Rejected or pending items do not count as complete. Re-submit on the She for STEM portal, then wait for the next admin publish.',
   },
   {
     id: 'other',

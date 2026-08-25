@@ -7,11 +7,12 @@ import {
   countMissedSessions,
   totalSessionHours,
 } from './classWiseAttendance';
-import { isSubmittedVal, parsePercentOrScore, resolveWideFormatColumnHeaders } from './excelParser';
+import { parsePercentOrScore, resolveWideFormatColumnHeaders } from './excelParser';
 import { normalizeExcelCell } from './excelCellValue';
 import {
   buildStudentAssignmentItems,
   isAssignmentAccepted,
+  isAssignmentSubmitted,
   type StudentAssignmentItem,
 } from './studentAssignmentDisplay';
 import { normalizeStudentEmail } from './studentEmailLookup';
@@ -136,12 +137,12 @@ function assignmentSubmissionPctFromRow(
   let submitted = 0;
   for (const col of assignmentCols) {
     const val = stringifyCellValue(matched[col]);
-    if (val && isSubmittedVal(val)) submitted++;
-    else if (val && /rejected|accepted|submitted|complete/i.test(val)) submitted++;
+    if (val && isAssignmentSubmitted(val)) submitted++;
   }
   return Math.round((submitted / assignmentCols.length) * 100);
 }
 
+/** Accepted / total assignment slots — rejected and pending do not count. */
 function assignmentAcceptancePctFromRow(
   matched: Record<string, unknown>,
   assignmentCols: string[],
@@ -282,13 +283,16 @@ export function buildStudentDashboardView(input: {
 
   const rowSubmissionPct = assignmentSubmissionPctFromRow(matched, assignmentCols);
   const rowAcceptancePct = assignmentAcceptancePctFromRow(matched, assignmentCols);
-  const assignmentSubmissionPct = overviewRecord?.assignmentSubmissionPct ?? (
-    student.imported_assignment_pct != null
-      ? Math.round(student.imported_assignment_pct)
-      : rowSubmissionPct
-  );
-  const assignmentAcceptancePct = overviewRecord?.assignmentAcceptancePct
-    ?? (rowAcceptancePct || assignmentSubmissionPct);
+  // Prefer live row columns for every student so rejected ≠ full credit.
+  const assignmentSubmissionPct = assignmentCols.length
+    ? rowSubmissionPct
+    : (overviewRecord?.assignmentSubmissionPct
+      ?? (student.imported_assignment_pct != null
+        ? Math.round(student.imported_assignment_pct)
+        : 0));
+  const assignmentAcceptancePct = assignmentCols.length
+    ? rowAcceptancePct
+    : (overviewRecord?.assignmentAcceptancePct ?? assignmentSubmissionPct);
 
   const studentCategoryForQuiz = stringRow['student_category']?.trim()
     || stringRow['Student Category']?.trim()

@@ -333,7 +333,8 @@ export function computeProgramOverview(
       accepted += stats.accepted;
     }
     const assignmentSubmissionPct = totalSlots > 0 ? round1((submitted / totalSlots) * 100) : 0;
-    const assignmentAcceptancePct = submitted > 0 ? round1((accepted / submitted) * 100) : 0;
+    // Accepted / total slots (rejected does not count as complete).
+    const assignmentAcceptancePct = totalSlots > 0 ? round1((accepted / totalSlots) * 100) : 0;
 
     const studentCategory = (row['student_category'] ?? row['Student Category'] ?? '').trim();
     const quizBars = buildQuizBarData(quizCols, row, studentCategory);
@@ -395,8 +396,7 @@ export function computeProgramOverview(
   }, 0);
   const totalAccepted = students.reduce((sum, s) => {
     const slots = assignmentCols.length;
-    const submitted = (slots * s.assignmentSubmissionPct) / 100;
-    return sum + (submitted * s.assignmentAcceptancePct) / 100;
+    return sum + (slots * s.assignmentAcceptancePct) / 100;
   }, 0);
   const cohortSlots = total * assignmentCols.length;
 
@@ -406,7 +406,7 @@ export function computeProgramOverview(
     statusSource: statusCol ? 'excel' : 'fallback',
     activity: toDistribution(activityCounts, total),
     assignmentSubmissionPct: cohortSlots > 0 ? round1((totalSubmitted / cohortSlots) * 100) : avg(students.map(s => s.assignmentSubmissionPct)),
-    assignmentAcceptancePct: totalSubmitted > 0 ? round1((totalAccepted / totalSubmitted) * 100) : avg(students.map(s => s.assignmentAcceptancePct)),
+    assignmentAcceptancePct: cohortSlots > 0 ? round1((totalAccepted / cohortSlots) * 100) : avg(students.map(s => s.assignmentAcceptancePct)),
     avgQuizSubmissionPct: avg(students.map(s => s.quizSubmissionPct)),
     avgQuizScore: avg(students.map(s => s.quizScoreAvg)),
     students,

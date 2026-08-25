@@ -181,7 +181,7 @@ export default function AdminProgramOverview({ rows, headers, mapping }: Props) 
           </button>
         ))}
         <KpiCard label="Assignment submission" value={`${overview.assignmentSubmissionPct}%`} hint="Submitted / total slots" />
-        <KpiCard label="Assignment acceptance" value={`${overview.assignmentAcceptancePct}%`} hint="Accepted / submitted" />
+        <KpiCard label="Assignment acceptance" value={`${overview.assignmentAcceptancePct}%`} hint="Accepted / total slots (rejected excluded)" />
         <KpiCard label="Avg quiz submission" value={`${overview.avgQuizSubmissionPct}%`} hint="Quizzes with a score" />
         <KpiCard label="Quiz score avg" value={`${overview.avgQuizScore}%`} hint="Missing quiz = 0%" />
       </div>
