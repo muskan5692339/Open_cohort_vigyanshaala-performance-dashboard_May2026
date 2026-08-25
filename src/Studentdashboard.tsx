@@ -399,7 +399,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
               value={attendedHours > 0 ? attendedHours.toFixed(2) : String(attendedSessionCount || 0)}
               subtitle={
                 totalHours > 0
-                  ? `of ${Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(2)} hrs · ${sessions} live + ${preRecordedTotalHours} pre`
+                  ? `of ${Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(2)} hrs (${sessions} live-session + ${Number(preRecordedTotalHours).toFixed(2)} Pre-recorded)`
                   : `${sessions || 0} total sessions`
               }
               warn={attendedHours === 0 && attendedSessionCount === 0 && sessions === 0}

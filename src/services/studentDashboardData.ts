@@ -350,7 +350,7 @@ export function buildStudentDashboardView(input: {
 
   const programHoursLabel =
     totalHours > 0
-      ? `${attendedHours.toFixed(2)} / ${totalHours} hrs (${sessions} live + ${preRecordedTotalHours} pre)`
+      ? `${attendedHours.toFixed(2)} / ${totalHours} hrs (${sessions} live-session + ${preRecordedTotalHours.toFixed(2)} Pre-recorded)`
       : attendancePctCol
         ? 'From Attendance %'
         : attendedSessionCount > 0 || sessions > 0
