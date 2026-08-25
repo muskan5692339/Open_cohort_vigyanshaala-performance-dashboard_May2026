@@ -460,6 +460,51 @@ export function totalSessionHours(entry: ClassWiseAttendanceEntry): number {
   ) / 100;
 }
 
+/** Max credit hours for all pre-recorded videos (from header duration / 60). */
+export function totalPreRecordedCreditHours(entry: ClassWiseAttendanceEntry): number {
+  const videos = entry.preRecorded ?? [];
+  const sum = videos.reduce((acc, s) => {
+    const durationMin = s.durationMin ?? parseDurationFromPreRecordedHeader(s.key);
+    const max =
+      s.maxCreditHours && s.maxCreditHours > 0
+        ? s.maxCreditHours
+        : durationMin && durationMin > 0
+          ? Math.round((durationMin / 60) * 1000) / 1000
+          : 0;
+    return acc + max;
+  }, 0);
+  return Math.round(sum * 1000) / 1000;
+}
+
+/** Watched pre-recorded hours, capped at each video's max credit. */
+export function attendedPreRecordedHours(entry: ClassWiseAttendanceEntry): number {
+  const videos = entry.preRecorded ?? [];
+  const sum = videos.reduce((acc, s) => {
+    const durationMin = s.durationMin ?? parseDurationFromPreRecordedHeader(s.key);
+    const max =
+      s.maxCreditHours && s.maxCreditHours > 0
+        ? s.maxCreditHours
+        : durationMin && durationMin > 0
+          ? Math.round((durationMin / 60) * 1000) / 1000
+          : 0;
+    const watched = Math.max(0, Number(s.hours) || 0);
+    return acc + (max > 0 ? Math.min(watched, max) : watched);
+  }, 0);
+  return Math.round(sum * 1000) / 1000;
+}
+
+/** Live (capped at 1/class) + pre-recorded watched hours. */
+export function totalAttendedProgramHours(entry: ClassWiseAttendanceEntry): number {
+  return Math.round((totalSessionHours(entry) + attendedPreRecordedHours(entry)) * 1000) / 1000;
+}
+
+/** Live class slots + pre-recorded video credit hours. */
+export function totalProgramHoursFromClassWise(entry: ClassWiseAttendanceEntry): number {
+  const live = entry.sessions.length;
+  const pre = totalPreRecordedCreditHours(entry);
+  return Math.round((live + pre) * 1000) / 1000;
+}
+
 export function parseProgramHours(raw: string): number | null {
   const text = (raw ?? '').replace(/,/g, '').trim();
   if (!text || text === '—') return null;

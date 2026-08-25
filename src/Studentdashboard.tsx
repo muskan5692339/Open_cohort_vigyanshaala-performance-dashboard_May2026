@@ -272,6 +272,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
     attendedSessionCount,
     attendedHours,
     totalHours,
+    preRecordedTotalHours,
   } = dashboardView;
 
   // Show acceptance % as the main Assignments KPI (rejected ≠ full credit).
@@ -398,7 +399,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
               value={attendedHours > 0 ? attendedHours.toFixed(2) : String(attendedSessionCount || 0)}
               subtitle={
                 totalHours > 0
-                  ? `of ${totalHours} session hrs`
+                  ? `of ${Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(2)} hrs · ${sessions} live + ${preRecordedTotalHours} pre`
                   : `${sessions || 0} total sessions`
               }
               warn={attendedHours === 0 && attendedSessionCount === 0 && sessions === 0}
