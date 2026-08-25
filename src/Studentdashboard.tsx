@@ -25,7 +25,7 @@ import ChartDataUpdatedBubble from './components/student/ChartDataUpdatedBubble'
 import ChartMobileFrame from './components/student/ChartMobileFrame';
 import ChartSnapshotActions from './components/student/ChartSnapshotActions';
 import StudentProfileEditPanel from './components/student/StudentProfileEditPanel';
-import WeeklyUpdateNotice from './components/student/WeeklyUpdateNotice';
+import ProgramJourneyCard from './components/student/ProgramJourneyCard';
 import './components/student/StudentProfileEditPanel.css';
 import './components/student/AnimeMetricAlert.css';
 import './components/student/ChartDataUpdatedBubble.css';
@@ -327,7 +327,13 @@ export default function StudentDashboard({ email, onBack }: Props) {
     <div className="student-page">
       <section className="student-shell">
         <div className="student-notice-strip">
-          <WeeklyUpdateNotice />
+          <ProgramJourneyCard
+            classWise={classWise}
+            liveSessions={sessions}
+            preRecordedTotalHours={preRecordedTotalHours}
+            assignmentRows={assignmentRows}
+            quizBarData={quizData}
+          />
           {attendanceOnlyRoster && (
             <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--sd-text-muted)', lineHeight: 1.5 }}>
               Attendance and sessions are up to date. Assignment and quiz scores will appear after your admin re-publishes
