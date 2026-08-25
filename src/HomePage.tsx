@@ -130,20 +130,16 @@ export default function HomePage({
   return (
     <div className="student-home">
       <header className="student-home__header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/favicon.svg" alt="VigyanShaala logo" width="36" height="36" style={{ display: 'block' }} />
-          <span style={{ fontSize: 18, fontWeight: 700, color: BRAND.text }}>VigyanShaala</span>
+        <div className="student-home__brand">
+          <img src="/favicon.svg" alt="VigyanShaala logo" width="28" height="28" />
+          <span>VigyanShaala</span>
         </div>
         {showAdminNav && onAdminView && (
-          <nav style={{ display: 'flex', gap: 6 }}>
-            <button type="button" style={{ padding: '8px 22px', borderRadius: 8, border: 'none', background: BRAND.purpleLight, color: BRAND.purple, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+          <nav className="student-home__nav">
+            <button type="button" className="student-home__nav-btn student-home__nav-btn--active">
               Student
             </button>
-            <button
-              type="button"
-              onClick={onAdminView}
-              style={{ padding: '8px 22px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.textLight, cursor: 'pointer', fontSize: 14 }}
-            >
+            <button type="button" onClick={onAdminView} className="student-home__nav-btn">
               Admin
             </button>
           </nav>
@@ -151,54 +147,38 @@ export default function HomePage({
       </header>
 
       <main className={`student-home__main${studentOnly ? ' student-home__main--single' : ''}`}>
-        <div>
-          <div style={{ display: 'inline-block', padding: '5px 14px', background: BRAND.purpleLight, color: BRAND.purple, borderRadius: 20, fontSize: 13, fontWeight: 600, marginBottom: 28 }}>
-            Student Performance Dashboard
-          </div>
+        <div className="student-home__login">
+          <div className="student-home__badge">Student dashboard</div>
 
           <h1 className="student-home__title">
-            Track your progress.<br />Stay on top of<br />every session.
+            Enter your email to view progress
           </h1>
 
-          <p style={{ fontSize: 16, color: BRAND.textLight, lineHeight: 1.75, margin: '0 0 32px', maxWidth: 440 }}>
-            View your attendance, assignment status, and quiz scores — updated weekly from your cohort&apos;s master workbook.
+          <p className="student-home__lead">
+            Attendance, assignments &amp; quizzes from your cohort workbook.
           </p>
 
           {studentOnly && (
-            <RosterSyncStatus
-              publishedAt={adminUpdatedAt}
-              fetchedAt={meta?.fetchedAt ?? null}
-              loading={datasetLoading}
-              refreshing={rosterRefreshing}
-              isStale={rosterIsStale}
-              incomplete={rosterIncomplete}
-              studentCount={lookupCount}
-              onRefresh={() => { void refreshRoster(); }}
-              adminTimeOnly
-            />
+            <div className="student-home__sync">
+              <RosterSyncStatus
+                publishedAt={adminUpdatedAt}
+                fetchedAt={meta?.fetchedAt ?? null}
+                loading={datasetLoading}
+                refreshing={rosterRefreshing}
+                isStale={rosterIsStale}
+                incomplete={rosterIncomplete}
+                studentCount={lookupCount}
+                onRefresh={() => { void refreshRoster(); }}
+                adminTimeOnly
+                compact
+              />
+            </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="student-email" style={{ display: 'block', fontSize: 14, fontWeight: 600, color: BRAND.text, marginBottom: 6 }}>
+          <form className="student-home__form" onSubmit={handleSubmit}>
+            <label htmlFor="student-email" className="student-home__label">
               Registered email
             </label>
-            <p style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.6, margin: '0 0 12px' }}>
-              Enter your She for STEM registered email ID to view your performance dashboard.
-              {datasetLoading && (
-                <span style={{ display: 'block', marginTop: 6, color: BRAND.purple }}>Loading cohort roster…</span>
-              )}
-              {!datasetLoading && lookupCount > 0 && (
-                <span style={{ display: 'block', marginTop: 6, color: '#15803d' }}>
-                  {lookupCount} registered email{lookupCount === 1 ? '' : 's'} ready
-                  {adminUpdatedAt ? ` (admin upload ${formatAdminUpdateTime(adminUpdatedAt)})` : ''}.
-                </span>
-              )}
-              {!datasetLoading && lookupCount === 0 && (
-                <span style={{ display: 'block', marginTop: 6, color: '#b45309' }}>
-                  {datasetError ?? 'No cohort roster loaded on this device yet.'}
-                </span>
-              )}
-            </p>
 
             <div className="student-home__email-row">
               <div ref={inputWrapRef} className="student-home__input-wrap">
@@ -229,20 +209,9 @@ export default function HomePage({
                       <li key={suggestion} role="option">
                         <button
                           type="button"
+                          className="student-home__suggestion-btn"
                           onMouseDown={e => e.preventDefault()}
                           onClick={() => selectSuggestion(suggestion)}
-                          style={{
-                            display: 'block',
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '12px 16px',
-                            border: 'none',
-                            background: 'transparent',
-                            color: BRAND.text,
-                            fontSize: 15,
-                            cursor: 'pointer',
-                            fontFamily: 'inherit',
-                          }}
                         >
                           {suggestion}
                         </button>
@@ -265,6 +234,22 @@ export default function HomePage({
               </button>
             </div>
 
+            <p className="student-home__hint">
+              Use your She for STEM registered email.
+              {datasetLoading && <span className="student-home__hint--loading"> Loading roster…</span>}
+              {!datasetLoading && lookupCount > 0 && (
+                <span className="student-home__hint--ok">
+                  {' '}{lookupCount} emails ready
+                  {adminUpdatedAt ? ` · ${formatAdminUpdateTime(adminUpdatedAt)}` : ''}.
+                </span>
+              )}
+              {!datasetLoading && lookupCount === 0 && (
+                <span className="student-home__hint--warn">
+                  {' '}{datasetError ?? 'Roster not loaded yet.'}
+                </span>
+              )}
+            </p>
+
             {showSuggestions && email.trim().length > 0 && suggestions.length === 0 && lookupCount > 0 && (
               <p className="student-home__no-match" role="status">
                 No matching email in the cohort roster.
@@ -276,37 +261,13 @@ export default function HomePage({
         </div>
 
         {!studentOnly && (
-          <div className="student-home__promo" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ background: BRAND.navy, borderRadius: 20, padding: '32px 28px', color: BRAND.white }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18, marginBottom: 20 }}>
-                <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, flexShrink: 0 }}>
-                  📚
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, opacity: 0.55, textTransform: 'uppercase', marginBottom: 6 }}>
-                    Live Cohort Metrics
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.3 }}>
-                    Real-time program insights
-                  </div>
-                </div>
-              </div>
-              <p style={{ fontSize: 14, opacity: 0.75, lineHeight: 1.75, margin: 0 }}>
-                Built for the operations team: identify at-risk students, monitor cohort completion, and review every session at a glance.
+          <div className="student-home__promo">
+            <div className="student-home__promo-card">
+              <div className="student-home__promo-kicker">Live cohort</div>
+              <div className="student-home__promo-title">Your scores in one place</div>
+              <p className="student-home__promo-body">
+                Check attendance, assignment status, and quiz scores after each admin sync.
               </p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div style={{ background: BRAND.white, borderRadius: 16, padding: '22px 20px', border: `1px solid ${BRAND.border}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-                <div style={{ fontSize: 30, marginBottom: 14 }}>📊</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: BRAND.text, marginBottom: 6 }}>Visual progress</div>
-                <div style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>Pie + trend charts for attendance.</div>
-              </div>
-              <div style={{ background: BRAND.white, borderRadius: 16, padding: '22px 20px', border: `1px solid ${BRAND.border}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-                <div style={{ fontSize: 30, marginBottom: 14 }}>☁️</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: BRAND.text, marginBottom: 6 }}>OneDrive sync</div>
-                <div style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>Reads weekly Excel updates automatically.</div>
-              </div>
             </div>
           </div>
         )}

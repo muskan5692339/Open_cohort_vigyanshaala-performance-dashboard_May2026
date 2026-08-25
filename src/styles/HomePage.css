@@ -1,46 +1,131 @@
 .student-home {
+  min-height: 100dvh;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: #ffffff;
   font-family: Inter, system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
 }
 
 .student-home__header {
-  padding: 16px 40px;
+  flex-shrink: 0;
+  padding: 10px 24px;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   background: #fff;
 }
 
-.student-home__main {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 72px 40px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 72px;
+.student-home__brand {
+  display: flex;
   align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.student-home__brand img {
+  display: block;
+}
+
+.student-home__nav {
+  display: flex;
+  gap: 6px;
+}
+
+.student-home__nav-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.student-home__nav-btn--active {
+  border: none;
+  background: #f0e8ff;
+  color: #863bff;
+  font-weight: 600;
+}
+
+.student-home__main {
+  flex: 1 1 auto;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 28px 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 32px;
+  align-items: start;
+  box-sizing: border-box;
 }
 
 .student-home__main--single {
   grid-template-columns: 1fr;
-  max-width: 560px;
+  max-width: 520px;
+  align-items: start;
+}
+
+.student-home__login {
+  min-width: 0;
+}
+
+.student-home__badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #f0e8ff;
+  color: #863bff;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
 }
 
 .student-home__title {
-  font-size: 52px;
+  font-size: clamp(22px, 3.4vw, 34px);
   font-weight: 800;
-  line-height: 1.12;
+  line-height: 1.2;
   color: #111827;
-  margin: 0 0 20px;
-  letter-spacing: -1px;
+  margin: 0 0 8px;
+  letter-spacing: -0.4px;
+}
+
+.student-home__lead {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.45;
+  margin: 0 0 14px;
+  max-width: 420px;
+}
+
+.student-home__sync {
+  margin: 0 0 12px;
+}
+
+.student-home__form {
+  margin: 0;
+}
+
+.student-home__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  color: #111827;
+  margin-bottom: 6px;
 }
 
 .student-home__email-row {
   display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 8px;
   align-items: stretch;
 }
 
@@ -53,8 +138,8 @@
 .student-home__email-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 13px 20px;
-  border-radius: 50px;
+  padding: 12px 16px;
+  border-radius: 12px;
   border: 1.5px solid #e5e7eb;
   font-size: 16px;
   outline: none;
@@ -74,15 +159,34 @@
 }
 
 .student-home__submit-btn {
-  padding: 13px 28px;
-  border-radius: 50px;
+  padding: 12px 20px;
+  border-radius: 12px;
   border: none;
   color: #fff;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 15px;
   font-family: inherit;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.student-home__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #6b7280;
+}
+
+.student-home__hint--loading {
+  color: #863bff;
+}
+
+.student-home__hint--ok {
+  color: #15803d;
+}
+
+.student-home__hint--warn {
+  color: #b45309;
 }
 
 .student-home__suggestions {
@@ -91,85 +195,160 @@
   left: 0;
   right: 0;
   margin: 0;
-  padding: 6px 0;
+  padding: 4px 0;
   list-style: none;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   z-index: 20;
-  max-height: 220px;
+  max-height: 180px;
   overflow-y: auto;
+}
+
+.student-home__suggestion-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: #111827;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.student-home__suggestion-btn:hover {
+  background: #f3f4f6;
 }
 
 .student-home__no-match {
   margin: 8px 0 0;
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 8px 12px;
+  font-size: 12px;
   color: #6b7280;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  line-height: 1.5;
+  border-radius: 10px;
+  line-height: 1.4;
 }
 
 .student-home__error {
   color: #ef4444;
   font-size: 13px;
   margin: 8px 0 0;
+  line-height: 1.4;
+}
+
+.student-home__promo {
+  min-width: 0;
+}
+
+.student-home__promo-card {
+  background: #1e2d45;
+  border-radius: 16px;
+  padding: 22px 20px;
+  color: #fff;
+}
+
+.student-home__promo-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 6px;
+}
+
+.student-home__promo-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+
+.student-home__promo-body {
+  margin: 0;
+  font-size: 13px;
   line-height: 1.5;
+  opacity: 0.78;
 }
 
 @media (max-width: 900px) {
   .student-home__main {
     grid-template-columns: 1fr;
-    gap: 40px;
-    padding: 32px 20px 48px;
-  }
-
-  .student-home__title {
-    font-size: 36px;
-    letter-spacing: -0.5px;
-  }
-
-  .student-home__header {
-    padding: 14px 20px;
+    gap: 0;
+    padding: 16px 16px 20px;
+    align-items: start;
   }
 
   .student-home__promo {
     display: none;
   }
+
+  .student-home__header {
+    padding: 10px 16px;
+  }
 }
 
 @media (max-width: 640px) {
-  .student-home__main {
-    padding: 24px 16px 40px;
+  .student-home__title {
+    font-size: 22px;
   }
 
-  .student-home__title {
-    font-size: 28px;
-    line-height: 1.2;
+  .student-home__lead {
+    font-size: 13px;
+    margin-bottom: 12px;
   }
 
   .student-home__email-row {
     flex-direction: column;
-    gap: 12px;
-  }
-
-  .student-home__email-input {
-    border-radius: 12px;
-    padding: 14px 16px;
+    gap: 8px;
   }
 
   .student-home__submit-btn {
     width: 100%;
-    border-radius: 12px;
-    padding: 14px 20px;
   }
 
   .student-home__suggestions {
     position: static;
-    margin-top: 8px;
-    max-height: 180px;
+    margin-top: 6px;
+    max-height: 140px;
+  }
+
+  .student-home__nav-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+/* Short phone screens: keep email above the fold */
+@media (max-height: 700px) {
+  .student-home__header {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .student-home__main {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .student-home__badge {
+    margin-bottom: 6px;
+  }
+
+  .student-home__title {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+
+  .student-home__lead {
+    margin-bottom: 10px;
+  }
+
+  .student-home__promo {
+    display: none;
   }
 }
