@@ -265,8 +265,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
     assignmentAcceptancePct,
     avgQuiz,
     quizHighest,
-    finalScore,
-    finalScoreLabel,
     engagementLabel,
     quizBarData: quizData,
     assignmentRows,
@@ -399,12 +397,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
               warn={attendedSessionCount === 0 && sessions === 0}
             />
           </div>
-
-          {finalScore != null && (
-            <div className="final-score-strip">
-              <strong>{finalScoreLabel ?? 'Final Score'}:</strong> {finalScore}%
-            </div>
-          )}
 
           <div className="charts-grid">
             <article className="panel-card panel-large panel-card-wrap">
