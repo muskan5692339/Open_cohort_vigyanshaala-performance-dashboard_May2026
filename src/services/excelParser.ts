@@ -687,16 +687,28 @@ export async function parseUploadedFile(
     return out;
   };
 
-  // Try to find a wide-format performance sheet by scanning content of every sheet
+  // Prefer exact "Overall"; never treat Overall_to_be_graduated as the primary sheet.
   const norm = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '');
-  // Priority: sheets whose name suggests wide-format; then all others
+  const overallExact = actualNames.find(n => norm(n) === 'overall');
   const priorityNames = actualNames.filter(n =>
-    norm(n).includes('studentwise') || norm(n).includes('perf') || norm(n).includes('monitoring') ||
-    norm(n).includes('summary') || norm(n).includes('data') || norm(n).includes('student'),
+    norm(n) === 'overall'
+    || norm(n).includes('studentwise')
+    || norm(n).includes('perf')
+    || norm(n).includes('monitoring')
+    || norm(n).includes('summary')
+    || (norm(n).includes('data') && !norm(n).includes('graduat'))
+    || (norm(n).includes('student') && !norm(n).includes('graduat')),
   );
-  const sheetsToScan = [...priorityNames, ...actualNames.filter(n => !priorityNames.includes(n))];
+  const skippedAsSecondary = (n: string) => /tobegraduat|graduated|alumni|archive/.test(norm(n));
+  const sheetsToScan = [
+    ...(overallExact ? [overallExact] : []),
+    ...priorityNames.filter(n => n !== overallExact),
+    ...actualNames.filter(n => n !== overallExact && !priorityNames.includes(n) && !skippedAsSecondary(n)),
+    ...actualNames.filter(n => skippedAsSecondary(n)),
+  ];
+  const uniqueSheetsToScan = [...new Set(sheetsToScan)];
 
-  for (const sheetName of sheetsToScan) {
+  for (const sheetName of uniqueSheetsToScan) {
     const rows = readSheet(sheetName);
     if (rows.length > 1 && isWideFormat(rows[0])) {
       const parsed = parseWideFormatSheet(rows, cohort, importDate);

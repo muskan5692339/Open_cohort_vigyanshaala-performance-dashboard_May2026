@@ -1,6 +1,11 @@
 import type { UploadValidationIssue, UploadValidationResult } from '../types/productionTypes';
 import { excelCellToString, isUncachedFormulaCell } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
+import {
+  findOverallSheetName,
+  isAllowedCohortSheetName,
+  isClassWiseAttendanceSheetName,
+} from './sheetSelection';
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_ROWS_WARNING = 10_000;
@@ -63,12 +68,58 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
       issues.push(issue('EMPTY_WORKBOOK', 'error', 'Workbook contains no sheets.', 'Add at least one data sheet.'));
     }
 
-    const allEmpty = wb.worksheets.every(ws => (ws.rowCount ?? 0) <= 1);
-    if (wb.worksheets.length > 0 && allEmpty) {
-      issues.push(issue('ALL_SHEETS_EMPTY', 'error', 'All sheets appear empty.', 'Ensure headers and data rows exist.'));
+    const sheetNames = wb.worksheets.map(ws => ws.name);
+    const overallName = findOverallSheetName(sheetNames);
+    const classWiseName = sheetNames.find(isClassWiseAttendanceSheetName);
+    const ignoredOtherSheets = sheetNames.filter(n => !isAllowedCohortSheetName(n));
+
+    if (!overallName && !classWiseName) {
+      issues.push(
+        issue(
+          'REQUIRED_SHEETS_MISSING',
+          'error',
+          'Workbook must include an "Overall" sheet (and preferably "Class-wise Attendance").',
+          'Rename your performance sheet to exactly "Overall". Other sheets like Overall_to_be_graduated are ignored.',
+        ),
+      );
+    } else if (!overallName) {
+      issues.push(
+        issue(
+          'OVERALL_SHEET_MISSING',
+          'error',
+          'Sheet "Overall" was not found.',
+          'Add or rename your main performance sheet to exactly "Overall". Sheets like Overall_to_be_graduated are not used.',
+        ),
+      );
     }
 
-    for (const ws of wb.worksheets) {
+    if (ignoredOtherSheets.length) {
+      issues.push(
+        issue(
+          'OTHER_SHEETS_IGNORED',
+          'warning',
+          `Ignoring ${ignoredOtherSheets.length} other sheet(s): ${ignoredOtherSheets.slice(0, 4).join(', ')}${ignoredOtherSheets.length > 4 ? '…' : ''}.`,
+          'Only "Overall" and "Class-wise Attendance" are imported.',
+        ),
+      );
+    }
+
+    const sheetsToValidate = wb.worksheets.filter(ws => isAllowedCohortSheetName(ws.name));
+
+    const allEmpty = sheetsToValidate.length > 0
+      && sheetsToValidate.every(ws => (ws.rowCount ?? 0) <= 1);
+    if (sheetsToValidate.length > 0 && allEmpty) {
+      issues.push(
+        issue(
+          'ALL_SHEETS_EMPTY',
+          'error',
+          'Overall / Class-wise Attendance sheets appear empty.',
+          'Ensure headers and data rows exist.',
+        ),
+      );
+    }
+
+    for (const ws of sheetsToValidate) {
       const rowCount = ws.rowCount ?? 0;
       if (rowCount <= 1) {
         issues.push(
