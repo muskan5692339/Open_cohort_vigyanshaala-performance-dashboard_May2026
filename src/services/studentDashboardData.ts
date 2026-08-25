@@ -5,11 +5,13 @@ import type { ClassWiseAttendanceEntry } from './classWiseAttendance';
 import {
   countAttendedSessions,
   countMissedSessions,
+  totalSessionHours,
 } from './classWiseAttendance';
 import { isSubmittedVal, parsePercentOrScore, resolveWideFormatColumnHeaders } from './excelParser';
 import { normalizeExcelCell } from './excelCellValue';
 import {
   buildStudentAssignmentItems,
+  isAssignmentAccepted,
   type StudentAssignmentItem,
 } from './studentAssignmentDisplay';
 import { normalizeStudentEmail } from './studentEmailLookup';
@@ -135,8 +137,22 @@ function assignmentSubmissionPctFromRow(
   for (const col of assignmentCols) {
     const val = stringifyCellValue(matched[col]);
     if (val && isSubmittedVal(val)) submitted++;
+    else if (val && /rejected|accepted|submitted|complete/i.test(val)) submitted++;
   }
   return Math.round((submitted / assignmentCols.length) * 100);
+}
+
+function assignmentAcceptancePctFromRow(
+  matched: Record<string, unknown>,
+  assignmentCols: string[],
+): number {
+  if (!assignmentCols.length) return 0;
+  let accepted = 0;
+  for (const col of assignmentCols) {
+    const val = stringifyCellValue(matched[col]);
+    if (val && isAssignmentAccepted(val)) accepted++;
+  }
+  return Math.round((accepted / assignmentCols.length) * 100);
 }
 
 export function findFinalScoreColumn(headers: string[]): string | null {
@@ -247,6 +263,12 @@ export function buildStudentDashboardView(input: {
     ? countMissedSessions(classWise)
     : Math.max(0, sessions - attendedSessionCount);
 
+  // Live session hours: each class cell capped at 1 hour, then summed.
+  const attendedHours = classWise ? totalSessionHours(classWise) : 0;
+  const totalHours = classWise && classWise.sessions.length > 0
+    ? classWise.sessions.length
+    : 0;
+
   // Prefer Attendance % from the performance sheet. Do not override with hours-based session math.
   let attendancePct = sheetAttendancePct ?? 0;
   if (attendancePct === 0 && student.imported_attendance_pct != null && student.imported_attendance_pct > 0) {
@@ -258,14 +280,15 @@ export function buildStudentDashboardView(input: {
 
   const missedAttendancePct = Math.max(0, Math.round((100 - attendancePct) * 100) / 100);
 
-  const attendedHours = 0;
-  const totalHours = 0;
-
-  const assignmentSubmissionPct = overviewRecord?.assignmentSubmissionPct
-    ?? (student.imported_assignment_pct != null
+  const rowSubmissionPct = assignmentSubmissionPctFromRow(matched, assignmentCols);
+  const rowAcceptancePct = assignmentAcceptancePctFromRow(matched, assignmentCols);
+  const assignmentSubmissionPct = overviewRecord?.assignmentSubmissionPct ?? (
+    student.imported_assignment_pct != null
       ? Math.round(student.imported_assignment_pct)
-      : assignmentSubmissionPctFromRow(matched, assignmentCols));
-  const assignmentAcceptancePct = overviewRecord?.assignmentAcceptancePct ?? assignmentSubmissionPct;
+      : rowSubmissionPct
+  );
+  const assignmentAcceptancePct = overviewRecord?.assignmentAcceptancePct
+    ?? (rowAcceptancePct || assignmentSubmissionPct);
 
   const studentCategoryForQuiz = stringRow['student_category']?.trim()
     || stringRow['Student Category']?.trim()
@@ -287,8 +310,9 @@ export function buildStudentDashboardView(input: {
   const finalScore = finalScoreCol ? parsePctOrNull(matched[finalScoreCol]) : null;
   const finalScoreLabel = finalScoreCol?.replace(/_/g, ' ').trim() ?? null;
 
+  // Engagement uses acceptance (rejected work should not count as full credit).
   const engagementScore = Math.round(
-    attendancePct * 0.4 + assignmentSubmissionPct * 0.4 + avgQuiz * 0.2,
+    attendancePct * 0.4 + assignmentAcceptancePct * 0.4 + avgQuiz * 0.2,
   );
   const engagementLabel =
     engagementScore >= 70 ? 'High Engagement'
@@ -311,13 +335,15 @@ export function buildStudentDashboardView(input: {
         }));
 
   const programHoursLabel =
-    attendancePctCol
-      ? 'From Attendance %'
-      : attendedSessionCount > 0 || sessions > 0
-        ? `${attendedSessionCount} / ${sessions} sessions`
-        : programHoursFromRow !== '—'
-          ? programHoursFromRow
-          : '—';
+    attendedHours > 0 && totalHours > 0
+      ? `${attendedHours.toFixed(2)} / ${totalHours} hrs`
+      : attendancePctCol
+        ? 'From Attendance %'
+        : attendedSessionCount > 0 || sessions > 0
+          ? `${attendedSessionCount} / ${sessions} sessions`
+          : programHoursFromRow !== '—'
+            ? programHoursFromRow
+            : '—';
 
   const categoryCol = findInterventionColumn(headers, mapping);
   const studentCategory = categoryCol

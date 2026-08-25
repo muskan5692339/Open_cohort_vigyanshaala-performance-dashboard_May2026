@@ -270,12 +270,15 @@ export default function StudentDashboard({ email, onBack }: Props) {
     assignmentRows,
     sessions,
     attendedSessionCount,
+    attendedHours,
+    totalHours,
   } = dashboardView;
 
-  const assignmentPct = assignmentSubmissionPct;
+  // Show acceptance % as the main Assignments KPI (rejected ≠ full credit).
+  const assignmentPct = assignmentAcceptancePct;
   const assignmentSubtitle =
-    assignmentAcceptancePct !== assignmentSubmissionPct
-      ? `${assignmentAcceptancePct}% accepted · ${assignmentRows.length} items`
+    assignmentSubmissionPct !== assignmentAcceptancePct
+      ? `${assignmentSubmissionPct}% submitted · ${assignmentRows.length} items`
       : `${assignmentRows.length} tracked items`;
 
   const attendanceDonut = buildAttendanceDonutFromHours(attendancePct, missedAttendancePct);
@@ -392,9 +395,13 @@ export default function StudentDashboard({ email, onBack }: Props) {
             </div>
             <StatCard
               label="Sessions"
-              value={String(attendedSessionCount || 0)}
-              subtitle={`${sessions || 0} total sessions`}
-              warn={attendedSessionCount === 0 && sessions === 0}
+              value={attendedHours > 0 ? attendedHours.toFixed(2) : String(attendedSessionCount || 0)}
+              subtitle={
+                totalHours > 0
+                  ? `of ${totalHours} session hrs`
+                  : `${sessions || 0} total sessions`
+              }
+              warn={attendedHours === 0 && attendedSessionCount === 0 && sessions === 0}
             />
           </div>
 
