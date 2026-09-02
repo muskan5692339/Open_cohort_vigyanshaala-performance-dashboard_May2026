@@ -7,6 +7,9 @@ import {
   totalProgramHoursFromClassWise,
   totalSessionHours,
 } from './classWiseAttendance';
+import { buildStudentDashboardView } from './studentDashboardData';
+import type { ParsedStudent } from '../types/syncTypes';
+import type { ParsedExcelPayload } from './loadMetricsFromParsedExcel';
 
 describe('cohort-wide assignment and session rules', () => {
   it('counts Rejected with Feedback as submitted but not accepted', () => {
@@ -56,5 +59,46 @@ describe('cohort-wide assignment and session rules', () => {
     expect(totalPreRecordedCreditHours(entry)).toBe(0.6);
     expect(totalProgramHoursFromClassWise(entry)).toBe(25.6);
     expect(totalAttendedProgramHours(entry)).toBe(25.5);
+  });
+
+  it('estimates Sessions hours from Overall attendance when class-wise cells are zero', () => {
+    const email = 'namaomiksha2@gmail.com';
+    const classWise = {
+      student_email: email,
+      sessions: Array.from({ length: 25 }, (_, i) => ({ key: `WK${i}`, hours: 0 })),
+      preRecorded: [
+        { key: 'Pre-recorded_WK3_V1 (02:21 min)', hours: 0, durationMin: 2.35, maxCreditHours: 0.04 },
+      ],
+    };
+    const student: ParsedStudent = {
+      student_id: '16857',
+      name: 'OMIKSHA NAMA',
+      email,
+    };
+    const payload = {
+      cohortName: 'Incubator 12.0',
+      headers: ['Email', 'Name', 'Attendance %'],
+      rawRows: [{ Email: email, Name: 'OMIKSHA NAMA', 'Attendance %': '61.9' }],
+      students: [student],
+      attendance: [],
+      assignments: [],
+      quiz: [],
+      classWiseAttendance: [classWise],
+    } as ParsedExcelPayload;
+
+    const view = buildStudentDashboardView({
+      payload,
+      email,
+      student,
+      matched: payload.rawRows![0],
+      mapping: {},
+      classWise,
+    });
+
+    expect(view.attendancePct).toBe(62);
+    expect(view.totalHours).toBeCloseTo(25.04, 1);
+    expect(view.attendedHours).toBeGreaterThan(0);
+    expect(view.attendedHours).toBeCloseTo(15.5, 0);
+    expect(view.attendedSessionCount).toBe(16);
   });
 });

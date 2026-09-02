@@ -5,7 +5,6 @@ import type { ClassWiseAttendanceEntry } from './classWiseAttendance';
 import {
   attendedPreRecordedHours,
   countAttendedSessions,
-  countMissedSessions,
   totalAttendedProgramHours,
   totalPreRecordedCreditHours,
   totalProgramHoursFromClassWise,
@@ -264,18 +263,15 @@ export function buildStudentDashboardView(input: {
   const sessions = classWise
     ? classWise.sessions.length
     : Math.max(0, parseInt(classesAttendedRaw, 10) || parseInt(totalClassesRaw, 10) || 0);
-  const attendedSessionCount = classWise
+  let attendedSessionCount = classWise
     ? countAttendedSessions(classWise)
     : Math.max(0, parseInt(classesAttendedRaw, 10) || 0);
-  const missedSessionCount = classWise
-    ? countMissedSessions(classWise)
-    : Math.max(0, sessions - attendedSessionCount);
 
   // Live (each class capped at 1 hr) + pre-recorded video hours.
   const liveHours = classWise ? totalSessionHours(classWise) : 0;
   const preRecordedTotalHours = classWise ? totalPreRecordedCreditHours(classWise) : 0;
   const preRecordedHours = classWise ? attendedPreRecordedHours(classWise) : 0;
-  const attendedHours = classWise ? totalAttendedProgramHours(classWise) : 0;
+  let attendedHours = classWise ? totalAttendedProgramHours(classWise) : 0;
   const totalHours = classWise
     ? totalProgramHoursFromClassWise(classWise)
     : 0;
@@ -285,9 +281,26 @@ export function buildStudentDashboardView(input: {
   if (attendancePct === 0 && student.imported_attendance_pct != null && student.imported_attendance_pct > 0) {
     attendancePct = Math.round(student.imported_attendance_pct * 100) / 100;
   }
-  if (attendancePct === 0 && sessions > 0) {
+  if (attendancePct === 0 && sessions > 0 && attendedSessionCount > 0) {
     attendancePct = Math.round((attendedSessionCount / sessions) * 100);
   }
+
+  // Some rows have Overall attendance % but zeroed class-wise hour cells — estimate Sessions KPI.
+  const classWiseHoursEmpty = classWise
+    && totalSessionHours(classWise) === 0
+    && attendedPreRecordedHours(classWise) === 0;
+  if (classWiseHoursEmpty && attendancePct > 0) {
+    if (totalHours > 0) {
+      attendedHours = Math.round((attendancePct / 100) * totalHours * 100) / 100;
+    }
+    if (sessions > 0 && attendedSessionCount === 0) {
+      attendedSessionCount = Math.max(0, Math.round((attendancePct / 100) * sessions));
+    }
+  }
+
+  const missedSessionCount = classWise
+    ? Math.max(0, sessions - attendedSessionCount)
+    : Math.max(0, sessions - attendedSessionCount);
 
   const missedAttendancePct = Math.max(0, Math.round((100 - attendancePct) * 100) / 100);
 
