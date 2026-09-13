@@ -1,4 +1,4 @@
-import { readScoped, resolveOrgId, writeScoped } from './orgScopedStorage';
+import { migrateLegacyKey, readScoped, resolveOrgId, writeScoped } from './orgScopedStorage';
 import { getActiveOrganizationId } from './cloud/cloudConfig';
 import { DEFAULT_ORG_ID } from '../types/cloudTypes';
 
@@ -21,13 +21,89 @@ export interface StudentProfileCorrection {
 }
 
 const KEY = 'vs_student_profile_corrections';
+const TEST_EMAILS = new Set(['deploy-check@example.com']);
+
+function isRealItem(item: StudentProfileCorrection): boolean {
+  return !TEST_EMAILS.has(String(item.email || '').toLowerCase());
+}
 
 function readLocal(orgId?: string): StudentProfileCorrection[] {
-  return readScoped<StudentProfileCorrection[]>(KEY, orgId ?? resolveOrgId()) ?? [];
+  const org = orgId ?? resolveOrgId();
+  migrateLegacyKey<StudentProfileCorrection>(KEY, KEY, org);
+  return readScoped<StudentProfileCorrection[]>(KEY, org) ?? [];
+}
+
+/** Scan this browser for any leftover Student Updates history (scoped + legacy keys). */
+export function recoverLocalProfileCorrections(): StudentProfileCorrection[] {
+  const found: StudentProfileCorrection[] = [];
+  const pushAll = (arr: unknown) => {
+    if (!Array.isArray(arr)) return;
+    for (const row of arr) {
+      if (!row || typeof row !== 'object') continue;
+      const item = row as StudentProfileCorrection;
+      if (!item.email || !item.status) continue;
+      if (!isRealItem(item)) continue;
+      found.push(item);
+    }
+  };
+
+  try {
+    pushAll(readLocal());
+    pushAll(migrateLegacyKey<StudentProfileCorrection>(KEY, KEY));
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key !== KEY && !key.startsWith(`${KEY}_`)) continue;
+      try {
+        pushAll(JSON.parse(localStorage.getItem(key) || '[]'));
+      } catch {
+        // ignore bad json
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  const byId = new Map<string, StudentProfileCorrection>();
+  for (const item of found) {
+    const prev = byId.get(item.id);
+    if (!prev) {
+      byId.set(item.id, item);
+      continue;
+    }
+    const rank = (s: ProfileCorrectionStatus) => (s === 'approved' || s === 'rejected' ? 2 : 1);
+    if (rank(item.status) > rank(prev.status)) {
+      byId.set(item.id, item);
+      continue;
+    }
+    const prevTime = prev.reviewedAt || prev.submittedAt;
+    const nextTime = item.reviewedAt || item.submittedAt;
+    if (nextTime >= prevTime) byId.set(item.id, item);
+  }
+  return [...byId.values()].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 }
 
 function writeLocal(items: StudentProfileCorrection[], orgId?: string): void {
-  writeScoped(KEY, items, orgId ?? resolveOrgId());
+  writeScoped(KEY, items.filter(isRealItem), orgId ?? resolveOrgId());
+}
+
+function mergeLocalAndCloud(
+  cloud: StudentProfileCorrection[],
+  local: StudentProfileCorrection[],
+): StudentProfileCorrection[] {
+  const byId = new Map<string, StudentProfileCorrection>();
+  const rank = (s: ProfileCorrectionStatus) => (s === 'approved' || s === 'rejected' ? 2 : 1);
+  const prefer = (a: StudentProfileCorrection, b: StudentProfileCorrection) => {
+    if (rank(b.status) !== rank(a.status)) return rank(b.status) > rank(a.status) ? b : a;
+    const aTime = a.reviewedAt || a.submittedAt;
+    const bTime = b.reviewedAt || b.submittedAt;
+    return bTime >= aTime ? b : a;
+  };
+  for (const item of [...cloud, ...local].filter(isRealItem)) {
+    const prev = byId.get(item.id);
+    byId.set(item.id, prev ? prefer(prev, item) : item);
+  }
+  return [...byId.values()].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 }
 
 function resolveOrg(): string {
@@ -107,6 +183,76 @@ export interface ProfileCorrectionsListResult {
   rejectedCount: number;
   tableReady: boolean;
   error: string | null;
+  /** How many local browser rows were missing from cloud and re-uploaded. */
+  recoveredFromBrowser?: number;
+}
+
+function emptyListResult(error: string | null, tableReady = false): ProfileCorrectionsListResult {
+  const local = recoverLocalProfileCorrections();
+  return {
+    items: local,
+    pendingCount: local.filter(i => i.status === 'pending').length,
+    approvedCount: local.filter(i => i.status === 'approved').length,
+    rejectedCount: local.filter(i => i.status === 'rejected').length,
+    tableReady,
+    error,
+    recoveredFromBrowser: 0,
+  };
+}
+
+/** Explicitly push every local/browser row into cloud (admin restore). */
+export async function restoreProfileCorrectionsFromBrowser(
+  accessToken: string | undefined,
+  organizationId?: string | null,
+): Promise<ProfileCorrectionsListResult> {
+  if (!accessToken) {
+    return emptyListResult('Sign in with cloud admin access to restore history.');
+  }
+  const orgId = organizationId || resolveOrg();
+  const localItems = recoverLocalProfileCorrections();
+  if (localItems.length === 0) {
+    return emptyListResult(
+      'No Student Updates history found in this browser. Open Student Updates on the same computer/browser where you approved earlier, or ask students to submit again.',
+      true,
+    );
+  }
+  try {
+    const res = await fetch('/api/student-engagement?resource=profile-corrections', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        resource: 'profile-corrections',
+        action: 'merge',
+        orgId,
+        items: localItems,
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      items?: StudentProfileCorrection[];
+      error?: string;
+      imported?: number;
+    };
+    if (!res.ok) {
+      return emptyListResult(body.error ?? `Restore failed (${res.status})`);
+    }
+    const cloudItems = (body.items ?? []).filter(isRealItem);
+    const items = mergeLocalAndCloud(cloudItems, localItems);
+    writeLocal(items, orgId);
+    return {
+      items,
+      pendingCount: items.filter(i => i.status === 'pending').length,
+      approvedCount: items.filter(i => i.status === 'approved').length,
+      rejectedCount: items.filter(i => i.status === 'rejected').length,
+      tableReady: true,
+      error: null,
+      recoveredFromBrowser: body.imported ?? localItems.length,
+    };
+  } catch (e) {
+    return emptyListResult((e as Error).message || 'Network error during restore.');
+  }
 }
 
 export async function submitProfileCorrectionCloud(input: {
@@ -155,14 +301,7 @@ export async function fetchProfileCorrectionsCloud(
   status: ProfileCorrectionStatus | 'all' = 'all',
 ): Promise<ProfileCorrectionsListResult> {
   if (!accessToken) {
-    return {
-      items: [],
-      pendingCount: 0,
-      approvedCount: 0,
-      rejectedCount: 0,
-      tableReady: false,
-      error: 'Sign in with cloud admin access to view student updates.',
-    };
+    return emptyListResult('Sign in with cloud admin access to view student updates.');
   }
   const orgId = organizationId || resolveOrg();
   try {
@@ -183,35 +322,54 @@ export async function fetchProfileCorrectionsCloud(
       error?: string;
     };
     if (!res.ok) {
-      return {
-        items: [],
-        pendingCount: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        tableReady: false,
-        error: body.error ?? `Server returned ${res.status}`,
-      };
+      const fallback = emptyListResult(body.error ?? `Server returned ${res.status}`);
+      return fallback.items.length
+        ? { ...fallback, error: `${fallback.error} Showing history saved on this browser.` }
+        : fallback;
     }
-    const items = body.items ?? [];
-    // Mirror to local so sidebar badge works after load.
+    const cloudItems = (body.items ?? []).filter(isRealItem);
+    const localItems = recoverLocalProfileCorrections();
+    const items = mergeLocalAndCloud(cloudItems, localItems);
+    // Keep merged history in this browser; do not wipe approved/rejected rows.
     writeLocal(items, orgId);
+
+    // If this browser still has history missing from cloud, push it up once.
+    const cloudIds = new Set(cloudItems.map(i => i.id));
+    const missingInCloud = localItems.filter(i => !cloudIds.has(i.id));
+    if (missingInCloud.length > 0) {
+      try {
+        await fetch('/api/student-engagement?resource=profile-corrections', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            resource: 'profile-corrections',
+            action: 'merge',
+            orgId,
+            items: missingInCloud,
+          }),
+        });
+      } catch {
+        // ignore merge upload failures; UI still shows local+cloud merge
+      }
+    }
+
     return {
       items,
-      pendingCount: body.pendingCount ?? items.filter(i => i.status === 'pending').length,
-      approvedCount: body.approvedCount ?? items.filter(i => i.status === 'approved').length,
-      rejectedCount: body.rejectedCount ?? items.filter(i => i.status === 'rejected').length,
+      pendingCount: items.filter(i => i.status === 'pending').length,
+      approvedCount: items.filter(i => i.status === 'approved').length,
+      rejectedCount: items.filter(i => i.status === 'rejected').length,
       tableReady: body.tableReady !== false,
       error: body.error ?? null,
+      recoveredFromBrowser: missingInCloud.length,
     };
   } catch (e) {
-    return {
-      items: [],
-      pendingCount: 0,
-      approvedCount: 0,
-      rejectedCount: 0,
-      tableReady: false,
-      error: (e as Error).message || 'Network error loading student updates.',
-    };
+    const fallback = emptyListResult((e as Error).message || 'Network error loading student updates.');
+    return fallback.items.length
+      ? { ...fallback, error: `${fallback.error} Showing history saved on this browser.` }
+      : fallback;
   }
 }
 

@@ -226,11 +226,105 @@ export async function handleProfileCorrectionPatch(req: VercelRequest, res: Verc
   }
 }
 
+function normalizeIncomingItem(raw: unknown): ProfileCorrectionDto | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  const email = cleanField(row.email)?.toLowerCase();
+  const status = cleanField(row.status) as ProfileCorrectionStatus | undefined;
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  if (status !== 'pending' && status !== 'approved' && status !== 'rejected') return null;
+  const fieldsRaw = (row.fields && typeof row.fields === 'object' ? row.fields : {}) as Record<string, unknown>;
+  const fields = {
+    phone: cleanField(fieldsRaw.phone),
+    college: cleanField(fieldsRaw.college, 300),
+    course: cleanField(fieldsRaw.course),
+    year: cleanField(fieldsRaw.year, 80),
+  };
+  if (!fields.phone && !fields.college && !fields.course && !fields.year) return null;
+  return {
+    id: cleanField(row.id, 80) || randomUUID(),
+    email,
+    studentName: cleanField(row.studentName, 160) || 'Student',
+    submittedAt: cleanField(row.submittedAt, 40) || new Date().toISOString(),
+    status,
+    fields,
+    adminNote: cleanField(row.adminNote, 500),
+    reviewedAt: cleanField(row.reviewedAt, 40),
+  };
+}
+
+function mergePreference(a: ProfileCorrectionDto, b: ProfileCorrectionDto): ProfileCorrectionDto {
+  const rank = (s: ProfileCorrectionStatus) => (s === 'approved' || s === 'rejected' ? 2 : 1);
+  if (rank(b.status) !== rank(a.status)) return rank(b.status) > rank(a.status) ? b : a;
+  const aTime = a.reviewedAt || a.submittedAt;
+  const bTime = b.reviewedAt || b.submittedAt;
+  return bTime >= aTime ? b : a;
+}
+
+/** Admin import/merge browser history into cloud store. */
+export async function handleProfileCorrectionMerge(req: VercelRequest, res: VercelResponse) {
+  const body = parseBody(req);
+  const orgId = cleanField(body?.orgId) || String(req.query.orgId ?? '');
+  const incoming = Array.isArray(body?.items) ? body!.items : [];
+
+  if (!orgId) return res.status(400).json({ error: 'orgId required' });
+
+  try {
+    await assertOrgAccess(req, orgId, {
+      route: ROUTE,
+      requiredRoles: ORG_HYBRID_WRITE_ROLES,
+    });
+
+    const store = await readStore(orgId);
+    const byId = new Map<string, ProfileCorrectionDto>();
+    for (const item of store.items) byId.set(item.id, item);
+
+    let imported = 0;
+    for (const raw of incoming) {
+      const item = normalizeIncomingItem(raw);
+      if (!item) continue;
+      // Skip synthetic test rows.
+      if (item.email === 'deploy-check@example.com') continue;
+      const existing = byId.get(item.id);
+      if (!existing) {
+        byId.set(item.id, item);
+        imported += 1;
+        continue;
+      }
+      const merged = mergePreference(existing, item);
+      if (merged !== existing) {
+        byId.set(item.id, merged);
+        imported += 1;
+      }
+    }
+
+    const items = [...byId.values()].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)).slice(0, 2000);
+    await writeStore(orgId, { updatedAt: new Date().toISOString(), items });
+    return res.status(200).json({
+      ok: true,
+      imported,
+      items,
+      ...counts(items),
+      tableReady: true,
+    });
+  } catch (e) {
+    if (await handleOrgAccessFailure(res, e, req, ROUTE, orgId)) return;
+    return res.status(500).json({ error: (e as Error).message || 'Failed to import history' });
+  }
+}
+
 export async function handleProfileCorrections(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method === 'POST') return handleProfileCorrectionPost(req, res);
+  if (req.method === 'POST') {
+    const body = parseBody(req);
+    if (body?.action === 'merge' || body?.action === 'import') {
+      return handleProfileCorrectionMerge(req, res);
+    }
+    return handleProfileCorrectionPost(req, res);
+  }
   if (req.method === 'GET') return handleProfileCorrectionGet(req, res);
   if (req.method === 'PATCH') return handleProfileCorrectionPatch(req, res);
-  res.setHeader('Allow', 'GET, POST, PATCH');
+  if (req.method === 'PUT') return handleProfileCorrectionMerge(req, res);
+  res.setHeader('Allow', 'GET, POST, PATCH, PUT');
   return res.status(405).json({ error: 'Method not allowed' });
 }

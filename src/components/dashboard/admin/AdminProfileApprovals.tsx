@@ -3,6 +3,8 @@ import { BRAND } from '../../../types/adminTypes';
 import { useAuth } from '../../../context/AuthContext';
 import {
   fetchProfileCorrectionsCloud,
+  recoverLocalProfileCorrections,
+  restoreProfileCorrectionsFromBrowser,
   reviewProfileCorrectionCloud,
   type ProfileCorrectionStatus,
   type StudentProfileCorrection,
@@ -168,7 +170,10 @@ export default function AdminProfileApprovals() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<'all' | 'approved' | 'rejected'>('all');
+  const localBrowserCount = useMemo(() => recoverLocalProfileCorrections().length, [items]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -183,12 +188,40 @@ export default function AdminProfileApprovals() {
     );
     setItems(real);
     setError(result.error);
+    if (result.recoveredFromBrowser && result.recoveredFromBrowser > 0) {
+      setInfo(`Restored ${result.recoveredFromBrowser} request(s) from this browser into cloud history.`);
+    }
     setLoading(false);
   }, [session?.access_token, organization?.id]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const onRestoreFromBrowser = async () => {
+    setRestoring(true);
+    setActionError(null);
+    setInfo(null);
+    const result = await restoreProfileCorrectionsFromBrowser(
+      session?.access_token,
+      organization?.id,
+    );
+    setRestoring(false);
+    if (result.error && !(result.items?.length)) {
+      setActionError(result.error);
+      return;
+    }
+    const real = (result.items ?? []).filter(
+      i => !TEST_EMAILS.has(String(i.email || '').toLowerCase()),
+    );
+    setItems(real);
+    if (result.error) setError(result.error);
+    setInfo(
+      result.recoveredFromBrowser && result.recoveredFromBrowser > 0
+        ? `Restored ${result.recoveredFromBrowser} request(s) from this browser into cloud.`
+        : 'Checked this browser — no extra history to restore beyond what is already shown.',
+    );
+  };
 
   const pending = useMemo(() => items.filter(i => i.status === 'pending'), [items]);
   const approved = useMemo(() => items.filter(i => i.status === 'approved'), [items]);
@@ -224,22 +257,49 @@ export default function AdminProfileApprovals() {
         <div style={{ flex: 1, minWidth: 220, fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
           Students request profile corrections from their dashboard. Approve pending items below — reviewed ones stay in History.
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: `1px solid ${BRAND.border}`,
-            background: '#fff',
-            cursor: 'pointer',
-            fontSize: 13,
-            fontWeight: 650,
-          }}
-        >
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => void load()}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: `1px solid ${BRAND.border}`,
+              background: '#fff',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 650,
+            }}
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            disabled={restoring}
+            onClick={() => void onRestoreFromBrowser()}
+            title="Re-upload any approvals saved only in this browser after the cloud move"
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: `1px solid ${BRAND.border}`,
+              background: BRAND.navy,
+              color: '#fff',
+              cursor: restoring ? 'not-allowed' : 'pointer',
+              fontSize: 13,
+              fontWeight: 650,
+              opacity: restoring ? 0.7 : 1,
+            }}
+          >
+            {restoring ? 'Restoring…' : 'Restore from this browser'}
+          </button>
+        </div>
       </div>
+
+      {localBrowserCount > 0 && approved.length + rejected.length === 0 && (
+        <div style={{ padding: 12, borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a', fontSize: 13, lineHeight: 1.5 }}>
+          This browser still has {localBrowserCount} saved request(s). Click <strong>Restore from this browser</strong> to put them back into History.
+        </div>
+      )}
 
       <div
         style={{
@@ -265,6 +325,11 @@ export default function AdminProfileApprovals() {
       {error && (
         <div style={{ padding: 12, borderRadius: 8, background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 13 }}>
           {error}
+        </div>
+      )}
+      {info && (
+        <div style={{ padding: 12, borderRadius: 8, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontSize: 13 }}>
+          {info}
         </div>
       )}
       {actionError && (
@@ -327,7 +392,7 @@ export default function AdminProfileApprovals() {
             {history.length === 0 ? (
               <EmptyState
                 title="No approval history yet"
-                body="After you Approve or Reject a pending request, it stays listed here. Requests made before cloud sync (13 Sept 2026 evening) were only on student phones and cannot be recovered — ask those students to submit again."
+                body="If you approved requests earlier on this computer, click “Restore from this browser”. Approvals done only on a student’s phone before cloud sync cannot be recovered — ask those students to submit again."
               />
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
