@@ -8,8 +8,6 @@ import {
   type StudentProfileCorrection,
 } from '../../../services/studentProfileCorrections';
 
-type TabFilter = 'pending' | 'history' | 'approved' | 'rejected' | 'all';
-
 const TEST_EMAILS = new Set(['deploy-check@example.com']);
 
 function formatWhen(iso: string): string {
@@ -134,54 +132,43 @@ function btnStyle(bg: string, disabled?: boolean): React.CSSProperties {
   };
 }
 
-function TabButton({
-  active,
-  label,
-  count,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  count: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: '8px 12px',
-        borderRadius: 8,
-        border: active ? 'none' : `1px solid ${BRAND.border}`,
-        background: active ? BRAND.navy : '#fff',
-        color: active ? '#fff' : BRAND.text,
-        fontWeight: 650,
-        fontSize: 13,
-        cursor: 'pointer',
-      }}
-    >
-      {label} ({count})
-    </button>
-  );
-}
-
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div style={{ padding: 20, border: `1px dashed ${BRAND.border}`, borderRadius: 10, background: '#fafafa' }}>
+    <div style={{ padding: 16, border: `1px dashed ${BRAND.border}`, borderRadius: 10, background: '#fafafa' }}>
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{title}</div>
       <div style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>{body}</div>
     </div>
   );
 }
 
+function Section({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: BRAND.navy }}>{title}</h3>
+        <span style={{ fontSize: 13, color: BRAND.textLight }}>({count})</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export default function AdminProfileApprovals() {
   const { session, organization } = useAuth();
-  const [tab, setTab] = useState<TabFilter>('pending');
   const [items, setItems] = useState<StudentProfileCorrection[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'approved' | 'rejected'>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,18 +193,12 @@ export default function AdminProfileApprovals() {
   const pending = useMemo(() => items.filter(i => i.status === 'pending'), [items]);
   const approved = useMemo(() => items.filter(i => i.status === 'approved'), [items]);
   const rejected = useMemo(() => items.filter(i => i.status === 'rejected'), [items]);
-  const history = useMemo(
-    () => items.filter(i => i.status === 'approved' || i.status === 'rejected'),
-    [items],
-  );
-
-  const filtered = useMemo(() => {
-    if (tab === 'pending') return pending;
-    if (tab === 'approved') return approved;
-    if (tab === 'rejected') return rejected;
-    if (tab === 'history') return history;
-    return items;
-  }, [tab, pending, approved, rejected, history, items]);
+  const history = useMemo(() => {
+    const rows = items.filter(i => i.status === 'approved' || i.status === 'rejected');
+    if (historyFilter === 'approved') return rows.filter(i => i.status === 'approved');
+    if (historyFilter === 'rejected') return rows.filter(i => i.status === 'rejected');
+    return rows;
+  }, [items, historyFilter]);
 
   const onReview = async (id: string, status: 'approved' | 'rejected', note?: string) => {
     setBusyId(id);
@@ -238,9 +219,26 @@ export default function AdminProfileApprovals() {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <div style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
-        Students request profile corrections from their dashboard. Approve or reject here — then update the master Excel on the next weekly upload.
+    <div style={{ display: 'grid', gap: 20 }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 220, fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
+          Students request profile corrections from their dashboard. Approve pending items below — reviewed ones stay in History.
+        </div>
+        <button
+          type="button"
+          onClick={() => void load()}
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: `1px solid ${BRAND.border}`,
+            background: '#fff',
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 650,
+          }}
+        >
+          Refresh
+        </button>
       </div>
 
       <div
@@ -255,37 +253,13 @@ export default function AdminProfileApprovals() {
           <div style={{ fontSize: 22, fontWeight: 800, color: BRAND.navy }}>{pending.length}</div>
         </div>
         <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: BRAND.greenLight }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.textLight, textTransform: 'uppercase' }}>Approved history</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.textLight, textTransform: 'uppercase' }}>Approved</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: BRAND.navy }}>{approved.length}</div>
         </div>
         <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: '#fef2f2' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.textLight, textTransform: 'uppercase' }}>Rejected history</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.textLight, textTransform: 'uppercase' }}>Rejected</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: BRAND.navy }}>{rejected.length}</div>
         </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <TabButton active={tab === 'pending'} label="Pending" count={pending.length} onClick={() => setTab('pending')} />
-        <TabButton active={tab === 'history'} label="History" count={history.length} onClick={() => setTab('history')} />
-        <TabButton active={tab === 'approved'} label="Approved" count={approved.length} onClick={() => setTab('approved')} />
-        <TabButton active={tab === 'rejected'} label="Rejected" count={rejected.length} onClick={() => setTab('rejected')} />
-        <TabButton active={tab === 'all'} label="All" count={items.length} onClick={() => setTab('all')} />
-        <button
-          type="button"
-          onClick={() => void load()}
-          style={{
-            marginLeft: 'auto',
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: `1px solid ${BRAND.border}`,
-            background: '#fff',
-            cursor: 'pointer',
-            fontSize: 13,
-            fontWeight: 650,
-          }}
-        >
-          Refresh
-        </button>
       </div>
 
       {error && (
@@ -301,32 +275,74 @@ export default function AdminProfileApprovals() {
 
       {loading ? (
         <div style={{ padding: 20, textAlign: 'center', color: BRAND.textLight }}>Loading student updates…</div>
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title={
-            tab === 'pending'
-              ? 'No pending student requests'
-              : tab === 'history' || tab === 'approved' || tab === 'rejected'
-                ? 'No approval history yet'
-                : 'No student update requests in cloud yet'
-          }
-          body={
-            tab === 'pending'
-              ? 'When a student taps “Update my details” and submits, their request appears here for Approve / Reject.'
-              : 'Approved and rejected requests will stay listed here after you review them. Older submissions made before cloud sync (13 Sept 2026 evening) were only on student phones and cannot be recovered — ask those students to submit again.'
-          }
-        />
       ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {filtered.map(item => (
-            <CorrectionCard
-              key={item.id}
-              item={item}
-              busy={busyId === item.id}
-              onReview={onReview}
-            />
-          ))}
-        </div>
+        <>
+          <Section title="Pending requests" count={pending.length}>
+            {pending.length === 0 ? (
+              <EmptyState
+                title="No pending student requests"
+                body="When a student taps “Update my details” and submits, their request appears here for Approve / Reject."
+              />
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {pending.map(item => (
+                  <CorrectionCard
+                    key={item.id}
+                    item={item}
+                    busy={busyId === item.id}
+                    onReview={onReview}
+                  />
+                ))}
+              </div>
+            )}
+          </Section>
+
+          <Section title="History (approved & rejected)" count={approved.length + rejected.length}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+              {([
+                ['all', `All (${approved.length + rejected.length})`],
+                ['approved', `Approved (${approved.length})`],
+                ['rejected', `Rejected (${rejected.length})`],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setHistoryFilter(key)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: historyFilter === key ? 'none' : `1px solid ${BRAND.border}`,
+                    background: historyFilter === key ? BRAND.navy : '#fff',
+                    color: historyFilter === key ? '#fff' : BRAND.text,
+                    fontWeight: 650,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {history.length === 0 ? (
+              <EmptyState
+                title="No approval history yet"
+                body="After you Approve or Reject a pending request, it stays listed here. Requests made before cloud sync (13 Sept 2026 evening) were only on student phones and cannot be recovered — ask those students to submit again."
+              />
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {history.map(item => (
+                  <CorrectionCard
+                    key={item.id}
+                    item={item}
+                    busy={false}
+                    onReview={async () => {}}
+                  />
+                ))}
+              </div>
+            )}
+          </Section>
+        </>
       )}
     </div>
   );
