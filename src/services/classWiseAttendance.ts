@@ -330,7 +330,7 @@ export function readClassWiseAttendanceFromWorkbook(
     const rows = readSheetRows(ws);
     const parsed = parseClassWiseAttendanceRows(rows, sheetName);
     if (parsed) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (import.meta.env.DEV) {
         console.debug(
           '[ClassWiseAttendance] loaded',
           parsed.entries.length,
@@ -343,7 +343,7 @@ export function readClassWiseAttendanceFromWorkbook(
     }
   }
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (import.meta.env.DEV) {
     console.warn('[ClassWiseAttendance] no matching sheet found. Sheets:', names);
   }
   return null;

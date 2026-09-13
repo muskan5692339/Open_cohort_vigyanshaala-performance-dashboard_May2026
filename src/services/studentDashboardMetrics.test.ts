@@ -74,9 +74,15 @@ describe('cohort-wide assignment and session rules', () => {
       student_id: '16857',
       name: 'OMIKSHA NAMA',
       email,
+      college: 'Test College',
+      program: 'BTech',
+      cohort: 'Incubator 12.0',
+      state: 'Rajasthan',
+      status: 'Active',
     };
     const payload = {
       cohortName: 'Incubator 12.0',
+      fileName: 'test.xlsx',
       headers: ['Email', 'Name', 'Attendance %'],
       rawRows: [{ Email: email, Name: 'OMIKSHA NAMA', 'Attendance %': '61.9' }],
       students: [student],
@@ -84,7 +90,7 @@ describe('cohort-wide assignment and session rules', () => {
       assignments: [],
       quiz: [],
       classWiseAttendance: [classWise],
-    } as ParsedExcelPayload;
+    } satisfies ParsedExcelPayload;
 
     const view = buildStudentDashboardView({
       payload,
