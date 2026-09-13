@@ -4,9 +4,9 @@ import {
   handleOrgAccessFailure,
   ORG_HYBRID_WRITE_ROLES,
   ORG_READ_ROLES,
-} from './_lib/assertOrgAccess.js';
-import { createServiceClient } from './_lib/serviceClient.js';
-import { resolveTelemetryOrgId } from './_lib/studentPortalTelemetry.js';
+} from './assertOrgAccess.js';
+import { createServiceClient } from './serviceClient.js';
+import { resolveTelemetryOrgId } from './studentPortalTelemetry.js';
 import { randomUUID } from 'crypto';
 
 const ROUTE = '/api/student-engagement?resource=profile-corrections';
