@@ -183,7 +183,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
       tableReady: true,
     });
   } catch (e) {
-    return handleOrgAccessFailure(res, e, { route: ROUTE, organizationId: orgId });
+    if (await handleOrgAccessFailure(res, e, req, ROUTE, orgId)) return;
+    return res.status(500).json({ error: (e as Error).message || 'Failed to load student updates' });
   }
 }
 
@@ -220,7 +221,8 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
     await writeStore(orgId, store);
     return res.status(200).json({ ok: true, item: store.items[idx] });
   } catch (e) {
-    return handleOrgAccessFailure(res, e, { route: ROUTE, organizationId: orgId });
+    if (await handleOrgAccessFailure(res, e, req, ROUTE, orgId)) return;
+    return res.status(500).json({ error: (e as Error).message || 'Failed to review request' });
   }
 }
 

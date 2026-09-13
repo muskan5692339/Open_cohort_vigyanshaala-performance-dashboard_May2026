@@ -330,22 +330,10 @@ export function readClassWiseAttendanceFromWorkbook(
     const rows = readSheetRows(ws);
     const parsed = parseClassWiseAttendanceRows(rows, sheetName);
     if (parsed) {
-      if (import.meta.env.DEV) {
-        console.debug(
-          '[ClassWiseAttendance] loaded',
-          parsed.entries.length,
-          'students from sheet',
-          `"${parsed.sheetName}"`,
-          `(${parsed.sessionColumns.length} live, ${parsed.preRecordedColumns.length} pre-recorded)`,
-        );
-      }
       return parsed;
     }
   }
 
-  if (import.meta.env.DEV) {
-    console.warn('[ClassWiseAttendance] no matching sheet found. Sheets:', names);
-  }
   return null;
 }
 
