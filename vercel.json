@@ -43,6 +43,9 @@
     },
     "api/student-engagement.ts": {
       "includeFiles": "api/_lib/**"
+    },
+    "api/profile-corrections.ts": {
+      "includeFiles": "api/_lib/**"
     }
   }
 }

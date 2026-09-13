@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LayoutGrid,
   Users,
@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import type { SidebarSection } from '../../../types/adminTypes';
 import { BRAND } from '../../../types/adminTypes';
+import { useAuth } from '../../../context/AuthContext';
+import { fetchProfileCorrectionsCloud } from '../../../services/studentProfileCorrections';
 
 interface SidebarProps {
   active: SidebarSection;
@@ -26,8 +28,6 @@ interface NavItem {
   icon: typeof LayoutGrid;
 }
 
-import { countPendingProfileCorrections } from '../../../services/studentProfileCorrections';
-
 const NAV_ITEMS: NavItem[] = [
   { id: 'program-overview', label: 'Program Overview', icon: PieChart },
   { id: 'portal-analytics', label: 'Portal Analytics', icon: MousePointerClick },
@@ -40,7 +40,25 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function Sidebar({ active, onChange, onBackToStudent }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const pendingUpdates = countPendingProfileCorrections();
+  const { session, organization } = useAuth();
+  const [pendingUpdates, setPendingUpdates] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!session?.access_token) {
+        if (!cancelled) setPendingUpdates(0);
+        return;
+      }
+      const result = await fetchProfileCorrectionsCloud(
+        session.access_token,
+        organization?.id,
+        'pending',
+      );
+      if (!cancelled) setPendingUpdates(result.pendingCount);
+    })();
+    return () => { cancelled = true; };
+  }, [session?.access_token, organization?.id, active]);
 
   const sidebarStyle: React.CSSProperties = {
     width: 256,

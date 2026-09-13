@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   getPendingCorrectionForEmail,
-  submitProfileCorrection,
+  submitProfileCorrectionCloud,
 } from '../../services/studentProfileCorrections';
 import './StudentProfileEditPanel.css';
 
@@ -23,15 +23,20 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
   const [course, setCourse] = useState(current.course === '—' ? '' : current.course);
   const [year, setYear] = useState(current.year === '—' ? '' : current.year);
   const [message, setMessage] = useState('');
-  const pending = getPendingCorrectionForEmail(email);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [pendingLocal, setPendingLocal] = useState(() => getPendingCorrectionForEmail(email));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone.trim() && !college.trim() && !course.trim() && !year.trim()) {
-      setMessage('Please change at least one field.');
+      setError('Please change at least one field.');
       return;
     }
-    submitProfileCorrection({
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    const result = await submitProfileCorrectionCloud({
       email,
       studentName,
       fields: {
@@ -41,7 +46,14 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
         year: year.trim() || undefined,
       },
     });
-    setMessage('Submitted for admin review. You will see updates after approval and the next data sync.');
+    setSubmitting(false);
+    if (result.item) setPendingLocal(result.item);
+    if (result.error) {
+      setError(result.error);
+      setMessage('Request saved on this device. Ask admin to enable cloud Student Updates if this keeps happening.');
+    } else {
+      setMessage('Submitted for admin review. You will see updates after approval and the next data sync.');
+    }
     setOpen(false);
   };
 
@@ -50,13 +62,13 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
       <button type="button" className="profile-edit-panel__toggle" onClick={() => setOpen(v => !v)}>
         {open ? 'Hide' : 'Update my details'}
       </button>
-      {pending && !open && (
+      {pendingLocal && !open && (
         <p className="profile-edit-panel__pending" role="status">
           Your correction request is pending admin approval.
         </p>
       )}
       {open && (
-        <form className="profile-edit-panel__form" onSubmit={handleSubmit}>
+        <form className="profile-edit-panel__form" onSubmit={e => void handleSubmit(e)}>
           <p className="profile-edit-panel__hint">
             Wrong phone, college, course, or year? Submit corrections here. An admin will review before the next weekly upload.
           </p>
@@ -76,10 +88,14 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
             Year
             <input type="text" value={year} onChange={e => setYear(e.target.value)} />
           </label>
-          <button type="submit" className="profile-edit-panel__submit">Submit for approval</button>
+          <button type="submit" className="profile-edit-panel__submit" disabled={submitting}>
+            {submitting ? 'Submitting…' : 'Submit for approval'}
+          </button>
+          {error && <p className="profile-edit-panel__msg" role="alert">{error}</p>}
           {message && <p className="profile-edit-panel__msg">{message}</p>}
         </form>
       )}
+      {!open && message && <p className="profile-edit-panel__msg">{message}</p>}
     </div>
   );
 }
