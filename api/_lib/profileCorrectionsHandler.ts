@@ -9,7 +9,7 @@ import { createServiceClient } from './_lib/serviceClient.js';
 import { resolveTelemetryOrgId } from './_lib/studentPortalTelemetry.js';
 import { randomUUID } from 'crypto';
 
-const ROUTE = '/api/profile-corrections';
+const ROUTE = '/api/student-engagement?resource=profile-corrections';
 const BUCKET = 'student-roster-public';
 
 export type ProfileCorrectionStatus = 'pending' | 'approved' | 'rejected';
@@ -108,7 +108,7 @@ function counts(items: ProfileCorrectionDto[]) {
 }
 
 /** Student portal — no auth; writes into default org store. */
-async function handlePost(req: VercelRequest, res: VercelResponse) {
+export async function handleProfileCorrectionPost(req: VercelRequest, res: VercelResponse) {
   const body = parseBody(req);
   const email = cleanField(body?.email)?.toLowerCase();
   const studentName = cleanField(body?.studentName, 160) || 'Student';
@@ -156,7 +156,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 }
 
 /** Admin list — auth required. */
-async function handleGet(req: VercelRequest, res: VercelResponse) {
+export async function handleProfileCorrectionGet(req: VercelRequest, res: VercelResponse) {
   const orgId = String(req.query.orgId ?? '');
   if (!orgId) return res.status(400).json({ error: 'orgId required' });
 
@@ -189,7 +189,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 }
 
 /** Admin approve / reject — auth required. */
-async function handlePatch(req: VercelRequest, res: VercelResponse) {
+export async function handleProfileCorrectionPatch(req: VercelRequest, res: VercelResponse) {
   const body = parseBody(req);
   const orgId = cleanField(body?.orgId) || String(req.query.orgId ?? '');
   const id = cleanField(body?.id);
@@ -226,11 +226,11 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleProfileCorrections(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method === 'POST') return handlePost(req, res);
-  if (req.method === 'GET') return handleGet(req, res);
-  if (req.method === 'PATCH') return handlePatch(req, res);
+  if (req.method === 'POST') return handleProfileCorrectionPost(req, res);
+  if (req.method === 'GET') return handleProfileCorrectionGet(req, res);
+  if (req.method === 'PATCH') return handleProfileCorrectionPatch(req, res);
   res.setHeader('Allow', 'GET, POST, PATCH');
   return res.status(405).json({ error: 'Method not allowed' });
 }

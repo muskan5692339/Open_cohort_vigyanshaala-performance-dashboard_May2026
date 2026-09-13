@@ -115,10 +115,11 @@ export async function submitProfileCorrectionCloud(input: {
   fields: StudentProfileCorrection['fields'];
 }): Promise<{ item: StudentProfileCorrection | null; error: string | null }> {
   try {
-    const res = await fetch('/api/profile-corrections', {
+    const res = await fetch('/api/student-engagement?resource=profile-corrections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        resource: 'profile-corrections',
         email: input.email,
         studentName: input.studentName,
         fields: input.fields,
@@ -165,8 +166,12 @@ export async function fetchProfileCorrectionsCloud(
   }
   const orgId = organizationId || resolveOrg();
   try {
-    const qs = new URLSearchParams({ orgId, status });
-    const res = await fetch(`/api/profile-corrections?${qs}`, {
+    const qs = new URLSearchParams({
+      orgId,
+      status,
+      resource: 'profile-corrections',
+    });
+    const res = await fetch(`/api/student-engagement?${qs}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const body = (await res.json().catch(() => ({}))) as {
@@ -220,13 +225,19 @@ export async function reviewProfileCorrectionCloud(
   if (!accessToken) return { item: null, error: 'Sign in required' };
   const orgId = organizationId || resolveOrg();
   try {
-    const res = await fetch('/api/profile-corrections', {
+    const res = await fetch('/api/student-engagement?resource=profile-corrections', {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ orgId, id, status, adminNote }),
+      body: JSON.stringify({
+        resource: 'profile-corrections',
+        orgId,
+        id,
+        status,
+        adminNote,
+      }),
     });
     const body = (await res.json().catch(() => ({}))) as {
       item?: StudentProfileCorrection;

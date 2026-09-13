@@ -9,8 +9,23 @@ import {
   resolveTelemetryOrgId,
   type TelemetryRow,
 } from './_lib/studentPortalTelemetry.js';
+import { handleProfileCorrections } from './_lib/profileCorrectionsHandler.js';
 
 const ROUTE = '/api/student-engagement';
+
+function wantsProfileCorrections(req: VercelRequest): boolean {
+  if (String(req.query.resource ?? '') === 'profile-corrections') return true;
+  const body = req.body;
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    const rec = body as Record<string, unknown>;
+    if (rec.resource === 'profile-corrections') return true;
+    // Student submit payload shape
+    if (typeof rec.email === 'string' && rec.fields && typeof rec.fields === 'object') return true;
+    // Admin review payload shape
+    if (typeof rec.id === 'string' && (rec.status === 'approved' || rec.status === 'rejected')) return true;
+  }
+  return false;
+}
 
 interface PostBody {
   orgId?: string;
@@ -164,6 +179,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (wantsProfileCorrections(req)) return handleProfileCorrections(req, res);
   if (req.method === 'POST') return handlePost(req, res);
   if (req.method === 'GET') return handleGet(req, res);
   return res.status(405).json({ error: 'Method not allowed' });
