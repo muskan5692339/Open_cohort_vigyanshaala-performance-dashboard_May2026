@@ -167,17 +167,23 @@ async function handleProfileCorrectionStudentStatus(req: VercelRequest, res: Ver
   try {
     const organizationId = resolveTelemetryOrgId();
     const store = await readStore(organizationId);
-    const pending =
-      store.items.find(i => i.email.toLowerCase() === email && i.status === 'pending') ?? null;
+    const forEmail = store.items.filter(i => i.email.toLowerCase() === email);
+    const pending = forEmail.find(i => i.status === 'pending') ?? null;
+    const approved =
+      [...forEmail]
+        .filter(i => i.status === 'approved')
+        .sort((a, b) =>
+          (b.reviewedAt || b.submittedAt).localeCompare(a.reviewedAt || a.submittedAt),
+        )[0] ?? null;
     const latest =
       pending ??
-      [...store.items]
-        .filter(i => i.email.toLowerCase() === email)
-        .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))[0] ??
+      approved ??
+      [...forEmail].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))[0] ??
       null;
     return res.status(200).json({
       pending: !!pending,
       item: pending,
+      approved,
       latest: latest
         ? { id: latest.id, status: latest.status, submittedAt: latest.submittedAt, reviewedAt: latest.reviewedAt }
         : null,

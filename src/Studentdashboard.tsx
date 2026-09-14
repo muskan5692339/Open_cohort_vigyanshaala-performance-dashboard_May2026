@@ -46,6 +46,12 @@ import {
   sessionHoursIndicatorFill,
 } from './services/classWiseAttendance';
 import { buildStudentDashboardView } from './services/studentDashboardData';
+import {
+  applyApprovedProfileOverrides,
+  fetchStudentProfileCorrectionStatus,
+  hasApprovedProfileOverrides,
+  type StudentProfileCorrection,
+} from './services/studentProfileCorrections';
 import { isClassWiseOnlySheet } from './services/sheetSelection';
 import { adminDataUpdatedAt } from './utils/formatAdminUpdateTime';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -165,7 +171,19 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionChartCaptureRef = useRef<HTMLDivElement>(null);
   const [sessionTrendFocus, setSessionTrendFocus] = useState<SessionTrendFocus>('start');
   const [sessionChartSeries, setSessionChartSeries] = useState<SessionChartSeries>('live');
+  const [approvedCorrection, setApprovedCorrection] = useState<StudentProfileCorrection | null>(null);
   const isMobile = useMediaQuery('(max-width: 640px)');
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchStudentProfileCorrectionStatus(email).then(status => {
+      if (cancelled) return;
+      setApprovedCorrection(status.approved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
 
   const lookup = useMemo(() => lookupStudentByEmail(payload, email), [payload, email]);
 
@@ -314,13 +332,27 @@ export default function StudentDashboard({ email, onBack }: Props) {
     name: studentName,
     id: studentId,
     email: studentEmail,
-    phone,
-    course: studentCourse,
-    year: pursuingYear,
+    phone: rosterPhone,
+    course: rosterCourse,
+    year: rosterYear,
     cohort,
-    college,
+    college: rosterCollege,
     studentCategory,
   } = profile;
+  const baseProfileFields = {
+    phone: rosterPhone,
+    college: rosterCollege,
+    course: rosterCourse,
+    year: rosterYear,
+  };
+  const approvedProfileFields = applyApprovedProfileOverrides(baseProfileFields, approvedCorrection);
+  const {
+    phone,
+    college,
+    course: studentCourse,
+    year: pursuingYear,
+  } = approvedProfileFields;
+  const profileUpdatedByAdmin = hasApprovedProfileOverrides(baseProfileFields, approvedCorrection);
   const adminUpdatedAt = adminDataUpdatedAt(meta);
 
   return (
@@ -353,6 +385,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <span>Course: {studentCourse}</span>
             <span>Year: {pursuingYear}</span>
           </div>
+          {profileUpdatedByAdmin && (
+            <p className="profile-edit-panel__msg" style={{ margin: '8px 0 0' }}>
+              Profile details above include your latest admin-approved update. Excel sync may still show older values until the next upload.
+            </p>
+          )}
           <div className="header-profile-grid">
             <div className="header-field">
               <div className="header-label">Cohort</div>

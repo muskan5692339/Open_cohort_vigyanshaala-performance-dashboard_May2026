@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  fetchPendingProfileCorrectionCloud,
+  fetchStudentProfileCorrectionStatus,
   getPendingCorrectionForEmail,
   submitProfileCorrectionCloud,
   type StudentProfileCorrection,
@@ -30,14 +30,16 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
   const [pendingLocal, setPendingLocal] = useState<StudentProfileCorrection | null>(() =>
     getPendingCorrectionForEmail(email),
   );
+  const [approvedLocal, setApprovedLocal] = useState<StudentProfileCorrection | null>(null);
   const [checkingPending, setCheckingPending] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setCheckingPending(true);
-    void fetchPendingProfileCorrectionCloud(email).then(item => {
+    void fetchStudentProfileCorrectionStatus(email).then(status => {
       if (cancelled) return;
-      setPendingLocal(item);
+      setPendingLocal(status.pending);
+      setApprovedLocal(status.approved);
       setCheckingPending(false);
     });
     return () => {
@@ -88,6 +90,11 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
       {pendingLocal && !open && (
         <p className="profile-edit-panel__pending" role="status">
           Your correction request is pending admin approval.
+        </p>
+      )}
+      {!pendingLocal && approvedLocal && !open && (
+        <p className="profile-edit-panel__msg" role="status">
+          Your profile update was approved. Details above reflect the approved change.
         </p>
       )}
       {open && (

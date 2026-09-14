@@ -137,12 +137,32 @@ export function cacheLocalCorrection(item: StudentProfileCorrection): void {
   writeLocal([item, ...existing], org);
 }
 
-/** Student portal: re-check cloud so pending survives refresh / other devices. */
-export async function fetchPendingProfileCorrectionCloud(
-  email: string,
-): Promise<StudentProfileCorrection | null> {
+export interface StudentProfileCorrectionStatus {
+  pending: StudentProfileCorrection | null;
+  approved: StudentProfileCorrection | null;
+}
+
+function readLocalApprovedForEmail(email: string): StudentProfileCorrection | null {
   const key = email.toLowerCase().trim();
-  if (!key) return getPendingCorrectionForEmail(email);
+  return (
+    recoverLocalProfileCorrections()
+      .filter(c => c.email.toLowerCase() === key && c.status === 'approved')
+      .sort((a, b) =>
+        (b.reviewedAt || b.submittedAt).localeCompare(a.reviewedAt || a.submittedAt),
+      )[0] ?? null
+  );
+}
+
+/** Student portal: pending + latest approved correction from cloud. */
+export async function fetchStudentProfileCorrectionStatus(
+  email: string,
+): Promise<StudentProfileCorrectionStatus> {
+  const key = email.toLowerCase().trim();
+  const localPending = getPendingCorrectionForEmail(email);
+  const localApproved = readLocalApprovedForEmail(email);
+  if (!key) {
+    return { pending: localPending, approved: localApproved };
+  }
   try {
     const qs = new URLSearchParams({
       resource: 'profile-corrections',
@@ -152,24 +172,78 @@ export async function fetchPendingProfileCorrectionCloud(
     const body = (await res.json().catch(() => ({}))) as {
       pending?: boolean;
       item?: StudentProfileCorrection | null;
+      approved?: StudentProfileCorrection | null;
     };
-    if (res.ok && body.item && body.pending) {
-      cacheLocalCorrection(body.item);
-      return body.item;
-    }
-    if (res.ok && !body.pending) {
-      // Clear stale local pending for this email when cloud says none.
+    if (res.ok) {
       const org = studentOrgId();
       const rest = readLocal(org).filter(
         c => !(c.email.toLowerCase() === key && c.status === 'pending'),
       );
-      writeLocal(rest, org);
-      return null;
+      if (body.pending && body.item) {
+        cacheLocalCorrection(body.item);
+        return {
+          pending: body.item,
+          approved: body.approved ?? localApproved,
+        };
+      }
+      if (body.approved) {
+        writeLocal([body.approved, ...rest.filter(c => c.id !== body.approved!.id)], org);
+      } else {
+        writeLocal(rest, org);
+      }
+      return {
+        pending: null,
+        approved: body.approved ?? localApproved,
+      };
     }
   } catch {
     // fall through to local
   }
-  return getPendingCorrectionForEmail(email);
+  return { pending: localPending, approved: localApproved };
+}
+
+/** Student portal: re-check cloud so pending survives refresh / other devices. */
+export async function fetchPendingProfileCorrectionCloud(
+  email: string,
+): Promise<StudentProfileCorrection | null> {
+  const status = await fetchStudentProfileCorrectionStatus(email);
+  return status.pending;
+}
+
+export interface StudentProfileDisplayFields {
+  phone: string;
+  college: string;
+  course: string;
+  year: string;
+}
+
+/** Overlay admin-approved profile fields onto Excel-sourced values. */
+export function applyApprovedProfileOverrides(
+  profile: StudentProfileDisplayFields,
+  approved: StudentProfileCorrection | null,
+): StudentProfileDisplayFields {
+  if (!approved?.fields) return profile;
+  const fields = approved.fields;
+  return {
+    phone: fields.phone?.trim() || profile.phone,
+    college: fields.college?.trim() || profile.college,
+    course: fields.course?.trim() || profile.course,
+    year: fields.year?.trim() || profile.year,
+  };
+}
+
+export function hasApprovedProfileOverrides(
+  base: StudentProfileDisplayFields,
+  approved: StudentProfileCorrection | null,
+): boolean {
+  if (!approved?.fields) return false;
+  const next = applyApprovedProfileOverrides(base, approved);
+  return (
+    next.phone !== base.phone ||
+    next.college !== base.college ||
+    next.course !== base.course ||
+    next.year !== base.year
+  );
 }
 
 export function submitProfileCorrection(input: {
