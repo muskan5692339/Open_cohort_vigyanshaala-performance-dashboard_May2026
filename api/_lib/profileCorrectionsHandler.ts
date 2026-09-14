@@ -155,8 +155,48 @@ export async function handleProfileCorrectionPost(req: VercelRequest, res: Verce
   }
 }
 
-/** Admin list — auth required. */
+/**
+ * Student portal — public pending check by email (only that student's pending row).
+ * Query: ?resource=profile-corrections&email=student@example.com
+ */
+async function handleProfileCorrectionStudentStatus(req: VercelRequest, res: VercelResponse) {
+  const email = cleanField(req.query.email)?.toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+  try {
+    const organizationId = resolveTelemetryOrgId();
+    const store = await readStore(organizationId);
+    const pending =
+      store.items.find(i => i.email.toLowerCase() === email && i.status === 'pending') ?? null;
+    const latest =
+      pending ??
+      [...store.items]
+        .filter(i => i.email.toLowerCase() === email)
+        .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))[0] ??
+      null;
+    return res.status(200).json({
+      pending: !!pending,
+      item: pending,
+      latest: latest
+        ? { id: latest.id, status: latest.status, submittedAt: latest.submittedAt, reviewedAt: latest.reviewedAt }
+        : null,
+    });
+  } catch (e) {
+    const message = (e as Error).message;
+    if (message.includes('Missing Supabase')) {
+      return res.status(503).json({ error: 'Cloud not configured', code: 'misconfigured' });
+    }
+    return res.status(500).json({ error: message });
+  }
+}
+
+/** Admin list — auth required. Student status — public email query. */
 export async function handleProfileCorrectionGet(req: VercelRequest, res: VercelResponse) {
+  if (req.query.email) {
+    return handleProfileCorrectionStudentStatus(req, res);
+  }
+
   const orgId = String(req.query.orgId ?? '');
   if (!orgId) return res.status(400).json({ error: 'orgId required' });
 
@@ -205,6 +245,7 @@ export async function handleProfileCorrectionPatch(req: VercelRequest, res: Verc
   try {
     await assertOrgAccess(req, orgId, {
       route: ROUTE,
+      // Same people who can manage program ops can approve student updates.
       requiredRoles: ORG_HYBRID_WRITE_ROLES,
     });
 
@@ -319,6 +360,14 @@ export async function handleProfileCorrections(req: VercelRequest, res: VercelRe
     const body = parseBody(req);
     if (body?.action === 'merge' || body?.action === 'import') {
       return handleProfileCorrectionMerge(req, res);
+    }
+    // Prefer POST review — some clients/proxies mishandle PATCH.
+    if (
+      body?.action === 'review' ||
+      (typeof body?.id === 'string' &&
+        (body?.status === 'approved' || body?.status === 'rejected'))
+    ) {
+      return handleProfileCorrectionPatch(req, res);
     }
     return handleProfileCorrectionPost(req, res);
   }

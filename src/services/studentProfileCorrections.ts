@@ -116,7 +116,7 @@ function studentOrgId(): string {
 
 /** Sync local helpers kept for student pending banner offline cache. */
 export function listProfileCorrections(status?: ProfileCorrectionStatus): StudentProfileCorrection[] {
-  const all = readLocal().sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  const all = recoverLocalProfileCorrections().sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   return status ? all.filter(c => c.status === status) : all;
 }
 
@@ -130,10 +130,46 @@ export function countPendingProfileCorrections(): number {
 }
 
 export function cacheLocalCorrection(item: StudentProfileCorrection): void {
-  const existing = readLocal().filter(
+  const org = studentOrgId();
+  const existing = readLocal(org).filter(
     c => !(c.email === item.email && c.status === 'pending') && c.id !== item.id,
   );
-  writeLocal([item, ...existing]);
+  writeLocal([item, ...existing], org);
+}
+
+/** Student portal: re-check cloud so pending survives refresh / other devices. */
+export async function fetchPendingProfileCorrectionCloud(
+  email: string,
+): Promise<StudentProfileCorrection | null> {
+  const key = email.toLowerCase().trim();
+  if (!key) return getPendingCorrectionForEmail(email);
+  try {
+    const qs = new URLSearchParams({
+      resource: 'profile-corrections',
+      email: key,
+    });
+    const res = await fetch(`/api/student-engagement?${qs}`);
+    const body = (await res.json().catch(() => ({}))) as {
+      pending?: boolean;
+      item?: StudentProfileCorrection | null;
+    };
+    if (res.ok && body.item && body.pending) {
+      cacheLocalCorrection(body.item);
+      return body.item;
+    }
+    if (res.ok && !body.pending) {
+      // Clear stale local pending for this email when cloud says none.
+      const org = studentOrgId();
+      const rest = readLocal(org).filter(
+        c => !(c.email.toLowerCase() === key && c.status === 'pending'),
+      );
+      writeLocal(rest, org);
+      return null;
+    }
+  } catch {
+    // fall through to local
+  }
+  return getPendingCorrectionForEmail(email);
 }
 
 export function submitProfileCorrection(input: {
@@ -380,17 +416,24 @@ export async function reviewProfileCorrectionCloud(
   adminNote?: string,
   organizationId?: string | null,
 ): Promise<{ item: StudentProfileCorrection | null; error: string | null }> {
-  if (!accessToken) return { item: null, error: 'Sign in required' };
+  if (!accessToken) {
+    return {
+      item: null,
+      error: 'Sign in required to approve. Click Sign in (top right), then try Approve again.',
+    };
+  }
   const orgId = organizationId || resolveOrg();
   try {
-    const res = await fetch('/api/student-engagement?resource=profile-corrections', {
-      method: 'PATCH',
+    // Use POST action=review (more reliable than PATCH on some hosts).
+    const res = await fetch(`/api/student-engagement?resource=profile-corrections&orgId=${encodeURIComponent(orgId)}`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         resource: 'profile-corrections',
+        action: 'review',
         orgId,
         id,
         status,
@@ -400,8 +443,20 @@ export async function reviewProfileCorrectionCloud(
     const body = (await res.json().catch(() => ({}))) as {
       item?: StudentProfileCorrection;
       error?: string;
+      code?: string;
     };
-    if (!res.ok) return { item: null, error: body.error ?? `Server returned ${res.status}` };
+    if (!res.ok) {
+      if (res.status === 401 || body.code === 'unauthorized') {
+        return { item: null, error: 'Session expired. Sign in again, then Approve.' };
+      }
+      if (res.status === 403 || body.code === 'forbidden') {
+        return {
+          item: null,
+          error: body.error ?? 'Your account cannot approve. Use an admin or program manager login.',
+        };
+      }
+      return { item: null, error: body.error ?? `Server returned ${res.status}` };
+    }
     if (body.item) {
       const all = readLocal(orgId).filter(c => c.id !== body.item!.id);
       writeLocal([body.item, ...all], orgId);

@@ -19,7 +19,7 @@ function wantsProfileCorrections(req: VercelRequest): boolean {
   if (body && typeof body === 'object' && !Array.isArray(body)) {
     const rec = body as Record<string, unknown>;
     if (rec.resource === 'profile-corrections') return true;
-    if (rec.action === 'merge' || rec.action === 'import') return true;
+    if (rec.action === 'merge' || rec.action === 'import' || rec.action === 'review') return true;
     // Student submit payload shape
     if (typeof rec.email === 'string' && rec.fields && typeof rec.fields === 'object') return true;
     // Admin review payload shape

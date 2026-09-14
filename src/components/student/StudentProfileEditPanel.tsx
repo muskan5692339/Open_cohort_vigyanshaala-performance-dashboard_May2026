@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  fetchPendingProfileCorrectionCloud,
   getPendingCorrectionForEmail,
   submitProfileCorrectionCloud,
+  type StudentProfileCorrection,
 } from '../../services/studentProfileCorrections';
 import './StudentProfileEditPanel.css';
 
@@ -25,7 +27,23 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [pendingLocal, setPendingLocal] = useState(() => getPendingCorrectionForEmail(email));
+  const [pendingLocal, setPendingLocal] = useState<StudentProfileCorrection | null>(() =>
+    getPendingCorrectionForEmail(email),
+  );
+  const [checkingPending, setCheckingPending] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCheckingPending(true);
+    void fetchPendingProfileCorrectionCloud(email).then(item => {
+      if (cancelled) return;
+      setPendingLocal(item);
+      setCheckingPending(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,8 +78,13 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
   return (
     <div className="profile-edit-panel">
       <button type="button" className="profile-edit-panel__toggle" onClick={() => setOpen(v => !v)}>
-        {open ? 'Hide' : 'Update my details'}
+        {open ? 'Hide' : pendingLocal ? 'View submitted details' : 'Update my details'}
       </button>
+      {checkingPending && !pendingLocal && !open && (
+        <p className="profile-edit-panel__pending" role="status">
+          Checking approval status…
+        </p>
+      )}
       {pendingLocal && !open && (
         <p className="profile-edit-panel__pending" role="status">
           Your correction request is pending admin approval.
@@ -72,6 +95,11 @@ export default function StudentProfileEditPanel({ email, studentName, current }:
           <p className="profile-edit-panel__hint">
             Wrong phone, college, course, or year? Submit corrections here. An admin will review before the next weekly upload.
           </p>
+          {pendingLocal && (
+            <p className="profile-edit-panel__pending" role="status">
+              A request is already pending. Submitting again replaces it.
+            </p>
+          )}
           <label>
             Phone
             <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} />

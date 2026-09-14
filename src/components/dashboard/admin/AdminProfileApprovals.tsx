@@ -256,6 +256,12 @@ export default function AdminProfileApprovals() {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 220, fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
           Students request profile corrections from their dashboard. Approve pending items below — reviewed ones stay in History.
+          {!session?.access_token && (
+            <>
+              {' '}
+              <strong style={{ color: BRAND.red }}>Sign in (top right) is required before Approve will work.</strong>
+            </>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
