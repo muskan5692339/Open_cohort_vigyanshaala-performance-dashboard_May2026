@@ -9,23 +9,37 @@ export function isOverallSheetName(name: string): boolean {
   return normalizeSheetKey(name) === 'overall';
 }
 
+/** Inc 14+ workbooks use this instead of a sheet named exactly "Overall". */
+export function isOverallPerformanceSheetName(name: string): boolean {
+  const n = normalizeSheetKey(name);
+  return n === 'overallperformance' || n === 'overallperf';
+}
+
+export function isPerformanceImportSheetName(name: string): boolean {
+  return isOverallPerformanceSheetName(name) || isOverallSheetName(name);
+}
+
 export function isClassWiseAttendanceSheetName(name: string): boolean {
   const n = normalizeSheetKey(name);
   return n === 'classwiseattendance'
     || (n.includes('classwise') && n.includes('attendance'));
 }
 
-/** Only these two workbook sheets are used for cohort import. */
+/** Overall / Overall Performance, plus Class-wise Attendance when there is no Overall Performance sheet. */
 export function isAllowedCohortSheetName(name: string): boolean {
-  return isOverallSheetName(name) || isClassWiseAttendanceSheetName(name);
+  return isPerformanceImportSheetName(name) || isClassWiseAttendanceSheetName(name);
 }
 
 export function filterAllowedCohortSheets<T extends { name: string }>(sheets: T[]): T[] {
+  const overallPerformance = sheets.find(s => isOverallPerformanceSheetName(s.name));
+  if (overallPerformance) return [overallPerformance];
   return sheets.filter(s => isAllowedCohortSheetName(s.name));
 }
 
 export function findOverallSheetName(sheetNames: string[]): string | null {
-  return sheetNames.find(isOverallSheetName) ?? null;
+  return sheetNames.find(isOverallPerformanceSheetName)
+    ?? sheetNames.find(isOverallSheetName)
+    ?? null;
 }
 
 /** True when headers look like the Class-wise Attendance sheet (sessions only). */
@@ -48,6 +62,9 @@ export function sheetHasPerformanceColumns(headers: string[]): boolean {
 
 /** Pick the sheet that contains assignments / quiz / wide-format perf data. */
 export function findPerformanceSheetName(preview: WorkbookPreview): string | null {
+  const overallPerf = preview.sheetNames.find(isOverallPerformanceSheetName);
+  if (overallPerf) return overallPerf;
+
   const overallExact = findOverallSheetName(preview.sheetNames);
   if (overallExact) {
     const sheet = preview.sheets.find(s => s.name === overallExact);
@@ -63,6 +80,7 @@ export function findPerformanceSheetName(preview: WorkbookPreview): string | nul
       let score = 0;
       if (sheetHasPerformanceColumns(headers)) score += 100;
       if (/^overall$/i.test(sheet.name.trim())) score += 120;
+      if (/overall\s*performance/i.test(sheet.name)) score += 140;
       if (/student|perf|monitor|summary|overall|master|data/i.test(name)) score += 40;
       if (/to.?be.?graduat|graduated|alumni|archive/i.test(name)) score -= 200;
       if (/class.?wise|attendance/i.test(name)) score -= 80;

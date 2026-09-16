@@ -444,15 +444,18 @@ export function parseWideFormatSheet(
     degree:      col(h, 'currently_pursuing_degree', 'pursuing degree', 'degree', 'currently pursuing'),
     subject:     col(h, 'subject area', 'subject/major', 'subject major', 'subject', 'stream'),
     college:     col(h, 'college name', 'name_of_college_university', 'name of college university', 'college', 'university', 'institution'),
-    partner:     col(h, 'partner organisation', 'partner organization', 'partner'),
+    partner:     col(h, 'partner organisation', 'partner organization', 'partner_organization', 'partner'),
+    location:    col(h, 'location', 'state', 'city'),
     progHours:   col(h, 'program hours', 'programme hours', 'total hours'),
-    classAtt:    col(h, 'no. of classes attended', 'classes attended', 'no of classes', 'attended watched', 'no  of classes'),
+    classAtt:    col(h, 'total sessions attended', 'sessions attended', 'no. of classes attended', 'classes attended', 'no of classes', 'attended watched', 'no  of classes'),
     attPct:      findAttendancePctColumn(h),
     assignCE:    col(h, 'assignment_career_exploration', 'career exploration', 'career_exploration'),
     assignSWOT:  col(h, 'assignment_swot', 'swot', 'swot analysis'),
     assignCP:    col(h, 'assignment_career_planner', 'career planner', 'career_planner'),
     assignCVB:   col(h, 'assignment_career_vision_board', 'career vision board', 'vision board', 'career_vision_board'),
     assignCV:    col(h, 'assignment_cv_resume', 'cv/resume', 'cv resume', 'resume', 'cv  resume'),
+    assignScore: col(h, 'assignment score', 'assignment %', 'assignment percent'),
+    quizScore:   col(h, 'quiz score', 'quiz %', 'quiz percent', 'avg quiz score'),
     finalScore:  col(h, 'final score >=60%', 'final score', 'final selection variable', 'final assessment'),
     endline:     col(h, 'endline form', 'endline'),
     status:      col(h, 'current status/action item', 'current status', 'action item', 'status'),
@@ -469,6 +472,7 @@ export function parseWideFormatSheet(
   mapCol('Program / Degree',            c.degree);
   mapCol('Subject Area',                c.subject);
   mapCol('Partner Organisation',        c.partner);
+  mapCol('Location',                    c.location);
   mapCol('Program Hours',               c.progHours);
   mapCol('Classes Attended',            c.classAtt);
   mapCol('Attendance %',                c.attPct);
@@ -477,6 +481,8 @@ export function parseWideFormatSheet(
   mapCol('Assignment: Career Planner',  c.assignCP);
   mapCol('Assignment: Vision Board',    c.assignCVB);
   mapCol('Assignment: CV / Resume',     c.assignCV);
+  mapCol('Assignment Score',            c.assignScore);
+  mapCol('Quiz Score',                  c.quizScore);
   mapCol('Final Score ≥60%',            c.finalScore);
   mapCol('Endline Form',                c.endline);
   mapCol('Status',                      c.status);
@@ -519,6 +525,7 @@ export function parseWideFormatSheet(
     const college    = c.college   !== -1 ? r[c.college]?.trim()   || '' : '';
     const program    = c.degree    !== -1 ? r[c.degree]?.trim()    || '' : '';
     const subject    = c.subject   !== -1 ? r[c.subject]?.trim()   || '' : '';
+    const location   = c.location  !== -1 ? r[c.location]?.trim()  || '' : '';
     const statusRaw  = c.status    !== -1 ? (r[c.status] ?? '').toLowerCase().trim() : '';
     const isInactive = ['dropped', 'inactive', 'left', 'withdrawn', 'exit', 'drop'].some(kw => statusRaw.includes(kw));
 
@@ -538,15 +545,21 @@ export function parseWideFormatSheet(
       const val = (r[colIdx] ?? '').trim();
       if (val && isSubmittedVal(val)) submittedAssign++;
     }
-    const importedAssignmentPct =
-      activeAssignCols.length > 0
-        ? Math.round((submittedAssign / activeAssignCols.length) * 100)
-        : undefined;
+    const importedAssignmentPct = (() => {
+      if (activeAssignCols.length > 0) {
+        return Math.round((submittedAssign / activeAssignCols.length) * 100);
+      }
+      if (c.assignScore !== -1) {
+        const raw = (r[c.assignScore] ?? '').trim();
+        if (raw) return parsePercentOrScore(raw);
+      }
+      return undefined;
+    })();
 
     let importedQuizPct: number | undefined;
     if (quizScoreHeaders.length) {
       const categoryVal = (() => {
-        const catIdx = col(h, 'student_category', 'student category');
+        const catIdx = col(h, 'student_category', 'student category', 'college category');
         return catIdx !== -1 ? (r[catIdx] ?? '').trim() : '';
       })();
       const rowRecord = Object.fromEntries(h.map((header, idx) => [header, (r[idx] ?? '').trim()]));
@@ -555,7 +568,11 @@ export function parseWideFormatSheet(
       if (scores.length) {
         importedQuizPct = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
       }
-    } else if (c.finalScore !== -1) {
+    }
+    if (importedQuizPct == null && c.quizScore !== -1) {
+      const qsRaw = (r[c.quizScore] ?? '').trim();
+      if (qsRaw) importedQuizPct = parsePercentOrScore(qsRaw);
+    } else if (importedQuizPct == null && c.finalScore !== -1 && c.quizScore === -1) {
       const fsRaw = (r[c.finalScore] ?? '').trim();
       if (fsRaw) importedQuizPct = parsePercentOrScore(fsRaw);
     }
@@ -565,7 +582,7 @@ export function parseWideFormatSheet(
       college,
       program:            program || subject,
       cohort,
-      state:              subject,
+      state:              location || subject,
       status:             isInactive ? 'Inactive' : 'Active',
       certificate_status: certRaw || undefined,
       imported_attendance_pct: effectiveAttPct,

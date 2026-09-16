@@ -253,6 +253,8 @@ export function buildStudentDashboardView(input: {
       : overviewRecord?.attendancePct ?? null);
 
   const classesAttendedRaw = getByKeywords(matched, [
+    'total sessions attended',
+    'sessions attended',
     'no. of classes attended',
     'classes attended',
     'no of classes attended',

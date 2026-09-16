@@ -320,9 +320,8 @@ export function readClassWiseAttendanceFromWorkbook(
 ): ClassWiseAttendanceData | null {
   const names = wb.worksheets.map(ws => ws.name);
   const preferred = findClassWiseAttendanceSheetName(names);
-  const sheetsToTry = preferred
-    ? [preferred, ...names.filter(n => n !== preferred)]
-    : names.filter(n => normalizeSheetName(n).includes('attendance'));
+  if (!preferred) return null;
+  const sheetsToTry = [preferred];
 
   for (const sheetName of sheetsToTry) {
     const ws = wb.getWorksheet(sheetName);

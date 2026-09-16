@@ -4,6 +4,7 @@ import {
   isAllowedCohortSheetName,
   isClassWiseAttendanceSheetName,
   isClassWiseOnlySheet,
+  isOverallPerformanceSheetName,
   isOverallSheetName,
   recommendImportSheet,
   sheetHasPerformanceColumns,
@@ -32,7 +33,12 @@ describe('isClassWiseOnlySheet', () => {
 });
 
 describe('allowed cohort sheets', () => {
-  it('accepts only Overall and Class-wise Attendance by name', () => {
+  it('prefers Overall Performance and ignores other sheets', () => {
+    expect(isOverallPerformanceSheetName('Overall Performance')).toBe(true);
+    expect(isOverallSheetName('Overall Performance')).toBe(false);
+    expect(findOverallSheetName(['Daily Attendance', 'Overall Performance', 'Quiz_Perf'])).toBe('Overall Performance');
+    expect(isAllowedCohortSheetName('Overall Performance')).toBe(true);
+    expect(isAllowedCohortSheetName('Daily Attendance')).toBe(false);
     expect(isOverallSheetName('Overall')).toBe(true);
     expect(isOverallSheetName('Overall_to_be_graduated')).toBe(false);
     expect(isClassWiseAttendanceSheetName('Class-wise Attendance')).toBe(true);

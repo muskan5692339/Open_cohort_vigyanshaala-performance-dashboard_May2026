@@ -78,8 +78,8 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
         issue(
           'REQUIRED_SHEETS_MISSING',
           'error',
-          'Workbook must include an "Overall" sheet (and preferably "Class-wise Attendance").',
-          'Rename your performance sheet to exactly "Overall". Other sheets like Overall_to_be_graduated are ignored.',
+          'Workbook must include an "Overall" or "Overall Performance" sheet.',
+          'Use a sheet named "Overall" or "Overall Performance". Other sheets are ignored.',
         ),
       );
     } else if (!overallName) {
@@ -87,8 +87,8 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
         issue(
           'OVERALL_SHEET_MISSING',
           'error',
-          'Sheet "Overall" was not found.',
-          'Add or rename your main performance sheet to exactly "Overall". Sheets like Overall_to_be_graduated are not used.',
+          'Sheet "Overall" or "Overall Performance" was not found.',
+          'Add or rename your main performance sheet to "Overall" or "Overall Performance".',
         ),
       );
     }
@@ -99,7 +99,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
           'OTHER_SHEETS_IGNORED',
           'warning',
           `Ignoring ${ignoredOtherSheets.length} other sheet(s): ${ignoredOtherSheets.slice(0, 4).join(', ')}${ignoredOtherSheets.length > 4 ? '…' : ''}.`,
-          'Only "Overall" and "Class-wise Attendance" are imported.',
+          'Only "Overall", "Overall Performance", and "Class-wise Attendance" are imported. If Overall Performance exists, that sheet is used alone.',
         ),
       );
     }
