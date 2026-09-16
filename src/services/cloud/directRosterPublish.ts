@@ -2,6 +2,7 @@ import type { ColumnMapping, DiscoveredColumn } from '../../types/dynamicSchema'
 import type { ClassWiseAttendanceEntry } from '../classWiseAttendance';
 import { supabase } from '../../lib/supabase';
 import { getActiveOrganizationId } from './cloudConfig';
+import { cohortStoragePath, slugifyCohortName } from '../cohortSlug';
 
 export interface RosterPublishInput {
   organizationId?: string;
@@ -13,6 +14,8 @@ export interface RosterPublishInput {
   discoveredColumns?: DiscoveredColumn[];
   classWiseAttendance?: ClassWiseAttendanceEntry[];
   classWiseAttendanceColumns?: string[];
+  /** When false, keep the existing /student-view roster and only publish the cohort link. */
+  publishAsMainStudentView?: boolean;
 }
 
 async function gzipString(json: string): Promise<Blob> {
@@ -49,7 +52,11 @@ export async function publishRosterDirectToStorage(
 
   try {
     const blob = await gzipString(JSON.stringify(payloadObj));
-    const paths = [`${orgId}/latest.json.gz`, 'latest.json.gz'];
+    const slug = slugifyCohortName(input.cohortName);
+    const paths = [cohortStoragePath(orgId, slug)];
+    if (input.publishAsMainStudentView !== false) {
+      paths.push(`${orgId}/latest.json.gz`, 'latest.json.gz');
+    }
 
     for (const path of paths) {
       const { error } = await supabase.storage

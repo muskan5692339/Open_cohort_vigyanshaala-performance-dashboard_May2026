@@ -155,7 +155,9 @@ export default function HomePage({
           </h1>
 
           <p className="student-home__lead">
-            Attendance, assignments &amp; quizzes from your cohort workbook.
+            {meta?.cohortName
+              ? `Attendance, assignments & quizzes for ${meta.cohortName}.`
+              : 'Attendance, assignments & quizzes from your cohort workbook.'}
           </p>
 
           {studentOnly && (

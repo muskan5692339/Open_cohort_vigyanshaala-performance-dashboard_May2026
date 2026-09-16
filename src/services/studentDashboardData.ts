@@ -378,6 +378,7 @@ export function buildStudentDashboardView(input: {
     : resolveField(matched, undefined, [
       'student_cat',
       'student category',
+      'category name',
       'college category',
       'institution category',
       'intervention group',
@@ -410,6 +411,7 @@ export function buildStudentDashboardView(input: {
       ]),
       cohort: resolveField(matched, student.cohort || payload.cohortName, ['cohort', 'batch', 'program cohort']),
       college: resolveField(matched, student.college, [
+        'college name',
         'name_of_college_university',
         'name of college university',
         'college',

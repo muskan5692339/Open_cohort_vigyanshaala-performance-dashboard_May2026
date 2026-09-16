@@ -68,6 +68,8 @@ export interface PersistUploadPayload {
   classWiseAttendanceColumns?: string[];
   existingUploadId?: string;
   syncRunId?: string;
+  /** When false, do not replace the main /student-view roster. */
+  publishAsMainStudentView?: boolean;
 }
 
 export interface CloudSyncQueueItem {

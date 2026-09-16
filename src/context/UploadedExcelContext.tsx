@@ -27,6 +27,7 @@ import {
   writeCohortToIndexedDb,
   type CohortStoredMeta,
 } from '../services/cohortRosterStore';
+import { cohortSlugFromLocation } from '../services/cohortSlug';
 
 const STORAGE_KEY = 'vs_uploaded_excel_v3';
 const LOCAL_STORAGE_KEY = 'vs_uploaded_excel_local_v3';
@@ -36,6 +37,10 @@ export const ROSTER_CACHE_VERSION = '3';
 
 function isStudentPublicRoute(): boolean {
   return typeof window !== 'undefined' && window.location.pathname.startsWith('/student-view');
+}
+
+function activeCohortSlug(): string | null {
+  return cohortSlugFromLocation();
 }
 
 export type UploadedExcelMeta = CohortStoredMeta;
@@ -326,7 +331,10 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
       await clearCohortIndexedDb();
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          const result = await fetchLatestCohortPayload(undefined, { cacheBust: true });
+          const result = await fetchLatestCohortPayload(undefined, {
+            cacheBust: true,
+            cohortSlug: activeCohortSlug(),
+          });
           if (result?.payload && getStudentLookupCount(result.payload) > 0) {
             applyCloudResult(result);
             return;
@@ -385,7 +393,10 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
         if (studentRoute && isCloudPersistenceEnabled()) {
           for (let attempt = 0; attempt < 3; attempt++) {
             try {
-              const result = await fetchLatestCohortPayload(undefined, { cacheBust: true });
+              const result = await fetchLatestCohortPayload(undefined, {
+            cacheBust: true,
+            cohortSlug: activeCohortSlug(),
+          });
               if (result?.payload && getStudentLookupCount(result.payload) > 0) {
                 applyCloudResult(result);
                 return;
@@ -424,7 +435,10 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
 
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            const result = await fetchLatestCohortPayload(undefined, { cacheBust: true });
+            const result = await fetchLatestCohortPayload(undefined, {
+            cacheBust: true,
+            cohortSlug: activeCohortSlug(),
+          });
             if (result?.payload && getStudentLookupCount(result.payload) > 0) {
               applyCloudResult(result);
               return;

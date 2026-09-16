@@ -37,6 +37,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     classWiseAttendanceColumns?: string[];
     existingUploadId?: string;
     syncRunId?: string;
+    publishAsMainStudentView?: boolean;
+    cohortSlug?: string;
   };
 
   if (!body?.organizationId || !body?.fileName) {
@@ -141,10 +143,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         upsert: true,
       });
 
-      const publicPaths = [
-        `${body.organizationId}/latest.json.gz`,
-        'latest.json.gz',
-      ];
+      const publicPaths = body.publishAsMainStudentView === false
+        ? (body.cohortSlug ? [`${body.organizationId}/cohorts/${body.cohortSlug}/latest.json.gz`] : [])
+        : [
+            `${body.organizationId}/latest.json.gz`,
+            'latest.json.gz',
+            ...(body.cohortSlug ? [`${body.organizationId}/cohorts/${body.cohortSlug}/latest.json.gz`] : []),
+          ];
       for (const publicPath of publicPaths) {
         const { error: pubErr } = await serviceDb.storage
           .from('student-roster-public')

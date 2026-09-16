@@ -4,6 +4,7 @@ import type { ClassWiseAttendanceEntry } from '../classWiseAttendance';
 import type { ColumnMapping, DiscoveredColumn } from '../../types/dynamicSchema';
 import { enqueueSyncItem, getActiveOrganizationId, isCloudPersistenceEnabled } from './cloudConfig';
 import { publishRosterDirectToStorage } from './directRosterPublish';
+import { cohortStoragePath, slugifyCohortName } from '../cohortSlug';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '');
@@ -77,11 +78,17 @@ function parseStoredCohort(stored: {
 }
 
 /** Direct public Supabase Storage read — works on student phones when API routes fail. */
-async function fetchPublicCohortPayload(orgId: string, cacheBust = false): Promise<CohortFetchResult | null> {
+async function fetchPublicCohortPayload(
+  orgId: string,
+  cacheBust = false,
+  cohortSlug?: string | null,
+): Promise<CohortFetchResult | null> {
   if (!SUPABASE_URL?.startsWith('http')) return null;
 
   const bust = cacheBust ? `?v=${Date.now()}` : '';
-  const paths = [`${orgId}/latest.json.gz`, 'latest.json.gz'];
+  const paths = cohortSlug
+    ? [cohortStoragePath(orgId, cohortSlug)]
+    : [`${orgId}/latest.json.gz`, 'latest.json.gz'];
   for (const path of paths) {
     try {
       const res = await fetch(
@@ -114,6 +121,7 @@ export async function persistUploadToCloud(
     userId?: string;
     existingUploadId?: string;
     syncRunId?: string;
+    publishAsMainStudentView?: boolean;
   },
   accessToken?: string,
 ): Promise<PersistUploadResult> {
@@ -139,7 +147,9 @@ export async function persistUploadToCloud(
     classWiseAttendanceColumns: input.classWiseAttendanceColumns,
     existingUploadId: input.existingUploadId,
     syncRunId: input.syncRunId,
-  };
+    publishAsMainStudentView: input.publishAsMainStudentView,
+    cohortSlug: slugifyCohortName(input.cohortName),
+  } as PersistUploadPayload & { cohortSlug: string };
 
   // Student roster — public storage upload does not require admin sign-in.
   if (body.rawRows?.length && body.headers?.length) {
@@ -153,6 +163,7 @@ export async function persistUploadToCloud(
       discoveredColumns: body.discoveredColumns as DiscoveredColumn[] | undefined,
       classWiseAttendance: body.classWiseAttendance as ClassWiseAttendanceEntry[] | undefined,
       classWiseAttendanceColumns: body.classWiseAttendanceColumns,
+      publishAsMainStudentView: body.publishAsMainStudentView,
     });
     if (direct.ok) {
       if (accessToken) {
@@ -298,7 +309,7 @@ export async function listUploadVersions(
  */
 export async function fetchLatestCohortPayload(
   organizationId?: string,
-  options?: { cacheBust?: boolean },
+  options?: { cacheBust?: boolean; cohortSlug?: string | null },
 ): Promise<{ payload: ParsedExcelPayload; meta: { fileName: string; cohortName: string; loadedAt: string; publishedAt?: string; studentCount: number; classWiseStudentCount?: number } } | null> {
   if (!isCloudPersistenceEnabled()) return null;
 
@@ -314,8 +325,9 @@ export async function fetchLatestCohortPayload(
   };
 
   try {
-    const publicResult = await fetchPublicCohortPayload(orgId, options?.cacheBust);
+    const publicResult = await fetchPublicCohortPayload(orgId, options?.cacheBust, options?.cohortSlug);
     if (publicResult?.payload?.rawRows?.length) return publicResult;
+    if (options?.cohortSlug) return null;
 
     let result = await tryUrl(base);
     if (result && 'misconfigured' in result) {

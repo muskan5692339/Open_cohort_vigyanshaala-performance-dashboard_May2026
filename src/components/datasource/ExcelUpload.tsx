@@ -34,6 +34,7 @@ import { useAdminSignIn } from '../../context/AdminSignInContext';
 import { readFileAsArrayBuffer } from '../../services/workbookBuffer';
 import { findPerformanceSheetName, isClassWiseOnlySheet } from '../../services/sheetSelection';
 import { detectQuizOneCategoryContamination } from '../../services/assessmentColumnOrder';
+import { slugifyCohortName, studentViewPathForSlug } from '../../services/cohortSlug';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -111,7 +112,7 @@ function PreviewTable({ rows, cols }: { rows: Record<string, unknown>[]; cols: s
 /* ── Main component ─────────────────────────────────────── */
 
 export default function ExcelUpload({ onDataImported }: Props) {
-  const { loadFromParsed } = useUploadedExcel();
+  const { loadFromParsed, meta } = useUploadedExcel();
   const { session, user, organization, cloudEnabled } = useAuth();
   const { openSignIn } = useAdminSignIn();
   const syncCtx = useSyncContext();
@@ -132,7 +133,8 @@ export default function ExcelUpload({ onDataImported }: Props) {
   const [validationResult, setValidationResult] = useState<UploadValidationResult | null>(null);
   const [workbookPreview, setWorkbookPreview] = useState<WorkbookPreview | null>(null);
   const [selectedSheet, setSelectedSheet] = useState('');
-  const [cohortName, setCohortName] = useState('Incubator 11.0');
+  const [cohortName, setCohortName] = useState('Incubator 14.0');
+  const [publishAsMain, setPublishAsMain] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [loadingDemo, setLoadingDemo] = useState(false);
@@ -180,11 +182,12 @@ export default function ExcelUpload({ onDataImported }: Props) {
           discoveredColumns: input.discoveredColumns,
           classWiseAttendance: input.classWiseAttendance,
           classWiseAttendanceColumns: input.classWiseAttendanceColumns,
+          publishAsMainStudentView: publishAsMain,
         },
         cloudToken,
       );
     },
-    [canUpload, organization?.id, cloudUserId, cloudToken],
+    [canUpload, organization?.id, cloudUserId, cloudToken, publishAsMain],
   );
 
   const resetUploadFlow = useCallback(() => {
@@ -586,6 +589,21 @@ export default function ExcelUpload({ onDataImported }: Props) {
             outline: 'none',
           }}
         />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: BRAND.text, flex: '1 1 280px' }}>
+          <input
+            type="checkbox"
+            checked={publishAsMain}
+            onChange={e => setPublishAsMain(e.target.checked)}
+          />
+          Also replace the main student link (/student-view). Leave unchecked to keep the current cohort there.
+        </label>
+        <div style={{ flex: '1 1 100%', fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
+          Public link for this cohort:{' '}
+          <strong style={{ color: BRAND.navy }}>
+            {`${window.location.origin}${studentViewPathForSlug(slugifyCohortName(cohortName || 'cohort'))}`}
+          </strong>
+          {meta?.cohortName ? ` · current dashboard data: ${meta.cohortName}` : ''}
+        </div>
         <span style={{ fontSize: 12, color: BRAND.textLight }}>
           Parsed data is shown on the dashboard immediately — no database upload required.
         </span>

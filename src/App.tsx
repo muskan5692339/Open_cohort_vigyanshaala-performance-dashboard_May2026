@@ -20,7 +20,12 @@ function AppContent() {
   const isStudentOnlyRoute = location.pathname.startsWith('/student-view');
   const isStudentPortalRoute =
     isStudentOnlyRoute || (STUDENT_ONLY_HOME && location.pathname === '/');
-  const homePath = isStudentOnlyRoute ? '/student-view' : '/';
+  const cohortSlug = location.pathname.match(/^\/student-view\/([^/]+)\/?$/i)?.[1] ?? null;
+  const homePath = cohortSlug
+    ? `/student-view/${cohortSlug}`
+    : isStudentOnlyRoute
+      ? '/student-view'
+      : '/';
 
   const [view, setView] = useState<View>(() =>
     location.pathname.startsWith('/admin') ? 'admin' : 'home',
@@ -100,6 +105,7 @@ function App() {
             <Routes>
               <Route path="/" element={<AppContent />} />
               <Route path="/student-view" element={<AppContent />} />
+              <Route path="/student-view/:cohortSlug" element={<AppContent />} />
               <Route path="/admin/*" element={<AppContent />} />
             </Routes>
           </BrowserRouter>
