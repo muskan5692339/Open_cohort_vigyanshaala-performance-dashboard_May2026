@@ -27,7 +27,7 @@ import {
   writeCohortToIndexedDb,
   type CohortStoredMeta,
 } from '../services/cohortRosterStore';
-import { cohortSlugFromLocation } from '../services/cohortSlug';
+import { cohortSlugFromLocation, slugifyCohortName } from '../services/cohortSlug';
 
 const STORAGE_KEY = 'vs_uploaded_excel_v3';
 const LOCAL_STORAGE_KEY = 'vs_uploaded_excel_local_v3';
@@ -41,6 +41,13 @@ function isStudentPublicRoute(): boolean {
 
 function activeCohortSlug(): string | null {
   return cohortSlugFromLocation();
+}
+
+function rosterMatchesUrlSlug(meta: { cohortName?: string } | null | undefined): boolean {
+  const slug = activeCohortSlug();
+  if (!slug) return true;
+  if (!meta?.cohortName) return false;
+  return slugifyCohortName(meta.cohortName) === slug;
 }
 
 export type UploadedExcelMeta = CohortStoredMeta;
@@ -228,7 +235,10 @@ function isRosterStale(meta: UploadedExcelMeta | null): boolean {
 function isRosterIncomplete(payload: ParsedExcelPayload | null, meta: UploadedExcelMeta | null): boolean {
   if (!payload || !meta || meta.studentCount < 1) return false;
   if (!isStudentPublicRoute()) return false;
-  return !payload.classWiseAttendance?.length;
+  if (payload.classWiseAttendance?.length) return false;
+  const headers = payload.headers ?? [];
+  const hasSummaryAttendance = headers.some(h => /attendance\s*%|total sessions attended/i.test(h));
+  return !hasSummaryAttendance;
 }
 
 function writeStored(payload: ParsedExcelPayload, meta: UploadedExcelMeta) {
@@ -351,7 +361,11 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
           await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
         }
       }
-      setDatasetError('Could not load the latest roster. Check your internet connection and tap Refresh again.');
+      setDatasetError(
+        activeCohortSlug()
+          ? 'This cohort link has no published file yet. Upload that cohort in Admin → Data Sources and Apply Mapping. The original /student-view list was not used here.'
+          : 'Could not load the latest roster. Check your internet connection and tap Refresh again.',
+      );
     } finally {
       setRosterRefreshing(false);
     }
@@ -418,7 +432,11 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
         if (hasLocal) return;
 
         const fromIdb = await readCohortFromIndexedDb();
-        if (fromIdb && getStudentLookupCount(fromIdb.payload) > 0) {
+        if (
+          fromIdb
+          && getStudentLookupCount(fromIdb.payload) > 0
+          && rosterMatchesUrlSlug(fromIdb.meta)
+        ) {
           const applied = applyLoadedState(fromIdb.payload, {
             ...fromIdb.meta,
             source: 'indexeddb',
@@ -457,7 +475,9 @@ export function UploadedExcelProvider({ children }: { children: ReactNode }) {
         }
 
         setDatasetError(
-          studentRoute
+          studentRoute && activeCohortSlug()
+            ? `This link is for a separate cohort and does not use the older student list. Publish it from Admin → Data Sources with cohort name matching this link, leave “Update original /student-view” off, then Apply Mapping.`
+            : studentRoute
             ? 'Could not load the latest roster. Check your internet connection and refresh this page.'
             : 'Cohort roster not found in the cloud yet. Admin: sign in, open Admin → Data Source, upload the Excel file, and click Apply mapping (once). Students can then return here — no daily upload needed.',
         );

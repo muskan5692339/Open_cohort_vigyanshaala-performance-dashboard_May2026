@@ -112,7 +112,7 @@ function PreviewTable({ rows, cols }: { rows: Record<string, unknown>[]; cols: s
 /* ── Main component ─────────────────────────────────────── */
 
 export default function ExcelUpload({ onDataImported }: Props) {
-  const { loadFromParsed, meta } = useUploadedExcel();
+  const { loadFromParsed } = useUploadedExcel();
   const { session, user, organization, cloudEnabled } = useAuth();
   const { openSignIn } = useAdminSignIn();
   const syncCtx = useSyncContext();
@@ -589,20 +589,40 @@ export default function ExcelUpload({ onDataImported }: Props) {
             outline: 'none',
           }}
         />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: BRAND.text, flex: '1 1 280px' }}>
-          <input
-            type="checkbox"
-            checked={publishAsMain}
-            onChange={e => setPublishAsMain(e.target.checked)}
-          />
-          Also replace the main student link (/student-view). Leave unchecked to keep the current cohort there.
-        </label>
-        <div style={{ flex: '1 1 100%', fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
-          Public link for this cohort:{' '}
-          <strong style={{ color: BRAND.navy }}>
-            {`${window.location.origin}${studentViewPathForSlug(slugifyCohortName(cohortName || 'cohort'))}`}
-          </strong>
-          {meta?.cohortName ? ` · current dashboard data: ${meta.cohortName}` : ''}
+        <div style={{ flex: '1 1 100%', display: 'grid', gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.navy }}>Which student page should this upload update?</div>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: BRAND.text }}>
+            <input
+              type="radio"
+              name="publish-target"
+              checked={!publishAsMain}
+              onChange={() => setPublishAsMain(false)}
+            />
+            <span>
+              <strong>This cohort only</strong> — {studentViewPathForSlug(slugifyCohortName(cohortName || 'cohort'))}
+              <br />
+              <span style={{ color: BRAND.textLight }}>Use this for Incubator 14.0. The original /student-view list stays as it is.</span>
+            </span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: BRAND.text }}>
+            <input
+              type="radio"
+              name="publish-target"
+              checked={publishAsMain}
+              onChange={() => setPublishAsMain(true)}
+            />
+            <span>
+              <strong>Also update the original student page</strong> — /student-view
+              <br />
+              <span style={{ color: BRAND.textLight }}>Use this when refreshing Incubator 12.0. Incubator 14.0 keeps its own link.</span>
+            </span>
+          </label>
+          <div style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
+            Full Inc 14 link:{' '}
+            <strong style={{ color: BRAND.navy }}>
+              {`${window.location.origin}${studentViewPathForSlug(slugifyCohortName(cohortName || 'cohort'))}`}
+            </strong>
+          </div>
         </div>
         <span style={{ fontSize: 12, color: BRAND.textLight }}>
           Parsed data is shown on the dashboard immediately — no database upload required.
