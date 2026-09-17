@@ -1,5 +1,7 @@
 import type { WorkbookPreview } from '../../types/productionTypes';
 import { BRAND } from '../../types/adminTypes';
+import { isDailyAttendanceSheetName } from '../../services/classWiseAttendance';
+import { isOverallPerformanceSheetName, isClassWiseAttendanceSheetName } from '../../services/sheetSelection';
 
 interface FilePreviewPanelProps {
   preview: WorkbookPreview;
@@ -19,36 +21,48 @@ export default function FilePreviewPanel({
   confirming,
 }: FilePreviewPanelProps) {
   const sheet = preview.sheets.find(s => s.name === selectedSheet) ?? preview.sheets[0];
+  const sessionSheet = preview.sheets.find(s => isDailyAttendanceSheetName(s.name) || isClassWiseAttendanceSheetName(s.name));
+  const scoreSheet = preview.sheets.find(s => isOverallPerformanceSheetName(s.name));
 
   return (
     <div style={{ background: '#fff', border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
       <div style={{ fontWeight: 700, fontSize: 15, color: BRAND.navy, marginBottom: 8 }}>File Preview — confirm before import</div>
       <div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 12 }}>
-        {preview.sheetNames.length} sheet(s) found · select the data sheet to import
+        {scoreSheet && sessionSheet
+          ? `${scoreSheet.name} is imported for scores. ${sessionSheet.name} is imported for the session-wise trend.`
+          : `${preview.sheetNames.length} sheet(s) found · select the data sheet to import`}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        {preview.sheets.map(s => (
-          <button
-            key={s.name}
-            type="button"
-            onClick={() => onSelectSheet(s.name)}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: `1px solid ${selectedSheet === s.name ? BRAND.navy : BRAND.border}`,
-              background: selectedSheet === s.name ? '#eff6ff' : '#fff',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontSize: 12,
-            }}
-          >
-            {s.name}
-            <span style={{ marginLeft: 6, color: BRAND.textLight }}>
-              ({s.rowCount} rows · {s.columnCount} cols)
-            </span>
-          </button>
-        ))}
+        {preview.sheets.map(s => {
+          const role = isDailyAttendanceSheetName(s.name) || isClassWiseAttendanceSheetName(s.name)
+            ? 'Session trend'
+            : isOverallPerformanceSheetName(s.name)
+              ? 'Scores'
+              : '';
+          return (
+            <button
+              key={s.name}
+              type="button"
+              onClick={() => onSelectSheet(s.name)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: `1px solid ${selectedSheet === s.name ? BRAND.navy : BRAND.border}`,
+                background: selectedSheet === s.name ? '#eff6ff' : '#fff',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: 12,
+              }}
+            >
+              {s.name}
+              {role ? <span style={{ marginLeft: 6, fontWeight: 700, color: BRAND.navy }}>{role}</span> : null}
+              <span style={{ marginLeft: 6, color: BRAND.textLight }}>
+                ({s.rowCount} rows · {s.columnCount} cols)
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {sheet && (
@@ -83,7 +97,7 @@ export default function FilePreviewPanel({
 
       <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
         <button type="button" onClick={onConfirm} disabled={confirming || !selectedSheet} style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: BRAND.navy, color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-          {confirming ? 'Processing…' : 'Confirm & Import Sheet'}
+          {confirming ? 'Processing…' : scoreSheet && sessionSheet ? `Import ${scoreSheet.name} + ${sessionSheet.name}` : 'Confirm & Import Sheet'}
         </button>
         <button type="button" onClick={onCancel} style={{ padding: '10px 18px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
           Cancel

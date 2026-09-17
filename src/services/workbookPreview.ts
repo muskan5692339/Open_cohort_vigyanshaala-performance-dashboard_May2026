@@ -2,6 +2,7 @@ import type { SheetPreview, WorkbookPreview } from '../types/productionTypes';
 import { readExcelRow } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 import { filterAllowedCohortSheets, recommendImportSheet } from './sheetSelection';
+import { isDailyAttendanceSheetName } from './classWiseAttendance';
 
 export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): Promise<WorkbookPreview> {
   const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
@@ -9,11 +10,13 @@ export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): P
 
   const allSheets: SheetPreview[] = wb.worksheets.map(ws => {
     const rowCount = Math.max(0, (ws.rowCount ?? 0) - 1);
-    const headerRow = ws.getRow(1);
-    const colCount = headerRow.cellCount;
-    const headers = readExcelRow(headerRow).map((h, i) => h || `Column ${i + 1}`);
+    const headerSourceRow = isDailyAttendanceSheetName(ws.name) ? 2 : 1;
+    const headerRow = ws.getRow(headerSourceRow);
+    const colCount = Math.max(headerRow.cellCount, ws.columnCount ?? 0);
+    const headers = readExcelRow(headerRow, colCount).map((h, i) => h || `Column ${i + 1}`);
     const previewRows: string[][] = [];
-    for (let r = 2; r <= Math.min(11, ws.rowCount ?? 1); r++) {
+    const firstDataRow = headerSourceRow + 1;
+    for (let r = firstDataRow; r <= Math.min(firstDataRow + 9, ws.rowCount ?? 1); r++) {
       previewRows.push(readExcelRow(ws.getRow(r), colCount));
     }
     return {

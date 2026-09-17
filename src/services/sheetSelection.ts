@@ -1,4 +1,5 @@
 import type { WorkbookPreview } from '../types/productionTypes';
+import { isDailyAttendanceSheetName } from './classWiseAttendance';
 
 export function normalizeSheetKey(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -27,12 +28,18 @@ export function isClassWiseAttendanceSheetName(name: string): boolean {
 
 /** Overall / Overall Performance, plus Class-wise Attendance when there is no Overall Performance sheet. */
 export function isAllowedCohortSheetName(name: string): boolean {
-  return isPerformanceImportSheetName(name) || isClassWiseAttendanceSheetName(name);
+  return isPerformanceImportSheetName(name)
+    || isClassWiseAttendanceSheetName(name)
+    || isDailyAttendanceSheetName(name);
 }
 
 export function filterAllowedCohortSheets<T extends { name: string }>(sheets: T[]): T[] {
   const overallPerformance = sheets.find(s => isOverallPerformanceSheetName(s.name));
-  if (overallPerformance) return [overallPerformance];
+  if (overallPerformance) {
+    const sessionSheet = sheets.find(s => isDailyAttendanceSheetName(s.name))
+      ?? sheets.find(s => isClassWiseAttendanceSheetName(s.name));
+    return sessionSheet ? [overallPerformance, sessionSheet] : [overallPerformance];
+  }
   return sheets.filter(s => isAllowedCohortSheetName(s.name));
 }
 

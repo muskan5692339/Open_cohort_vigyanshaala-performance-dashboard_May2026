@@ -32,7 +32,7 @@ import { persistSchemaProfileToCloud, persistUploadToCloud } from '../../service
 import { getActiveOrganizationId, isCloudPersistenceEnabled } from '../../services/cloud/cloudConfig';
 import { useAdminSignIn } from '../../context/AdminSignInContext';
 import { readFileAsArrayBuffer } from '../../services/workbookBuffer';
-import { findPerformanceSheetName, isClassWiseOnlySheet } from '../../services/sheetSelection';
+import { findPerformanceSheetName, isClassWiseOnlySheet, isOverallPerformanceSheetName } from '../../services/sheetSelection';
 import { detectQuizOneCategoryContamination } from '../../services/assessmentColumnOrder';
 import { slugifyCohortName, studentViewPathForSlug } from '../../services/cohortSlug';
 
@@ -260,7 +260,8 @@ export default function ExcelUpload({ onDataImported }: Props) {
     const buffer = pendingFileBuffer;
 
     try {
-      let sheetToParse = selectedSheet;
+      let sheetToParse = workbookPreview?.sheetNames.find(name => isOverallPerformanceSheetName(name))
+        ?? selectedSheet;
       if (workbookPreview && isClassWiseOnlySheet(
         workbookPreview.sheets.find(s => s.name === selectedSheet)?.headers ?? [],
       )) {

@@ -38,7 +38,7 @@ describe('allowed cohort sheets', () => {
     expect(isOverallSheetName('Overall Performance')).toBe(false);
     expect(findOverallSheetName(['Daily Attendance', 'Overall Performance', 'Quiz_Perf'])).toBe('Overall Performance');
     expect(isAllowedCohortSheetName('Overall Performance')).toBe(true);
-    expect(isAllowedCohortSheetName('Daily Attendance')).toBe(false);
+    expect(isAllowedCohortSheetName('Daily Attendance')).toBe(true);
     expect(isOverallSheetName('Overall')).toBe(true);
     expect(isOverallSheetName('Overall_to_be_graduated')).toBe(false);
     expect(isClassWiseAttendanceSheetName('Class-wise Attendance')).toBe(true);
