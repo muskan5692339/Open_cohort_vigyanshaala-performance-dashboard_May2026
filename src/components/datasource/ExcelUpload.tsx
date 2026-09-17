@@ -135,6 +135,7 @@ export default function ExcelUpload({ onDataImported }: Props) {
   const [selectedSheet, setSelectedSheet] = useState('');
   const [cohortName, setCohortName] = useState('Incubator 14.0');
   const [publishAsMain, setPublishAsMain] = useState(false);
+  const [uploadMode, setUploadMode] = useState<'add' | 'update-original'>('add');
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [loadingDemo, setLoadingDemo] = useState(false);
@@ -566,81 +567,108 @@ export default function ExcelUpload({ onDataImported }: Props) {
   return (
     <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
 
-      {/* Cohort selector — always visible */}
-      <div style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 18 }}>
-        <label style={{ fontSize: 13, fontWeight: 700, color: BRAND.navy, whiteSpace: 'nowrap' }}>
-          Cohort
-        </label>
-        <input
-          type="text"
-          value={cohortName}
-          onChange={e => setCohortName(e.target.value)}
-          placeholder="e.g. Incubator 12.0"
-          disabled={parsing}
-          style={{
-            flex: 1, minWidth: 200, maxWidth: 340,
-            padding: '8px 12px',
-            border: `1.5px solid ${cohortName.trim() ? BRAND.border : BRAND.red}`,
-            borderRadius: 8,
-            fontSize: 14,
-            fontFamily: 'inherit',
-            color: BRAND.text,
-            background: parsing ? BRAND.bg : '#fff',
-            outline: 'none',
-          }}
-        />
-        <div style={{ flex: '1 1 100%', display: 'grid', gap: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.navy }}>Which student page should this upload update?</div>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: BRAND.text }}>
-            <input
-              type="radio"
-              name="publish-target"
-              checked={!publishAsMain}
-              onChange={() => setPublishAsMain(false)}
-            />
-            <span>
-              <strong>This cohort only</strong> — {studentViewPathForSlug(slugifyCohortName(cohortName || 'cohort'))}
-              <br />
-              <span style={{ color: BRAND.textLight }}>Use this for Incubator 14.0. The original /student-view list stays as it is.</span>
-            </span>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: BRAND.text }}>
-            <input
-              type="radio"
-              name="publish-target"
-              checked={publishAsMain}
-              onChange={() => setPublishAsMain(true)}
-            />
-            <span>
-              <strong>Also update the original student page</strong> — /student-view
-              <br />
-              <span style={{ color: BRAND.textLight }}>Use this when refreshing Incubator 12.0. Incubator 14.0 keeps its own link.</span>
-            </span>
-          </label>
-          <div style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
-            Full Inc 14 link:{' '}
-            <strong style={{ color: BRAND.navy }}>
-              {`${window.location.origin}${studentViewPathForSlug(slugifyCohortName(cohortName || 'cohort'))}`}
-            </strong>
+      {/* Student links stay visible for both running cohorts */}
+      <div style={{ ...S.card, display: 'grid', gap: 12, marginBottom: 18 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: BRAND.navy }}>Student view links</div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: '#f8fafc' }}>
+            <div style={{ fontWeight: 800, color: BRAND.navy }}>Incubator 12.0</div>
+            <div style={{ fontSize: 12, color: BRAND.textLight, margin: '4px 0 6px' }}>Original page. Adding Incubator 14.0 does not change this link.</div>
+            <a href="/student-view" style={{ fontSize: 13, fontWeight: 700, color: BRAND.navy }}>{`${window.location.origin}/student-view`}</a>
+          </div>
+          <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: '#f8fafc' }}>
+            <div style={{ fontWeight: 800, color: BRAND.navy }}>Incubator 14.0</div>
+            <div style={{ fontSize: 12, color: BRAND.textLight, margin: '4px 0 6px' }}>New cohort page. Students use this link after you Apply Mapping below.</div>
+            <a href="/student-view/incubator-14-0" style={{ fontSize: 13, fontWeight: 700, color: BRAND.navy }}>{`${window.location.origin}/student-view/incubator-14-0`}</a>
           </div>
         </div>
-        <span style={{ fontSize: 12, color: BRAND.textLight }}>
-          Parsed data is shown on the dashboard immediately — no database upload required.
-        </span>
-        <button
-          type="button"
-          onClick={handleLoadDemo}
-          disabled={loadingDemo || validating || parsing}
-          style={{
-            ...S.btn,
-            background: '#f0f4ff',
-            color: BRAND.navy,
-            border: `1px solid ${BRAND.border}`,
-            fontSize: 13,
-          }}
-        >
-          {loadingDemo ? 'Loading demo…' : 'Load Demo Dataset'}
-        </button>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setUploadMode('add');
+              setPublishAsMain(false);
+              setCohortName('Incubator 14.0');
+            }}
+            style={{
+              ...S.btn,
+              background: uploadMode === 'add' ? BRAND.navy : '#fff',
+              color: uploadMode === 'add' ? '#fff' : BRAND.navy,
+              border: `1px solid ${uploadMode === 'add' ? BRAND.navy : BRAND.border}`,
+            }}
+          >
+            Add cohort
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setUploadMode('update-original');
+              setPublishAsMain(true);
+              setCohortName('Incubator 12.0');
+            }}
+            style={{
+              ...S.btn,
+              background: uploadMode === 'update-original' ? BRAND.navy : '#fff',
+              color: uploadMode === 'update-original' ? '#fff' : BRAND.navy,
+              border: `1px solid ${uploadMode === 'update-original' ? BRAND.navy : BRAND.border}`,
+            }}
+          >
+            Update Incubator 12.0 only
+          </button>
+          <button
+            type="button"
+            onClick={handleLoadDemo}
+            disabled={loadingDemo || validating || parsing}
+            style={{
+              ...S.btn,
+              background: '#fff',
+              color: BRAND.textLight,
+              border: `1px solid ${BRAND.border}`,
+            }}
+          >
+            {loadingDemo ? 'Loading demo…' : 'Load demo'}
+          </button>
+        </div>
+
+        <label style={{ fontSize: 13, fontWeight: 700, color: BRAND.navy }}>
+          {uploadMode === 'add' ? 'New cohort name' : 'Cohort being updated'}
+          <input
+            type="text"
+            value={cohortName}
+            onChange={e => {
+              setCohortName(e.target.value);
+              if (uploadMode === 'add') setPublishAsMain(false);
+            }}
+            placeholder="Incubator 14.0"
+            disabled={parsing || uploadMode === 'update-original'}
+            style={{
+              display: 'block',
+              width: '100%',
+              maxWidth: 340,
+              marginTop: 6,
+              padding: '8px 12px',
+              border: `1.5px solid ${cohortName.trim() ? BRAND.border : BRAND.red}`,
+              borderRadius: 8,
+              fontSize: 14,
+              fontFamily: 'inherit',
+              color: BRAND.text,
+              background: parsing || uploadMode === 'update-original' ? BRAND.bg : '#fff',
+              outline: 'none',
+            }}
+          />
+        </label>
+        <div style={{ fontSize: 13, color: BRAND.textLight, lineHeight: 1.5 }}>
+          {uploadMode === 'add'
+            ? 'Drop the Incubator 14.0 Excel below, then Apply Mapping. The original Incubator 12.0 page is not replaced.'
+            : 'Drop the Incubator 12.0 Excel below, then Apply Mapping. This refreshes /student-view only.'}
+          {' '}Student link for this upload:{' '}
+          <strong style={{ color: BRAND.navy }}>
+            {uploadMode === 'update-original'
+              ? `${window.location.origin}/student-view`
+              : `${window.location.origin}${studentViewPathForSlug(slugifyCohortName(cohortName || 'cohort'))}`}
+          </strong>
+        </div>
       </div>
 
       {!canUpload && !visualized && (
