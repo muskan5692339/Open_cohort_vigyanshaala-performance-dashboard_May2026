@@ -140,6 +140,7 @@ export function isSessionColumnHeader(header: string): boolean {
   const h = (header ?? '').replace(/^\uFEFF/, '').trim();
   if (!h) return false;
   if (isPreRecordedColumnHeader(h)) return false;
+  if (isDateAttendanceHeader(h)) return false;
   if (/^WK\d/i.test(h)) return true;
   // WK_MC_Saturday 18th, WK_WS_..., etc. (track code without a week number)
   if (/^WK_(MC|WS|SUK|PR)/i.test(h)) return true;
@@ -148,6 +149,23 @@ export function isSessionColumnHeader(header: string): boolean {
   if (/^week\s*\d/i.test(h)) return true;
   if (/^session\s*\d/i.test(h)) return true;
   return false;
+}
+
+/** Date columns on the Daily Attendance sheet, e.g. 2026-08-22. */
+export function isDateAttendanceHeader(header: string): boolean {
+  const h = (header ?? '').replace(/^\uFEFF/, '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(h) || /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(h);
+}
+
+export function formatSessionDateLabel(header: string): string {
+  const iso = header.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!iso) return header.trim();
+  const date = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+export function isDailyAttendanceSheetName(name: string): boolean {
+  return normalizeSheetName(name) === 'dailyattendance';
 }
 
 export function findClassWiseAttendanceSheetName(sheetNames: string[]): string | undefined {
@@ -204,6 +222,14 @@ function parseSessionHours(raw: string): number {
   return normalizeSessionHours(n);
 }
 
+function parseDailyAttendanceMark(raw: string): number {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (!s || s === '0' || s === 'absent' || s === 'a' || s === 'n' || s === '#n/a' || s === '#na') return 0;
+  if (['1', 'p', 'present', 'yes', 'y', 'true'].includes(s)) return 1;
+  const n = parseFloat(s.replace(/,/g, ''));
+  return Number.isFinite(n) && n > 0 ? 1 : 0;
+}
+
 function parsePreRecordedHours(raw: string): number {
   const n = parseFloat(String(raw ?? '').replace(/,/g, '').trim());
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -238,8 +264,10 @@ export function parseClassWiseAttendanceRows(
   const headers = (rows[headerRowIdx] ?? []).map(h => (h ?? '').replace(/^\uFEFF/, '').trim());
   const nameMatchesClassWise =
     !!sheetName && !!findClassWiseAttendanceSheetName([sheetName]);
+  const dateColumns = headers.filter(isDateAttendanceHeader);
+  const isDailySheet = isDailyAttendanceSheetName(sheetName) || dateColumns.length >= 3;
 
-  if (!isClassWiseAttendanceHeaders(headers) && !nameMatchesClassWise) return null;
+  if (!isClassWiseAttendanceHeaders(headers) && !nameMatchesClassWise && !isDailySheet) return null;
 
   const emailIdx = headers.findIndex(isEmailHeader);
   if (emailIdx < 0) return null;
@@ -251,12 +279,22 @@ export function parseClassWiseAttendanceRows(
 
   let sessionColumns = headers.filter(isSessionColumnHeader);
   let preRecordedColumns = headers.filter(isPreRecordedColumnHeader);
-  if (!sessionColumns.length && !preRecordedColumns.length && nameMatchesClassWise) {
+  if (isDailySheet && dateColumns.length) {
+    sessionColumns = dateColumns;
+    preRecordedColumns = [];
+  } else if (!sessionColumns.length && !preRecordedColumns.length && nameMatchesClassWise) {
     const dataColumns = headers.filter((h, idx) => idx !== emailIdx && idx !== nameCol && h.trim());
     sessionColumns = dataColumns.filter(h => !isPreRecordedColumnHeader(h));
     preRecordedColumns = dataColumns.filter(isPreRecordedColumnHeader);
   }
   if (!sessionColumns.length && !preRecordedColumns.length) return null;
+
+  const dateLabels = isDailySheet
+    ? sessionColumns.map(col => {
+      const label = formatSessionDateLabel(col);
+      return label;
+    })
+    : sessionColumns;
 
   const entries: ClassWiseAttendanceEntry[] = [];
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
@@ -266,9 +304,13 @@ export function parseClassWiseAttendanceRows(
     const email = normalizeEmail(r[emailIdx] ?? '');
     if (!isValidEmail(email)) continue;
 
-    const sessions: ClassWiseSession[] = sessionColumns.map(col => {
+    const sessions: ClassWiseSession[] = sessionColumns.map((col, idx) => {
       const colIdx = headers.indexOf(col);
-      return { key: col, hours: parseSessionHours(r[colIdx] ?? '') };
+      const raw = r[colIdx] ?? '';
+      return {
+        key: isDailySheet ? dateLabels[idx] : col,
+        hours: isDailySheet ? parseDailyAttendanceMark(raw) : parseSessionHours(raw),
+      };
     });
     const preRecorded: ClassWiseSession[] = preRecordedColumns.map(col => {
       const colIdx = headers.indexOf(col);
@@ -319,9 +361,10 @@ export function readClassWiseAttendanceFromWorkbook(
   },
 ): ClassWiseAttendanceData | null {
   const names = wb.worksheets.map(ws => ws.name);
-  const preferred = findClassWiseAttendanceSheetName(names);
-  if (!preferred) return null;
-  const sheetsToTry = [preferred];
+  const classWise = findClassWiseAttendanceSheetName(names);
+  const daily = names.find(isDailyAttendanceSheetName);
+  const sheetsToTry = [classWise, daily].filter((name): name is string => Boolean(name));
+  if (!sheetsToTry.length) return null;
 
   for (const sheetName of sheetsToTry) {
     const ws = wb.getWorksheet(sheetName);

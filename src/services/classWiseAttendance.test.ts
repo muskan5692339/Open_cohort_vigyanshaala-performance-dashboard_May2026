@@ -6,6 +6,21 @@ import {
   parseClassWiseAttendanceRows,
 } from './classWiseAttendance';
 
+describe('parse Daily Attendance date columns', () => {
+  it('uses date columns as the session-wise trend', () => {
+    const rows = [
+      ['', '', '', '11', '607'],
+      ['S.NO', 'EMAIL', 'FULL NAME', '% Attendance', '2026-08-22', '2026-08-24', '2026-09-14'],
+      ['1', 'rithu2128@gmail.com', 'N M RITHUNATH', '100', '1', '0', '1'],
+    ];
+    const parsed = parseClassWiseAttendanceRows(rows, 'Daily Attendance');
+    expect(parsed).not.toBeNull();
+    const trend = buildSessionTrendFromClassWise(parsed!.entries[0]);
+    expect(trend.map(p => p.name)).toEqual(['22 Aug', '24 Aug', '14 Sept']);
+    expect(trend.map(p => p.value)).toEqual([1, 0, 1]);
+  });
+});
+
 describe('isSessionColumnHeader', () => {
   it('recognizes numbered week columns', () => {
     expect(isSessionColumnHeader('WK0_SUK_Saturday 13th')).toBe(true);
