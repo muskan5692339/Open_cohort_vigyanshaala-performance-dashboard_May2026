@@ -366,7 +366,72 @@
 
 @media (prefers-reduced-motion: reduce) {
   .program-journey__ping,
-  .program-journey__all-clear-dot {
+  .program-journey__all-clear-dot,
+  .program-journey__week-live {
     animation: none;
   }
+}
+
+.program-journey__inc14 {
+  display: grid;
+  gap: 8px;
+}
+
+.program-journey__inc14-meta,
+.program-journey__weeks-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--sd-text-muted);
+}
+
+.program-journey__weeks-head strong {
+  color: var(--sd-text);
+  font-size: 14px;
+}
+
+.program-journey__weeks-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  height: 10px;
+  border-radius: 999px;
+  background: #e8edf4;
+  overflow: hidden;
+}
+
+.program-journey__week-seg--done {
+  background: #68a74c;
+}
+
+.program-journey__week-seg--current {
+  background: #22c55e;
+}
+
+.program-journey__week-live {
+  position: absolute;
+  top: -4px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #16a34a;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.28);
+  z-index: 1;
+}
+
+.program-journey__week-labels {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  font-size: 10px;
+  color: var(--sd-text-muted);
+  text-align: center;
+}
+
+.program-journey__week-labels .is-current {
+  color: #166534;
+  font-weight: 800;
 }

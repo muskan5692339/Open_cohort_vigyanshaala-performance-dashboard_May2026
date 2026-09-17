@@ -365,6 +365,12 @@ export default function StudentDashboard({ email, onBack }: Props) {
             preRecordedTotalHours={preRecordedTotalHours}
             assignmentRows={assignmentRows}
             quizBarData={quizData}
+            cohortName={
+              typeof window !== 'undefined' && window.location.pathname.includes('incubator-14')
+                ? 'Incubator 14.0'
+                : cohort
+            }
+            dataAsOf={adminUpdatedAt}
           />
           {attendanceOnlyRoster && (
             <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--sd-text-muted)', lineHeight: 1.5 }}>

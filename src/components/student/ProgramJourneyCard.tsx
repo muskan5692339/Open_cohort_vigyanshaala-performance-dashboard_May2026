@@ -26,10 +26,15 @@ type GapGroup = {
   tone: 'warn' | 'danger';
 };
 
-/** Open Cohort calendar (2026). */
+/** Open Cohort Incubator 12 calendar (2026). */
 const PROGRAM_START = new Date(2026, 5, 13); // 13 June
 const PROGRAM_END = new Date(2026, 7, 8); // 8 August
 const CERTIFICATE_BY = new Date(2026, 8, 10); // 10 September
+
+/** Incubator 14.0 — inaugural 22 Aug; Week 1 starts Monday 24 Aug; 8 weeks. */
+const INC14_START = new Date(2026, 7, 22);
+const INC14_WEEK1 = new Date(2026, 7, 24);
+const INC14_WEEKS = 8;
 
 const LIVE_HOURS_GAP = 0.7;
 const PRE_PCT_GAP = 70;
@@ -37,6 +42,31 @@ const QUIZ_PCT_GAP = 70;
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+export function isIncubator14(cohortName?: string | null): boolean {
+  return /incubator\s*14|inc\s*14/i.test(cohortName ?? '');
+}
+
+export function incubator14WeekIndex(asOf: Date): number {
+  const start = startOfDay(INC14_WEEK1).getTime();
+  const day = startOfDay(asOf).getTime();
+  if (day < start) return 0;
+  const days = Math.floor((day - start) / 86_400_000);
+  return Math.min(INC14_WEEKS, Math.floor(days / 7) + 1);
+}
+
+export function incubator14WeekRange(week: number): { start: Date; end: Date } | null {
+  if (week < 1 || week > INC14_WEEKS) return null;
+  const start = new Date(INC14_WEEK1);
+  start.setDate(start.getDate() + (week - 1) * 7);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start, end };
+}
+
+function formatShortDate(d: Date): string {
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
 function resolveMilestones(now = new Date()): Milestone[] {
@@ -212,6 +242,9 @@ type Props = {
   quizBarData: { name: string; score: number | null; display: string }[];
   liveSessions: number;
   preRecordedTotalHours: number;
+  cohortName?: string | null;
+  /** Data-source upload time. Current week follows this, not the phone clock. */
+  dataAsOf?: string | null;
 };
 
 export default function ProgramJourneyCard({
@@ -220,8 +253,18 @@ export default function ProgramJourneyCard({
   quizBarData,
   liveSessions,
   preRecordedTotalHours,
+  cohortName,
+  dataAsOf,
 }: Props) {
-  const milestones = useMemo(() => resolveMilestones(), []);
+  const asOf = useMemo(() => {
+    const parsed = dataAsOf ? new Date(dataAsOf) : new Date();
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [dataAsOf]);
+  const inc14 = isIncubator14(cohortName);
+  const weekIndex = useMemo(() => incubator14WeekIndex(asOf), [asOf]);
+  const weekRange = incubator14WeekRange(weekIndex);
+  const week8 = incubator14WeekRange(INC14_WEEKS);
+  const milestones = useMemo(() => resolveMilestones(asOf), [asOf]);
   const gapGroups = useMemo(
     () => buildGapGroups({ classWise, assignmentRows, quizBarData }),
     [classWise, assignmentRows, quizBarData],
@@ -253,6 +296,40 @@ export default function ProgramJourneyCard({
           )}
         </div>
 
+        {inc14 ? (
+          <div className="program-journey__inc14">
+            <div className="program-journey__inc14-meta">
+              <span>Program started {formatShortDate(INC14_START)}</span>
+              <span>Week 8 ends {week8 ? formatShortDate(week8.end) : '18 Oct'}</span>
+            </div>
+            <div className="program-journey__weeks-head">
+              <strong>{weekIndex < 1 ? 'Before Week 1' : `Week ${weekIndex} of ${INC14_WEEKS}`}</strong>
+              <span>
+                {weekRange ? `${formatShortDate(weekRange.start)} – ${formatShortDate(weekRange.end)}` : 'Week 1 starts 24 Aug'}
+                {dataAsOf ? ` · as of data uploaded ${formatShortDate(asOf)}` : ''}
+              </span>
+            </div>
+            <div className="program-journey__weeks-track" aria-label={weekIndex < 1 ? 'Before week 1 of 8' : `Week ${weekIndex} of ${INC14_WEEKS}`}>
+              {Array.from({ length: INC14_WEEKS }, (_, i) => {
+                const n = i + 1;
+                const state = weekIndex >= n ? (weekIndex === n ? 'current' : 'done') : 'upcoming';
+                return <span key={n} className={`program-journey__week-seg program-journey__week-seg--${state}`} />;
+              })}
+              {weekIndex >= 1 && (
+                <span
+                  className="program-journey__week-live"
+                  style={{ left: `${((weekIndex - 0.5) / INC14_WEEKS) * 100}%` }}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+            <div className="program-journey__week-labels">
+              {Array.from({ length: INC14_WEEKS }, (_, i) => (
+                <span key={i} className={weekIndex === i + 1 ? 'is-current' : ''}>W{i + 1}</span>
+              ))}
+            </div>
+          </div>
+        ) : (
         <ol className="program-journey__track" aria-label="Program timeline">
           {milestones.map((m, index) => (
             <li
@@ -284,6 +361,7 @@ export default function ProgramJourneyCard({
             </li>
           ))}
         </ol>
+        )}
       </div>
 
       <div
