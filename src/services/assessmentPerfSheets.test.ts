@@ -80,6 +80,47 @@ describe('parseAssessmentPerfSheets', () => {
     expect(parsed.byEmail.get('a@x.com')?.['Quiz 1 Score']).toBeUndefined();
   });
 
+  it('merges Assignment_Source feedback onto matching assignment columns', () => {
+    const merge = parseAssessmentPerfSheets([
+      {
+        name: 'Assignment_Perf',
+        rows: [
+          ['', '', 'Career Exploration', 'Career Exploration', 'SWOT', 'SWOT'],
+          ['EMAIL', 'NAME', 'Status A1', 'Score A1', 'Status A2', 'Score A2'],
+          ['a@x.com', 'A', 'accepted', '90', 'rejected', '0'],
+        ],
+      },
+      {
+        name: 'Assignment_Source',
+        rows: [
+          // Pad to columns C (2), K (10), R (17)
+          [
+            'S.NO', 'ID', 'Student Email', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+            'feedback_comments', 'L', 'M', 'N', 'O', 'P', 'Q', 'Assignment Name',
+          ],
+          [
+            '1', '1', 'a@x.com', '', '', '', '', '', '', '',
+            'Please add more reflection on strengths.', '', '', '', '', '', '', 'Career Exploration',
+          ],
+          [
+            '2', '1', 'a@x.com', '', '', '', '', '', '', '',
+            'Revise SWOT threats section.', '', '', '', '', '', '', 'SWOT',
+          ],
+        ],
+      },
+    ]);
+
+    expect(merge.feedbackByEmail.get('a@x.com')?.get('careerexploration')).toContain('reflection');
+    const result = mergeAssessmentPerfIntoRows(
+      ['EMAIL', 'FULL NAME'],
+      [{ EMAIL: 'a@x.com', 'FULL NAME': 'A' }],
+      merge,
+    );
+    expect(result.rawRows[0]['Assignment1_Career Exploration_comments']).toContain('reflection');
+    expect(result.rawRows[0]['Assignment2_SWOT_comments']).toContain('threats');
+    expect(result.headers).toContain('Assignment1_Career Exploration_comments');
+  });
+
   it('merges fields into Overall Performance rows', () => {
     const merge = parseAssessmentPerfSheets([
       {

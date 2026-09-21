@@ -1,5 +1,9 @@
 import { excelCellToString, readExcelRow, type ExcelReadableRow } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
+import {
+  isAssignmentCommentColumn,
+  normalizeAssignmentKey,
+} from './studentAssignmentDisplay';
 
 function normalizeSheetKey(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -21,6 +25,17 @@ export function isQuizSourceSheetName(name: string): boolean {
   return n === 'quizsource' || n === 'quiz_source';
 }
 
+/** Long-format assignment feedback: email (C), feedback (K), assignment name (R). */
+export function isAssignmentSourceSheetName(name: string): boolean {
+  const n = normalizeSheetKey(name);
+  return n === 'assignmentsource' || n === 'assignment_source';
+}
+
+/** Excel 1-based columns C / K / R → 0-based indices. */
+const ASSIGNMENT_SOURCE_EMAIL_COL = 2;
+const ASSIGNMENT_SOURCE_FEEDBACK_COL = 10;
+const ASSIGNMENT_SOURCE_NAME_COL = 17;
+
 function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase().replace(/^mailto:/i, '').trim();
 }
@@ -32,8 +47,8 @@ function isValidEmail(email: string): boolean {
 function readSheetRows(ws: {
   eachRow: (cb: (row: ExcelReadableRow) => void) => void;
   getRow: (n: number) => ExcelReadableRow;
-}): string[][] {
-  const colCount = Math.max(ws.getRow(1).cellCount, ws.getRow(2).cellCount, 1);
+}, minCols = 1): string[][] {
+  const colCount = Math.max(ws.getRow(1).cellCount, ws.getRow(2).cellCount, minCols, 1);
   const out: string[][] = [];
   ws.eachRow(row => {
     out.push(readExcelRow(row, colCount));
@@ -69,6 +84,68 @@ export interface AssessmentPerfMerge {
   assignmentColumns: string[];
   quizColumns: string[];
   byEmail: Map<string, Record<string, string>>;
+  /** email → normalized assignment key → facilitator feedback from Assignment_Source */
+  feedbackByEmail: Map<string, Map<string, string>>;
+}
+
+/**
+ * Parse Assignment_Source (long format): Col C email, Col K feedback, Col R assignment name.
+ */
+export function parseAssignmentSourceFeedback(
+  rows: string[][],
+): Map<string, Map<string, string>> {
+  const out = new Map<string, Map<string, string>>();
+  if (!rows.length) return out;
+
+  let start = 0;
+  const header = rows[0] ?? [];
+  const headerC = (header[ASSIGNMENT_SOURCE_EMAIL_COL] ?? '').toLowerCase();
+  const headerK = (header[ASSIGNMENT_SOURCE_FEEDBACK_COL] ?? '').toLowerCase();
+  const headerR = (header[ASSIGNMENT_SOURCE_NAME_COL] ?? '').toLowerCase();
+  if (
+    headerC.includes('email')
+    || headerK.includes('feedback')
+    || headerK.includes('comment')
+    || headerR.includes('assignment')
+  ) {
+    start = 1;
+  }
+
+  for (let r = start; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const email = normalizeEmail(row[ASSIGNMENT_SOURCE_EMAIL_COL] ?? '');
+    if (!isValidEmail(email)) continue;
+    const feedback = (row[ASSIGNMENT_SOURCE_FEEDBACK_COL] ?? '').trim();
+    const assignName = (row[ASSIGNMENT_SOURCE_NAME_COL] ?? '').trim();
+    if (!feedback || !assignName) continue;
+
+    const key = normalizeAssignmentKey(assignName);
+    if (!key) continue;
+
+    const byAssign = out.get(email) ?? new Map<string, string>();
+    // Keep the longest feedback if duplicates exist for the same assignment.
+    const prev = byAssign.get(key) ?? '';
+    if (!prev || feedback.length >= prev.length) byAssign.set(key, feedback);
+    out.set(email, byAssign);
+  }
+
+  return out;
+}
+
+function lookupAssignmentFeedback(
+  feedbackMap: Map<string, string>,
+  assignmentCol: string,
+): string {
+  const base = normalizeAssignmentKey(assignmentCol);
+  if (!base) return '';
+  const exact = feedbackMap.get(base);
+  if (exact) return exact;
+  for (const [key, value] of feedbackMap) {
+    if (!key || !value) continue;
+    if (key === base || key.startsWith(base) || base.startsWith(key)) return value;
+  }
+  return '';
 }
 
 /**
@@ -81,6 +158,7 @@ export function parseAssessmentPerfSheets(
   const byEmail = new Map<string, Record<string, string>>();
   const assignmentColumns: string[] = [];
   const quizColumns: string[] = [];
+  let feedbackByEmail = new Map<string, Map<string, string>>();
 
   const assignSheet = sheets.find(s => isAssignmentPerfSheetName(s.name));
   if (assignSheet && assignSheet.rows.length >= 3) {
@@ -184,7 +262,12 @@ export function parseAssessmentPerfSheets(
     }
   }
 
-  return { assignmentColumns, quizColumns, byEmail };
+  const sourceSheet = sheets.find(s => isAssignmentSourceSheetName(s.name));
+  if (sourceSheet?.rows.length) {
+    feedbackByEmail = parseAssignmentSourceFeedback(sourceSheet.rows);
+  }
+
+  return { assignmentColumns, quizColumns, byEmail, feedbackByEmail };
 }
 
 export function mergeAssessmentPerfIntoRows(
@@ -192,7 +275,7 @@ export function mergeAssessmentPerfIntoRows(
   rawRows: Record<string, string>[],
   merge: AssessmentPerfMerge,
 ): { headers: string[]; rawRows: Record<string, string>[] } {
-  if (!merge.byEmail.size) return { headers, rawRows };
+  if (!merge.byEmail.size && !merge.feedbackByEmail.size) return { headers, rawRows };
 
   const emailKey = headers.find(h => /^email$/i.test(h.trim()))
     ?? headers.find(h => /email/i.test(h));
@@ -200,17 +283,40 @@ export function mergeAssessmentPerfIntoRows(
 
   const extraHeaders = [...merge.assignmentColumns, ...merge.quizColumns]
     .filter(h => !headers.includes(h));
-  const nextHeaders = [...headers, ...extraHeaders];
+  let nextHeaders = [...headers, ...extraHeaders];
 
   const nextRows = rawRows.map(row => {
     const email = normalizeEmail(row[emailKey] ?? '');
     const extra = merge.byEmail.get(email);
-    if (!extra) return row;
-    const next = { ...row };
-    for (const [key, value] of Object.entries(extra)) {
-      if (!value && String(next[key] ?? '').trim()) continue;
-      next[key] = value;
+    const next = extra ? { ...row } : { ...row };
+    if (extra) {
+      for (const [key, value] of Object.entries(extra)) {
+        if (!value && String(next[key] ?? '').trim()) continue;
+        next[key] = value;
+      }
     }
+
+    const feedbackMap = merge.feedbackByEmail.get(email);
+    if (feedbackMap?.size) {
+      const assignCols = [
+        ...merge.assignmentColumns,
+        ...Object.keys(next).filter(k =>
+          !isAssignmentCommentColumn(k)
+          && (/^assignment\d+/i.test(k.replace(/\s+/g, '')) || /assignment/i.test(k)),
+        ),
+      ];
+      const seen = new Set<string>();
+      for (const col of assignCols) {
+        if (seen.has(col) || isAssignmentCommentColumn(col)) continue;
+        seen.add(col);
+        const feedback = lookupAssignmentFeedback(feedbackMap, col);
+        if (!feedback) continue;
+        const commentCol = `${col}_comments`;
+        next[commentCol] = feedback;
+        if (!nextHeaders.includes(commentCol)) nextHeaders = [...nextHeaders, commentCol];
+      }
+    }
+
     return next;
   });
 
@@ -227,12 +333,19 @@ export async function loadAssessmentPerfFromFile(
     .filter(ws =>
       isAssignmentPerfSheetName(ws.name)
       || isQuizPerfSheetName(ws.name)
-      || isQuizSourceSheetName(ws.name),
+      || isQuizSourceSheetName(ws.name)
+      || isAssignmentSourceSheetName(ws.name),
     )
-    .map(ws => ({ name: ws.name, rows: readSheetRows(ws) }));
+    .map(ws => ({
+      name: ws.name,
+      rows: readSheetRows(
+        ws,
+        isAssignmentSourceSheetName(ws.name) ? ASSIGNMENT_SOURCE_NAME_COL + 1 : 1,
+      ),
+    }));
   if (!sheets.length) return null;
   const parsed = parseAssessmentPerfSheets(sheets);
-  if (!parsed.byEmail.size) return null;
+  if (!parsed.byEmail.size && !parsed.feedbackByEmail.size) return null;
   return parsed;
 }
 
