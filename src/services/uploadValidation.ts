@@ -1,6 +1,8 @@
 import type { UploadValidationIssue, UploadValidationResult } from '../types/productionTypes';
 import { excelCellToString, isUncachedFormulaCell } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
+import { isAssignmentPerfSheetName } from './assessmentPerfSheets';
+import { isDailyAttendanceSheetName } from './classWiseAttendance';
 import {
   findOverallSheetName,
   isAllowedCohortSheetName,
@@ -10,6 +12,46 @@ import {
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_ROWS_WARNING = 10_000;
 const SUPPORTED = /\.xlsx?$/i;
+
+/** Header row used for uniqueness checks (1-based). Matches import readers. */
+function validationHeaderRowIndex(sheetName: string): number {
+  if (isDailyAttendanceSheetName(sheetName) || isAssignmentPerfSheetName(sheetName)) return 2;
+  return 1;
+}
+
+/**
+ * Headers for duplicate detection. Assignment_Perf uses parent titles (row 1)
+ * over Status|Score (row 2) — composite names so intentional pairs are unique.
+ */
+function headersForDuplicateCheck(
+  ws: { getRow: (n: number) => { cellCount: number; getCell: (c: number) => unknown } },
+  sheetName: string,
+): string[] {
+  const headerRowIdx = validationHeaderRowIndex(sheetName);
+  const headerRow = ws.getRow(headerRowIdx);
+  const cellCount = Math.max(headerRow.cellCount, ws.getRow(1).cellCount, 1);
+
+  if (isAssignmentPerfSheetName(sheetName)) {
+    const titleRow = ws.getRow(1);
+    let lastTitle = '';
+    const out: string[] = [];
+    for (let i = 1; i <= cellCount; i++) {
+      const title = excelCellToString(titleRow.getCell(i)).trim();
+      if (title) lastTitle = title;
+      const sub = excelCellToString(headerRow.getCell(i)).trim();
+      if (!sub && !title) {
+        out.push('');
+        continue;
+      }
+      out.push(lastTitle && sub ? `${lastTitle} ${sub}` : sub || lastTitle);
+    }
+    return out;
+  }
+
+  return Array.from({ length: cellCount }, (_, i) =>
+    excelCellToString(headerRow.getCell(i + 1)),
+  );
+}
 
 function issue(
   code: string,
@@ -107,7 +149,10 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
     const sheetsToValidate = wb.worksheets.filter(ws => isAllowedCohortSheetName(ws.name));
 
     const allEmpty = sheetsToValidate.length > 0
-      && sheetsToValidate.every(ws => (ws.rowCount ?? 0) <= 1);
+      && sheetsToValidate.every(ws => {
+        const minRows = validationHeaderRowIndex(ws.name);
+        return (ws.rowCount ?? 0) <= minRows;
+      });
     if (sheetsToValidate.length > 0 && allEmpty) {
       issues.push(
         issue(
@@ -121,25 +166,24 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
 
     for (const ws of sheetsToValidate) {
       const rowCount = ws.rowCount ?? 0;
-      if (rowCount <= 1) {
+      const minHeaderRows = validationHeaderRowIndex(ws.name);
+      if (rowCount <= minHeaderRows) {
         issues.push(
           issue('EMPTY_SHEET', 'warning', `Sheet "${ws.name}" has no data rows.`, 'Select a different sheet or add data.'),
         );
         continue;
       }
 
-      const headerRow = ws.getRow(1);
-      const headers = Array.from({ length: headerRow.cellCount }, (_, i) =>
-        excelCellToString(headerRow.getCell(i + 1)),
-      );
+      const headerRowIdx = validationHeaderRowIndex(ws.name);
+      const headers = headersForDuplicateCheck(ws, ws.name);
 
       if (headers.every(h => !h)) {
         issues.push(
           issue(
             'MISSING_HEADERS',
             'error',
-            `Sheet "${ws.name}" is missing column headers in row 1.`,
-            'Add header names in the first row.',
+            `Sheet "${ws.name}" is missing column headers in row ${headerRowIdx}.`,
+            `Add header names in row ${headerRowIdx}.`,
           ),
         );
       }
@@ -152,17 +196,23 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
       });
       const dupes = [...seen.entries()].filter(([, c]) => c > 1).map(([h]) => h);
       if (dupes.length) {
+        // Never block: Inc 14 sheets use multi-row headers (Status|Score under shared
+        // titles; Daily Attendance row 1 has repeating counts). Import uses the right row.
+        const knownMultiHeader =
+          isDailyAttendanceSheetName(ws.name) || isAssignmentPerfSheetName(ws.name);
         issues.push(
           issue(
             'DUPLICATE_HEADERS',
-            'error',
+            'warning',
             `Duplicate headers on "${ws.name}": ${dupes.join(', ')}`,
-            'Rename duplicate columns so each header is unique.',
+            knownMultiHeader
+              ? 'Multi-row headers are expected on this sheet; import will use the correct header row.'
+              : 'Rename duplicate columns so each header is unique if mapping looks wrong.',
           ),
         );
       }
 
-      const dataRows = rowCount - 1;
+      const dataRows = Math.max(0, rowCount - headerRowIdx);
       if (dataRows > MAX_ROWS_WARNING) {
         issues.push(
           issue(
@@ -174,29 +224,31 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
         );
       }
 
-      const row2 = ws.getRow(2);
-      const row2vals = (row2.values as unknown[]).slice(1).map(v => String(v ?? '').trim());
-      const row3 = ws.getRow(3);
-      const row3vals = (row3.values as unknown[]).slice(1).map(v => String(v ?? '').trim());
+      const subHeaderRow = ws.getRow(headerRowIdx + 1);
+      const subHeaderVals = (subHeaderRow.values as unknown[]).slice(1).map(v => String(v ?? '').trim());
+      const dataProbeRow = ws.getRow(headerRowIdx + 2);
+      const dataProbeVals = (dataProbeRow.values as unknown[]).slice(1).map(v => String(v ?? '').trim());
       const looksLikeSubHeader =
-        row2vals.filter(Boolean).length > 0 &&
-        row2vals.every(v => /^[a-z\s]+$/i.test(v) && v.length < 30) &&
+        !isDailyAttendanceSheetName(ws.name) &&
+        !isAssignmentPerfSheetName(ws.name) &&
+        subHeaderVals.filter(Boolean).length > 0 &&
+        subHeaderVals.every(v => /^[a-z\s]+$/i.test(v) && v.length < 30) &&
         headers.filter(Boolean).length >= 3 &&
-        row3vals.filter(Boolean).length >= headers.filter(Boolean).length * 0.5;
+        dataProbeVals.filter(Boolean).length >= headers.filter(Boolean).length * 0.5;
       if (looksLikeSubHeader) {
         issues.push(
           issue(
             'MIXED_HEADER_ROWS',
             'warning',
             `Sheet "${ws.name}" may have multiple header rows.`,
-            'Confirm row 1 contains the final column names.',
+            `Confirm row ${headerRowIdx} contains the final column names.`,
           ),
         );
       }
 
       let uncachedFormulaCells = 0;
-      const sampleRows = Math.min(rowCount, 51);
-      for (let r = 2; r <= sampleRows; r++) {
+      const sampleRows = Math.min(rowCount, headerRowIdx + 50);
+      for (let r = headerRowIdx + 1; r <= sampleRows; r++) {
         const row = ws.getRow(r);
         row.eachCell(cell => {
           try {
