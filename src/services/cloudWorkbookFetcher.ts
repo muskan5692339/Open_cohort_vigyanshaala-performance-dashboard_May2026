@@ -124,6 +124,17 @@ export async function orchestrateCloudWorkbookSync(
     classWiseAttendanceColumns: classWise?.sessionColumns ?? parsed.classWiseAttendanceColumns ?? [],
   };
 
+  const { loadAssessmentPerfFromFile, mergeAssessmentPerfIntoRows } = await import('./assessmentPerfSheets');
+  const assessmentPerf = await loadAssessmentPerfFromFile(input.file);
+  if (assessmentPerf) {
+    const merged = mergeAssessmentPerfIntoRows(parsed.headers ?? [], parsed.rawRows ?? [], assessmentPerf);
+    parsed = {
+      ...parsed,
+      headers: merged.headers,
+      rawRows: merged.rawRows,
+    };
+  }
+
   if (parsed.students.errors.length) {
     parsed.students.errors.slice(0, 3).forEach(e => warnings.push(`Students: ${e.message}`));
   }

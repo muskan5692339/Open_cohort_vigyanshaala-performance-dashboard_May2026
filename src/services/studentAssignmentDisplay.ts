@@ -55,8 +55,12 @@ export function classifyAssignmentStatus(value: string): AssignmentDisplayKind {
   // Long cell text is facilitator feedback, not a status (may contain the word "accepted").
   if (s.length > 56) return 'other';
   if (s.includes('rejected')) return 'rejected';
-  if (['accepted', 'submitted', 'complete', 'completed', 'pass'].some(k => s.includes(k))) {
+  if (['accepted', 'complete', 'completed', 'pass'].some(k => s.includes(k))) {
     return 'accepted';
+  }
+  // Still in progress — show the real status, count as submitted for %.
+  if (['under review', 'draft', 'reattempt', 're-attempt', 'submitted'].some(k => s.includes(k))) {
+    return 'other';
   }
   if (['no submission', 'not submission', 'pending', 'in progress', 'awaiting'].some(k => s.includes(k))) {
     return 'pending';

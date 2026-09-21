@@ -3,6 +3,10 @@ import type { DragEvent } from 'react';
 import { parseUploadedFile } from '../../services/excelParser';
 import { parseWorkbookSheet } from '../../services/selectedSheetParser';
 import { loadClassWiseAttendanceFromFile } from '../../services/classWiseAttendance';
+import {
+  loadAssessmentPerfFromFile,
+  mergeAssessmentPerfIntoRows,
+} from '../../services/assessmentPerfSheets';
 import { validateUploadFile } from '../../services/uploadValidation';
 import { previewWorkbook } from '../../services/workbookPreview';
 import { loadSyncConfig } from '../../services/oneDriveSync';
@@ -297,6 +301,16 @@ export default function ExcelUpload({ onDataImported }: Props) {
         classWiseAttendance: classWise?.entries ?? p.classWiseAttendance ?? [],
         classWiseAttendanceColumns: classWise?.sessionColumns ?? p.classWiseAttendanceColumns ?? [],
       };
+
+      const assessmentPerf = await loadAssessmentPerfFromFile(pendingFile, buffer);
+      if (assessmentPerf) {
+        const merged = mergeAssessmentPerfIntoRows(p.headers ?? [], p.rawRows ?? [], assessmentPerf);
+        p = {
+          ...p,
+          headers: merged.headers,
+          rawRows: merged.rawRows,
+        };
+      }
 
       setParsed(p);
       const quizOneLeak = detectQuizOneCategoryContamination(p.rawRows ?? []);

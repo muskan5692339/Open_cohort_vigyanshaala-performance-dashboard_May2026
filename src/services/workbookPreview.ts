@@ -3,6 +3,7 @@ import { readExcelRow } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 import { filterAllowedCohortSheets, recommendImportSheet } from './sheetSelection';
 import { isDailyAttendanceSheetName } from './classWiseAttendance';
+import { isAssignmentPerfSheetName } from './assessmentPerfSheets';
 
 export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): Promise<WorkbookPreview> {
   const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
@@ -10,7 +11,7 @@ export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): P
 
   const allSheets: SheetPreview[] = wb.worksheets.map(ws => {
     const rowCount = Math.max(0, (ws.rowCount ?? 0) - 1);
-    const headerSourceRow = isDailyAttendanceSheetName(ws.name) ? 2 : 1;
+    const headerSourceRow = isDailyAttendanceSheetName(ws.name) || isAssignmentPerfSheetName(ws.name) ? 2 : 1;
     const headerRow = ws.getRow(headerSourceRow);
     const colCount = Math.max(headerRow.cellCount, ws.columnCount ?? 0);
     const headers = readExcelRow(headerRow, colCount).map((h, i) => h || `Column ${i + 1}`);

@@ -1,6 +1,7 @@
 import type { WorkbookPreview } from '../../types/productionTypes';
 import { BRAND } from '../../types/adminTypes';
 import { isDailyAttendanceSheetName } from '../../services/classWiseAttendance';
+import { isAssignmentPerfSheetName, isQuizPerfSheetName } from '../../services/assessmentPerfSheets';
 import { isOverallPerformanceSheetName, isClassWiseAttendanceSheetName } from '../../services/sheetSelection';
 
 interface FilePreviewPanelProps {
@@ -23,13 +24,27 @@ export default function FilePreviewPanel({
   const sheet = preview.sheets.find(s => s.name === selectedSheet) ?? preview.sheets[0];
   const sessionSheet = preview.sheets.find(s => isDailyAttendanceSheetName(s.name) || isClassWiseAttendanceSheetName(s.name));
   const scoreSheet = preview.sheets.find(s => isOverallPerformanceSheetName(s.name));
+  const assignmentSheet = preview.sheets.find(s => isAssignmentPerfSheetName(s.name));
+  const quizSheet = preview.sheets.find(s => isQuizPerfSheetName(s.name));
+
+  const importBits = [
+    scoreSheet?.name,
+    sessionSheet?.name,
+    assignmentSheet?.name,
+    quizSheet?.name,
+  ].filter(Boolean);
 
   return (
     <div style={{ background: '#fff', border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
       <div style={{ fontWeight: 700, fontSize: 15, color: BRAND.navy, marginBottom: 8 }}>File Preview — confirm before import</div>
       <div style={{ fontSize: 12, color: BRAND.textLight, marginBottom: 12 }}>
-        {scoreSheet && sessionSheet
-          ? `${scoreSheet.name} is imported for scores. ${sessionSheet.name} is imported for the session-wise trend.`
+        {scoreSheet && (sessionSheet || assignmentSheet || quizSheet)
+          ? [
+              `${scoreSheet.name} → scores & roster`,
+              sessionSheet ? `${sessionSheet.name} → session trend` : null,
+              assignmentSheet ? `${assignmentSheet.name} → assignment status` : null,
+              quizSheet ? `${quizSheet.name} → quiz scores` : null,
+            ].filter(Boolean).join(' · ')
           : `${preview.sheetNames.length} sheet(s) found · select the data sheet to import`}
       </div>
 
@@ -37,9 +52,13 @@ export default function FilePreviewPanel({
         {preview.sheets.map(s => {
           const role = isDailyAttendanceSheetName(s.name) || isClassWiseAttendanceSheetName(s.name)
             ? 'Session trend'
-            : isOverallPerformanceSheetName(s.name)
-              ? 'Scores'
-              : '';
+            : isAssignmentPerfSheetName(s.name)
+              ? 'Assignments'
+              : isQuizPerfSheetName(s.name)
+                ? 'Quizzes'
+                : isOverallPerformanceSheetName(s.name)
+                  ? 'Scores'
+                  : '';
           return (
             <button
               key={s.name}
@@ -97,7 +116,7 @@ export default function FilePreviewPanel({
 
       <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
         <button type="button" onClick={onConfirm} disabled={confirming || !selectedSheet} style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: BRAND.navy, color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-          {confirming ? 'Processing…' : scoreSheet && sessionSheet ? `Import ${scoreSheet.name} + ${sessionSheet.name}` : 'Confirm & Import Sheet'}
+          {confirming ? 'Processing…' : importBits.length > 1 ? `Import ${importBits.join(' + ')}` : 'Confirm & Import Sheet'}
         </button>
         <button type="button" onClick={onCancel} style={{ padding: '10px 18px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
           Cancel
