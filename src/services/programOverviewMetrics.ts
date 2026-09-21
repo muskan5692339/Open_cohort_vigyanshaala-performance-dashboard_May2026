@@ -49,8 +49,23 @@ function colsFromDiscovered(
   return discovered.filter(c => c.mappedRole === role).map(c => c.name);
 }
 
+function isAggregateMetricHeader(col: string): boolean {
+  const compact = col.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return (
+    compact === 'assignmentscore'
+    || compact === 'assignmentpercent'
+    || compact === 'assignmentpct'
+    || compact === 'assignmentpercentage'
+    || compact === 'quizscore'
+    || compact === 'quizpercent'
+    || compact === 'quizpct'
+    || compact === 'quizpercentage'
+  );
+}
+
 function isAssignmentHeader(col: string): boolean {
-  const l = col.toLowerCase();
+  if (isAggregateMetricHeader(col)) return false;
+  const l = col.toLowerCase().replace(/\s+/g, ' ');
   return (
     l.includes('assignment')
     || /_assignment_/i.test(col)
@@ -59,6 +74,7 @@ function isAssignmentHeader(col: string): boolean {
 }
 
 function isQuizHeader(col: string): boolean {
+  if (isAggregateMetricHeader(col)) return false;
   return isQuizLikeColumn(col);
 }
 

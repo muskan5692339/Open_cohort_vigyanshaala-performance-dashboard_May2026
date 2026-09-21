@@ -15,6 +15,12 @@ export function isQuizPerfSheetName(name: string): boolean {
   return n === 'quizperf' || n === 'quizperformance' || n === 'quiz_perf';
 }
 
+/** Fallback when Quiz_Perf formulas have no cached values. */
+export function isQuizSourceSheetName(name: string): boolean {
+  const n = normalizeSheetKey(name);
+  return n === 'quizsource' || n === 'quiz_source';
+}
+
 function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase().replace(/^mailto:/i, '').trim();
 }
@@ -53,6 +59,12 @@ function fillForwardTitles(titles: string[]): string[] {
   return out;
 }
 
+/** Inc 14 uses "Status", "Status A1", "Status A2" under each assignment title. */
+function isStatusSubHeader(header: string): boolean {
+  const h = header.trim().toLowerCase();
+  return h === 'status' || /^status(\s|$)/.test(h);
+}
+
 export interface AssessmentPerfMerge {
   assignmentColumns: string[];
   quizColumns: string[];
@@ -79,8 +91,7 @@ export function parseAssessmentPerfSheets(
       const statusCols: { idx: number; name: string }[] = [];
       let assignNum = 0;
       for (let i = 0; i < headerRow.length; i++) {
-        const h = (headerRow[i] ?? '').trim().toLowerCase();
-        if (h !== 'status') continue;
+        if (!isStatusSubHeader(headerRow[i] ?? '')) continue;
         const title = (titleRow[i] ?? '').trim() || `Assignment ${assignNum + 1}`;
         assignNum += 1;
         const colName = `Assignment${assignNum}_${title.replace(/\s+/g, ' ').trim()}`;
@@ -113,11 +124,10 @@ export function parseAssessmentPerfSheets(
       headerRow.forEach((h, i) => {
         const m = h.trim().match(/^quiz\s*(\d+)$/i);
         if (!m) return;
-        const colName = `Quiz ${m[1]} Score`;
-        quizCols.push({ idx: i, name: colName });
-        quizColumns.push(colName);
+        quizCols.push({ idx: i, name: `Quiz ${m[1]} Score` });
       });
 
+      const quizSeen = new Set<string>();
       for (let r = 1; r < quizSheet.rows.length; r++) {
         const row = quizSheet.rows[r];
         if (!row) continue;
@@ -126,9 +136,50 @@ export function parseAssessmentPerfSheets(
         const fields = byEmail.get(email) ?? {};
         for (const col of quizCols) {
           const raw = (row[col.idx] ?? '').trim();
+          // Skip blank / uncached formula cells so Overall Quiz Score stays usable.
+          if (!raw) continue;
           fields[col.name] = raw;
+          quizSeen.add(col.name);
         }
         byEmail.set(email, fields);
+      }
+      for (const col of quizCols) {
+        if (quizSeen.has(col.name)) quizColumns.push(col.name);
+      }
+    }
+  }
+
+  // If Quiz_Perf had only blank/uncached formulas, fall back to Quiz_Source values.
+  if (!quizColumns.length) {
+    const quizSource = sheets.find(s => isQuizSourceSheetName(s.name));
+    if (quizSource && quizSource.rows.length >= 2) {
+      const headerRow = quizSource.rows[0] ?? [];
+      const emailIdx = findEmailCol(headerRow);
+      if (emailIdx >= 0) {
+        const quizCols: { idx: number; name: string }[] = [];
+        headerRow.forEach((h, i) => {
+          const m = h.trim().match(/^quiz\s*(\d+)$/i);
+          if (!m) return;
+          quizCols.push({ idx: i, name: `Quiz ${m[1]} Score` });
+        });
+        const quizSeen = new Set<string>();
+        for (let r = 1; r < quizSource.rows.length; r++) {
+          const row = quizSource.rows[r];
+          if (!row) continue;
+          const email = normalizeEmail(row[emailIdx] ?? '');
+          if (!isValidEmail(email)) continue;
+          const fields = byEmail.get(email) ?? {};
+          for (const col of quizCols) {
+            const raw = (row[col.idx] ?? '').trim();
+            if (!raw) continue;
+            fields[col.name] = raw;
+            quizSeen.add(col.name);
+          }
+          byEmail.set(email, fields);
+        }
+        for (const col of quizCols) {
+          if (quizSeen.has(col.name)) quizColumns.push(col.name);
+        }
       }
     }
   }
@@ -155,7 +206,12 @@ export function mergeAssessmentPerfIntoRows(
     const email = normalizeEmail(row[emailKey] ?? '');
     const extra = merge.byEmail.get(email);
     if (!extra) return row;
-    return { ...row, ...extra };
+    const next = { ...row };
+    for (const [key, value] of Object.entries(extra)) {
+      if (!value && String(next[key] ?? '').trim()) continue;
+      next[key] = value;
+    }
+    return next;
   });
 
   return { headers: nextHeaders, rawRows: nextRows };
@@ -168,7 +224,11 @@ export async function loadAssessmentPerfFromFile(
   const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
   const wb = await loadWorkbookFromBuffer(buffer);
   const sheets = wb.worksheets
-    .filter(ws => isAssignmentPerfSheetName(ws.name) || isQuizPerfSheetName(ws.name))
+    .filter(ws =>
+      isAssignmentPerfSheetName(ws.name)
+      || isQuizPerfSheetName(ws.name)
+      || isQuizSourceSheetName(ws.name),
+    )
     .map(ws => ({ name: ws.name, rows: readSheetRows(ws) }));
   if (!sheets.length) return null;
   const parsed = parseAssessmentPerfSheets(sheets);

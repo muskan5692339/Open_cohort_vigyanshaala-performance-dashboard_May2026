@@ -16,11 +16,12 @@ function isFinalScoreHeader(col: string): boolean {
   return l.includes('final score') || l.includes('final selection') || l.includes('final assessment');
 }
 
-/** Quiz score columns — e.g. "Quiz 1 Score" … "Quiz 7 Score". */
+/** Quiz score columns — e.g. "Quiz 1 Score" … "Quiz 7 Score". Not aggregate "Quiz Score". */
 export function isQuizScoreColumn(col: string): boolean {
   if (isFinalScoreHeader(col)) return false;
-  const compact = col.toLowerCase().replace(/\s+/g, '');
-  return /quiz\d+score/i.test(compact) || /quiz\d+/.test(compact) && col.toLowerCase().includes('score');
+  const compact = col.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (compact === 'quizscore' || compact === 'quizpercent' || compact === 'quizpct') return false;
+  return /quiz\d+score/i.test(compact) || (/quiz\d+/.test(compact) && col.toLowerCase().includes('score'));
 }
 
 export function isQuizLikeColumn(col: string): boolean {

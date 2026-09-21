@@ -44,6 +44,42 @@ describe('parseAssessmentPerfSheets', () => {
     });
   });
 
+  it('accepts Inc 14 Status A1 / Status A2 sub-headers', () => {
+    const parsed = parseAssessmentPerfSheets([
+      {
+        name: 'Assignment_Perf',
+        rows: [
+          ['', '', 'Career Exploration', 'Career Exploration', 'SWOT', 'SWOT'],
+          ['EMAIL', 'NAME', 'Status A1', 'Score A1', 'Status A2', 'Score A2'],
+          ['a@x.com', 'A', 'accepted', '90', 'No Submission', '0'],
+        ],
+      },
+    ]);
+    expect(parsed.assignmentColumns).toEqual([
+      'Assignment1_Career Exploration',
+      'Assignment2_SWOT',
+    ]);
+    expect(parsed.byEmail.get('a@x.com')).toMatchObject({
+      'Assignment1_Career Exploration': 'accepted',
+      'Assignment2_SWOT': 'No Submission',
+    });
+  });
+
+  it('omits Quiz_Perf columns when all scores are blank (uncached formulas)', () => {
+    const parsed = parseAssessmentPerfSheets([
+      {
+        name: 'Quiz_Perf',
+        rows: [
+          ['EMAIL', 'Quiz 1', 'Quiz 2'],
+          ['a@x.com', '', ''],
+          ['b@x.com', '', ''],
+        ],
+      },
+    ]);
+    expect(parsed.quizColumns).toEqual([]);
+    expect(parsed.byEmail.get('a@x.com')?.['Quiz 1 Score']).toBeUndefined();
+  });
+
   it('merges fields into Overall Performance rows', () => {
     const merge = parseAssessmentPerfSheets([
       {
