@@ -99,7 +99,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
           'OTHER_SHEETS_IGNORED',
           'warning',
           `Ignoring ${ignoredOtherSheets.length} other sheet(s): ${ignoredOtherSheets.slice(0, 4).join(', ')}${ignoredOtherSheets.length > 4 ? '…' : ''}.`,
-          'Only "Overall", "Overall Performance", and "Class-wise Attendance" are imported. If Overall Performance exists, that sheet is used alone.',
+          'Only these sheets are imported when present: Overall Performance, Daily Attendance, Assignment_Perf, Quiz_Perf. All other tabs are ignored.',
         ),
       );
     }

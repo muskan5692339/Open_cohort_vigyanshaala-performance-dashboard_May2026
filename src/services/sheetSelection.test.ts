@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  filterAllowedCohortSheets,
   findOverallSheetName,
   isAllowedCohortSheetName,
   isClassWiseAttendanceSheetName,
@@ -33,17 +34,32 @@ describe('isClassWiseOnlySheet', () => {
 });
 
 describe('allowed cohort sheets', () => {
-  it('prefers Overall Performance and ignores other sheets', () => {
+  it('recognises Overall and Class-wise Attendance names', () => {
     expect(isOverallPerformanceSheetName('Overall Performance')).toBe(true);
-    expect(isOverallSheetName('Overall Performance')).toBe(false);
-    expect(findOverallSheetName(['Daily Attendance', 'Overall Performance', 'Quiz_Perf'])).toBe('Overall Performance');
-    expect(isAllowedCohortSheetName('Overall Performance')).toBe(true);
-    expect(isAllowedCohortSheetName('Daily Attendance')).toBe(true);
     expect(isOverallSheetName('Overall')).toBe(true);
     expect(isOverallSheetName('Overall_to_be_graduated')).toBe(false);
     expect(isClassWiseAttendanceSheetName('Class-wise Attendance')).toBe(true);
     expect(isAllowedCohortSheetName('Overall_to_be_graduated')).toBe(false);
     expect(findOverallSheetName(['Overall_to_be_graduated', 'Overall', 'Notes'])).toBe('Overall');
+  });
+
+  it('keeps only the four Inc 14 colour-coded sheets', () => {
+    const filtered = filterAllowedCohortSheets([
+      { name: 'Form Responses 1' },
+      { name: 'Assignment_Source' },
+      { name: 'Quiz_Source' },
+      { name: 'FFE' },
+      { name: 'Assignment_Perf' },
+      { name: 'Daily Attendance' },
+      { name: 'Overall Performance' },
+      { name: 'Quiz_Perf' },
+    ]);
+    expect(filtered.map(s => s.name)).toEqual([
+      'Overall Performance',
+      'Daily Attendance',
+      'Assignment_Perf',
+      'Quiz_Perf',
+    ]);
   });
 
   it('recommends Overall over Overall_to_be_graduated', () => {

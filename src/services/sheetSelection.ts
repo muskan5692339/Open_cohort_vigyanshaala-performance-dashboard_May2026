@@ -39,13 +39,15 @@ export function isAllowedCohortSheetName(name: string): boolean {
 export function filterAllowedCohortSheets<T extends { name: string }>(sheets: T[]): T[] {
   const overallPerformance = sheets.find(s => isOverallPerformanceSheetName(s.name));
   if (overallPerformance) {
-    const extras = sheets.filter(s =>
-      isDailyAttendanceSheetName(s.name)
-      || isClassWiseAttendanceSheetName(s.name)
-      || isAssignmentPerfSheetName(s.name)
-      || isQuizPerfSheetName(s.name),
-    );
-    return [overallPerformance, ...extras];
+    // Inc 14 color-coded set only — ignore Form Responses, sources, FFE, etc.
+    const ordered: T[] = [overallPerformance];
+    const daily = sheets.find(s => isDailyAttendanceSheetName(s.name));
+    const assignment = sheets.find(s => isAssignmentPerfSheetName(s.name));
+    const quiz = sheets.find(s => isQuizPerfSheetName(s.name));
+    if (daily) ordered.push(daily);
+    if (assignment) ordered.push(assignment);
+    if (quiz) ordered.push(quiz);
+    return ordered;
   }
   return sheets.filter(s => isAllowedCohortSheetName(s.name));
 }
