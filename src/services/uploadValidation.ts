@@ -1,5 +1,5 @@
 import type { UploadValidationIssue, UploadValidationResult } from '../types/productionTypes';
-import { excelCellToString, isUncachedFormulaCell } from './excelCellValue';
+import { excelCellToString, isUncachedFormulaCell, type ExcelReadableRow } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 import { isAssignmentPerfSheetName } from './assessmentPerfSheets';
 import { isDailyAttendanceSheetName } from './classWiseAttendance';
@@ -20,11 +20,11 @@ function validationHeaderRowIndex(sheetName: string): number {
 }
 
 /**
- * Headers for duplicate detection. Assignment_Perf uses parent titles (row 1)
- * over Status|Score (row 2) — composite names so intentional pairs are unique.
+ * Headers for presence checks. Assignment_Perf uses parent titles (row 1)
+ * over Status|Score (row 2) — composite names match how the sheet is structured.
  */
-function headersForDuplicateCheck(
-  ws: { getRow: (n: number) => { cellCount: number; getCell: (c: number) => unknown } },
+function headersForValidation(
+  ws: { getRow: (n: number) => ExcelReadableRow },
   sheetName: string,
 ): string[] {
   const headerRowIdx = validationHeaderRowIndex(sheetName);
@@ -175,7 +175,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
       }
 
       const headerRowIdx = validationHeaderRowIndex(ws.name);
-      const headers = headersForDuplicateCheck(ws, ws.name);
+      const headers = headersForValidation(ws, ws.name);
 
       if (headers.every(h => !h)) {
         issues.push(
@@ -188,29 +188,9 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
         );
       }
 
-      const seen = new Map<string, number>();
-      headers.forEach(h => {
-        if (!h) return;
-        const key = h.toLowerCase();
-        seen.set(key, (seen.get(key) ?? 0) + 1);
-      });
-      const dupes = [...seen.entries()].filter(([, c]) => c > 1).map(([h]) => h);
-      if (dupes.length) {
-        // Never block: Inc 14 sheets use multi-row headers (Status|Score under shared
-        // titles; Daily Attendance row 1 has repeating counts). Import uses the right row.
-        const knownMultiHeader =
-          isDailyAttendanceSheetName(ws.name) || isAssignmentPerfSheetName(ws.name);
-        issues.push(
-          issue(
-            'DUPLICATE_HEADERS',
-            'warning',
-            `Duplicate headers on "${ws.name}": ${dupes.join(', ')}`,
-            knownMultiHeader
-              ? 'Multi-row headers are expected on this sheet; import will use the correct header row.'
-              : 'Rename duplicate columns so each header is unique if mapping looks wrong.',
-          ),
-        );
-      }
+      // Skip duplicate-header checks. Inc 14 sheets intentionally repeat parent titles
+      // (Career Exploration / SWOT over Status|Score) and Daily Attendance row 1 has
+      // repeating session counts — blocking on those prevents a valid workbook import.
 
       const dataRows = Math.max(0, rowCount - headerRowIdx);
       if (dataRows > MAX_ROWS_WARNING) {
