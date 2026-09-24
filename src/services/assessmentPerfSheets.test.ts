@@ -80,6 +80,35 @@ describe('parseAssessmentPerfSheets', () => {
     expect(parsed.byEmail.get('a@x.com')?.['Quiz 1 Score']).toBeUndefined();
   });
 
+  it('fills new Quiz columns from Quiz_Source when Quiz_Perf already has older quizzes', () => {
+    const parsed = parseAssessmentPerfSheets([
+      {
+        name: 'Quiz_Perf',
+        rows: [
+          ['EMAIL', 'Quiz 1', 'Quiz 2', 'Quiz 5'],
+          ['a@x.com', '80', '90', ''],
+        ],
+      },
+      {
+        name: 'Quiz_Source',
+        rows: [
+          ['EMAIL', 'Quiz 1', 'Quiz 2', 'Quiz 5 Score'],
+          ['a@x.com', '80', '90', '95'],
+        ],
+      },
+    ]);
+    expect(parsed.quizColumns).toEqual([
+      'Quiz 1 Score',
+      'Quiz 2 Score',
+      'Quiz 5 Score',
+    ]);
+    expect(parsed.byEmail.get('a@x.com')).toMatchObject({
+      'Quiz 1 Score': '80',
+      'Quiz 2 Score': '90',
+      'Quiz 5 Score': '95',
+    });
+  });
+
   it('merges Assignment_Source feedback onto matching assignment columns', () => {
     const merge = parseAssessmentPerfSheets([
       {

@@ -63,6 +63,49 @@ function findEmailCol(headers: string[]): number {
   });
 }
 
+function matchQuizColumnHeader(header: string): string | null {
+  const m = header.trim().match(/^quiz\s*(\d+)(?:\s*score)?$/i);
+  return m ? `Quiz ${m[1]} Score` : null;
+}
+
+/** Merge quiz scores from a sheet into byEmail; returns columns that have at least one value. */
+function ingestQuizSheet(
+  sheet: { rows: string[][] },
+  byEmail: Map<string, Record<string, string>>,
+  options?: { onlyFillMissing?: boolean },
+): string[] {
+  if (sheet.rows.length < 2) return [];
+  const headerRow = sheet.rows[0] ?? [];
+  const emailIdx = findEmailCol(headerRow);
+  if (emailIdx < 0) return [];
+
+  const quizCols: { idx: number; name: string }[] = [];
+  headerRow.forEach((h, i) => {
+    const name = matchQuizColumnHeader(h);
+    if (!name) return;
+    quizCols.push({ idx: i, name });
+  });
+  if (!quizCols.length) return [];
+
+  const quizSeen = new Set<string>();
+  for (let r = 1; r < sheet.rows.length; r++) {
+    const row = sheet.rows[r];
+    if (!row) continue;
+    const email = normalizeEmail(row[emailIdx] ?? '');
+    if (!isValidEmail(email)) continue;
+    const fields = byEmail.get(email) ?? {};
+    for (const col of quizCols) {
+      const raw = (row[col.idx] ?? '').trim();
+      if (!raw) continue;
+      if (options?.onlyFillMissing && String(fields[col.name] ?? '').trim()) continue;
+      fields[col.name] = raw;
+      quizSeen.add(col.name);
+    }
+    byEmail.set(email, fields);
+  }
+  return quizCols.filter(c => quizSeen.has(c.name)).map(c => c.name);
+}
+
 /** Carry forward merged top-row titles: Career Exploration | (blank) → both get title. */
 function fillForwardTitles(titles: string[]): string[] {
   const out = [...titles];
@@ -193,72 +236,17 @@ export function parseAssessmentPerfSheets(
   }
 
   const quizSheet = sheets.find(s => isQuizPerfSheetName(s.name));
-  if (quizSheet && quizSheet.rows.length >= 2) {
-    // Quiz_Perf uses a single header row (row 1).
-    const headerRow = quizSheet.rows[0] ?? [];
-    const emailIdx = findEmailCol(headerRow);
-    if (emailIdx >= 0) {
-      const quizCols: { idx: number; name: string }[] = [];
-      headerRow.forEach((h, i) => {
-        const m = h.trim().match(/^quiz\s*(\d+)$/i);
-        if (!m) return;
-        quizCols.push({ idx: i, name: `Quiz ${m[1]} Score` });
-      });
-
-      const quizSeen = new Set<string>();
-      for (let r = 1; r < quizSheet.rows.length; r++) {
-        const row = quizSheet.rows[r];
-        if (!row) continue;
-        const email = normalizeEmail(row[emailIdx] ?? '');
-        if (!isValidEmail(email)) continue;
-        const fields = byEmail.get(email) ?? {};
-        for (const col of quizCols) {
-          const raw = (row[col.idx] ?? '').trim();
-          // Skip blank / uncached formula cells so Overall Quiz Score stays usable.
-          if (!raw) continue;
-          fields[col.name] = raw;
-          quizSeen.add(col.name);
-        }
-        byEmail.set(email, fields);
-      }
-      for (const col of quizCols) {
-        if (quizSeen.has(col.name)) quizColumns.push(col.name);
-      }
+  if (quizSheet) {
+    for (const col of ingestQuizSheet(quizSheet, byEmail)) {
+      if (!quizColumns.includes(col)) quizColumns.push(col);
     }
   }
 
-  // If Quiz_Perf had only blank/uncached formulas, fall back to Quiz_Source values.
-  if (!quizColumns.length) {
-    const quizSource = sheets.find(s => isQuizSourceSheetName(s.name));
-    if (quizSource && quizSource.rows.length >= 2) {
-      const headerRow = quizSource.rows[0] ?? [];
-      const emailIdx = findEmailCol(headerRow);
-      if (emailIdx >= 0) {
-        const quizCols: { idx: number; name: string }[] = [];
-        headerRow.forEach((h, i) => {
-          const m = h.trim().match(/^quiz\s*(\d+)$/i);
-          if (!m) return;
-          quizCols.push({ idx: i, name: `Quiz ${m[1]} Score` });
-        });
-        const quizSeen = new Set<string>();
-        for (let r = 1; r < quizSource.rows.length; r++) {
-          const row = quizSource.rows[r];
-          if (!row) continue;
-          const email = normalizeEmail(row[emailIdx] ?? '');
-          if (!isValidEmail(email)) continue;
-          const fields = byEmail.get(email) ?? {};
-          for (const col of quizCols) {
-            const raw = (row[col.idx] ?? '').trim();
-            if (!raw) continue;
-            fields[col.name] = raw;
-            quizSeen.add(col.name);
-          }
-          byEmail.set(email, fields);
-        }
-        for (const col of quizCols) {
-          if (quizSeen.has(col.name)) quizColumns.push(col.name);
-        }
-      }
+  // Per-column fill from Quiz_Source (new quizzes often exist only here, or Quiz_Perf has blank formulas).
+  const quizSource = sheets.find(s => isQuizSourceSheetName(s.name));
+  if (quizSource) {
+    for (const col of ingestQuizSheet(quizSource, byEmail, { onlyFillMissing: true })) {
+      if (!quizColumns.includes(col)) quizColumns.push(col);
     }
   }
 

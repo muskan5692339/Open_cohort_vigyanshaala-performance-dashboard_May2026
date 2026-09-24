@@ -455,13 +455,32 @@ export default function ExcelUpload({ onDataImported }: Props) {
 
     let classWiseAttendance = parsed.classWiseAttendance ?? [];
     let classWiseAttendanceColumns = parsed.classWiseAttendanceColumns ?? [];
-    if (!classWiseAttendance.length && pendingFile && pendingFileBuffer) {
+    let publishHeaders = parsed.headers ?? [];
+    let publishRawRows = parsed.rawRows ?? [];
+
+    // Always re-read from the workbook on Apply Mapping so new quiz / live-session
+    // columns are picked up even if Confirm Import used an older parse.
+    if (pendingFile && pendingFileBuffer) {
       const classWise = await loadClassWiseAttendanceFromFile(pendingFile, pendingFileBuffer);
-      classWiseAttendance = classWise?.entries ?? [];
-      classWiseAttendanceColumns = classWise?.sessionColumns ?? [];
-      if (classWiseAttendance.length) {
-        setParsed(prev => prev ? { ...prev, classWiseAttendance, classWiseAttendanceColumns } : prev);
+      if (classWise?.entries?.length) {
+        classWiseAttendance = classWise.entries;
+        classWiseAttendanceColumns = classWise.sessionColumns ?? [];
       }
+
+      const assessmentPerf = await loadAssessmentPerfFromFile(pendingFile, pendingFileBuffer);
+      if (assessmentPerf) {
+        const merged = mergeAssessmentPerfIntoRows(publishHeaders, publishRawRows, assessmentPerf);
+        publishHeaders = merged.headers;
+        publishRawRows = merged.rawRows;
+      }
+
+      setParsed(prev => prev ? {
+        ...prev,
+        headers: publishHeaders,
+        rawRows: publishRawRows,
+        classWiseAttendance,
+        classWiseAttendanceColumns,
+      } : prev);
     }
 
     try {
@@ -472,15 +491,15 @@ export default function ExcelUpload({ onDataImported }: Props) {
         attendance: parsed.attendance.data,
         assignments: parsed.assignments.data,
         quiz: parsed.quiz.data,
-        rawRows: parsed.rawRows ?? [],
-        headers: parsed.headers ?? [],
+        rawRows: publishRawRows,
+        headers: publishHeaders,
         discoveredColumns: schemaColumns,
         mapping,
         classWiseAttendance,
         classWiseAttendanceColumns,
       });
 
-      generateDynamicAnalytics(parsed.rawRows ?? [], mapping);
+      generateDynamicAnalytics(publishRawRows, mapping);
       recordMappingAttempt(true);
       appendAuditLog('mapping_change', `Applied column mapping for ${fileName}`, {
         columns: schemaColumns.length,
@@ -494,19 +513,21 @@ export default function ExcelUpload({ onDataImported }: Props) {
           source: 'excel',
           schemaSignature: parsed.fileSignature,
           sheetName: selectedSheet || Object.values(parsed._sheetMapping)[0],
-          rowCount: parsed.rawRows?.length ?? 0,
+          rowCount: publishRawRows.length,
           changedColumns: schemaMigration?.changes ?? [],
-          headers: parsed.headers,
-          rawRows: parsed.rawRows,
+          headers: publishHeaders,
+          rawRows: publishRawRows,
           mapping,
           discoveredColumns: schemaColumns,
           classWiseAttendance,
           classWiseAttendanceColumns,
         });
         if (publish?.ok) {
+          const quizCount = publishHeaders.filter(h => /^quiz\s*\d+/i.test(h)).length;
+          const sessionCount = classWiseAttendanceColumns.length;
           setCloudPublishStatus({
             tone: 'ok',
-            text: `Roster published for students (${parsed.rawRows?.length ?? 0} rows). They can open the student page without uploading again.${!cloudToken ? ' Sign-in is optional — only needed for upload history metadata.' : ''}`,
+            text: `Roster published for students (${publishRawRows.length} rows, ${quizCount} quiz cols, ${sessionCount} live sessions). They can open the student page without uploading again.${!cloudToken ? ' Sign-in is optional — only needed for upload history metadata.' : ''}`,
           });
         } else {
           setCloudPublishStatus({

@@ -45,8 +45,16 @@ export function normalizeSheetName(name: string): string {
 function readSheetRows(ws: {
   eachRow: (cb: (row: ExcelReadableRow) => void) => void;
   getRow: (n: number) => ExcelReadableRow;
+  columnCount?: number;
 }): string[][] {
-  const colCount = ws.getRow(1).cellCount;
+  // Daily Attendance often has short row 1 (counts) and real headers/dates on row 2+.
+  const colCount = Math.max(
+    ws.getRow(1).cellCount ?? 0,
+    ws.getRow(2).cellCount ?? 0,
+    ws.getRow(3).cellCount ?? 0,
+    ws.columnCount ?? 0,
+    1,
+  );
   const out: string[][] = [];
   ws.eachRow(row => {
     out.push(readExcelRow(row, colCount));
@@ -357,26 +365,35 @@ export function readClassWiseAttendanceFromWorkbook(
     getWorksheet: (name: string) => {
       eachRow: (cb: (row: ExcelReadableRow) => void) => void;
       getRow: (n: number) => ExcelReadableRow;
+      columnCount?: number;
     } | undefined;
   },
 ): ClassWiseAttendanceData | null {
   const names = wb.worksheets.map(ws => ws.name);
   const classWise = findClassWiseAttendanceSheetName(names);
   const daily = names.find(isDailyAttendanceSheetName);
-  const sheetsToTry = [classWise, daily].filter((name): name is string => Boolean(name));
+  // Prefer Daily Attendance when present (Inc 14); fall back to Class-wise.
+  // If both parse, keep the sheet with more session/date columns.
+  const sheetsToTry = [daily, classWise].filter((name, idx, arr): name is string =>
+    Boolean(name) && arr.indexOf(name) === idx,
+  );
   if (!sheetsToTry.length) return null;
 
+  let best: ClassWiseAttendanceData | null = null;
   for (const sheetName of sheetsToTry) {
     const ws = wb.getWorksheet(sheetName);
     if (!ws) continue;
     const rows = readSheetRows(ws);
     const parsed = parseClassWiseAttendanceRows(rows, sheetName);
-    if (parsed) {
-      return parsed;
-    }
+    if (!parsed) continue;
+    const score = parsed.sessionColumns.length + (parsed.preRecordedColumns?.length ?? 0);
+    const bestScore = best
+      ? best.sessionColumns.length + (best.preRecordedColumns?.length ?? 0)
+      : -1;
+    if (!best || score > bestScore) best = parsed;
   }
 
-  return null;
+  return best;
 }
 
 export async function loadClassWiseAttendanceFromFile(
