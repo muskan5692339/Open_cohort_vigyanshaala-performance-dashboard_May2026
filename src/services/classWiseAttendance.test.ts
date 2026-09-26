@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSessionTrendFromClassWise,
   computeHoursBasedAttendance,
+  formatSessionDateLabel,
   isSessionColumnHeader,
   parseClassWiseAttendanceRows,
 } from './classWiseAttendance';
@@ -18,6 +19,32 @@ describe('parse Daily Attendance date columns', () => {
     const trend = buildSessionTrendFromClassWise(parsed!.entries[0]);
     expect(trend.map(p => p.name)).toEqual(['22 Aug', '24 Aug', '14 Sept']);
     expect(trend.map(p => p.value)).toEqual([1, 0, 1]);
+  });
+
+  it('recognizes 24-Sep style headers and Excel serial dates', () => {
+    // 45924 ≈ 2026-09-24 in Excel serial
+    const rows = [
+      ['S.NO', 'EMAIL', 'FULL NAME', '24-Sep', '25-Sep', '45926'],
+      ['1', 'a@x.com', 'A', '1', '0', '1'],
+    ];
+    const parsed = parseClassWiseAttendanceRows(rows, 'Daily Attendance');
+    expect(parsed).not.toBeNull();
+    const trend = buildSessionTrendFromClassWise(parsed!.entries[0]);
+    expect(trend.map(p => p.name)).toEqual(['24 Sept', '25 Sept', '26 Sept']);
+    expect(trend.map(p => p.value)).toEqual([1, 0, 1]);
+  });
+
+  it('picks up a column renamed from 26-Sep to 25-Sep', () => {
+    const rows = [
+      ['EMAIL', '22-Aug', '24-Sep', '25-Sep'],
+      ['a@x.com', '1', '1', '1'],
+    ];
+    const parsed = parseClassWiseAttendanceRows(rows, 'Daily Attendance');
+    expect(parsed!.sessionColumns.map(formatSessionDateLabel)).toEqual([
+      '22 Aug',
+      '24 Sept',
+      '25 Sept',
+    ]);
   });
 });
 

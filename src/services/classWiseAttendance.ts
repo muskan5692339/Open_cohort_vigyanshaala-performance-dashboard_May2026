@@ -46,15 +46,21 @@ function readSheetRows(ws: {
   eachRow: (cb: (row: ExcelReadableRow) => void) => void;
   getRow: (n: number) => ExcelReadableRow;
   columnCount?: number;
+  actualColumnCount?: number;
 }): string[][] {
-  // Daily Attendance often has short row 1 (counts) and real headers/dates on row 2+.
-  const colCount = Math.max(
+  // Daily Attendance often has short row 1 (counts) and real date headers on row 2+.
+  // New dates (24-Sep / 25-Sep) sit past early cellCount — scan all rows + sheet width.
+  let colCount = Math.max(
     ws.getRow(1).cellCount ?? 0,
     ws.getRow(2).cellCount ?? 0,
     ws.getRow(3).cellCount ?? 0,
     ws.columnCount ?? 0,
+    ws.actualColumnCount ?? 0,
     1,
   );
+  ws.eachRow(row => {
+    colCount = Math.max(colCount, row.cellCount ?? 0);
+  });
   const out: string[][] = [];
   ws.eachRow(row => {
     out.push(readExcelRow(row, colCount));
@@ -159,16 +165,99 @@ export function isSessionColumnHeader(header: string): boolean {
   return false;
 }
 
-/** Date columns on the Daily Attendance sheet, e.g. 2026-08-22. */
-export function isDateAttendanceHeader(header: string): boolean {
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0, january: 0,
+  feb: 1, february: 1,
+  mar: 2, march: 2,
+  apr: 3, april: 3,
+  may: 4,
+  jun: 5, june: 5,
+  jul: 6, july: 6,
+  aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8,
+  oct: 9, october: 9,
+  nov: 10, november: 10,
+  dec: 11, december: 11,
+};
+
+/** Excel serial days (approx 2009–2064) — Daily Attendance headers often arrive as these. */
+function excelSerialToUtcDate(serial: number): Date | null {
+  if (!Number.isFinite(serial) || serial < 40000 || serial > 60000) return null;
+  const utc = Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000;
+  const d = new Date(utc);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function toIsoFromParts(year: number, monthIndex: number, day: number): string | null {
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11 || day < 1 || day > 31) return null;
+  const d = new Date(Date.UTC(year, monthIndex, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== monthIndex || d.getUTCDate() !== day) return null;
+  return `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`;
+}
+
+/** Normalize Daily Attendance headers to YYYY-MM-DD when possible. */
+export function normalizeAttendanceDateHeader(header: string): string | null {
   const h = (header ?? '').replace(/^\uFEFF/, '').trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(h) || /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(h);
+  if (!h) return null;
+
+  const iso = h.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  const slash = h.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (slash) {
+    const a = Number(slash[1]);
+    const b = Number(slash[2]);
+    let year = Number(slash[3]);
+    if (year < 100) year += 2000;
+    // Prefer D/M/Y (India) when day > 12; else assume D/M/Y still for Inc sheets.
+    const day = a;
+    const month = b;
+    return toIsoFromParts(year, month - 1, day);
+  }
+
+  const serial = Number(h);
+  if (/^\d{5}(\.\d+)?$/.test(h)) {
+    const d = excelSerialToUtcDate(serial);
+    if (d) return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+  }
+
+  // 24-Sep, 24 Sep, 24-Sep-2026, 24 Sep 26
+  const dMon = h.match(/^(\d{1,2})[-\s]+([A-Za-z]{3,9})(?:[-\s,]+(\d{2,4}))?$/);
+  if (dMon) {
+    const day = Number(dMon[1]);
+    const month = MONTH_INDEX[dMon[2].toLowerCase()];
+    let year = dMon[3] ? Number(dMon[3]) : new Date().getUTCFullYear();
+    if (year < 100) year += 2000;
+    if (month != null) return toIsoFromParts(year, month, day);
+  }
+
+  // Sep-24, Sep 24, Sep 24 2026, September 24, 2026
+  const monD = h.match(/^([A-Za-z]{3,9})[-\s]+(\d{1,2})(?:[-\s,]+(\d{2,4}))?$/);
+  if (monD) {
+    const month = MONTH_INDEX[monD[1].toLowerCase()];
+    const day = Number(monD[2]);
+    let year = monD[3] ? Number(monD[3]) : new Date().getUTCFullYear();
+    if (year < 100) year += 2000;
+    if (month != null) return toIsoFromParts(year, month, day);
+  }
+
+  return null;
+}
+
+/** Date columns on the Daily Attendance sheet (ISO, D/M/Y, 24-Sep, Excel serial). */
+export function isDateAttendanceHeader(header: string): boolean {
+  return normalizeAttendanceDateHeader(header) != null;
 }
 
 export function formatSessionDateLabel(header: string): string {
-  const iso = header.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!iso) return header.trim();
-  const date = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+  const iso = normalizeAttendanceDateHeader(header) ?? header.trim();
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return header.trim();
+  const date = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
@@ -205,10 +294,12 @@ function findHeaderRowIndex(rows: string[][]): number {
     const emailIdx = headers.findIndex(isEmailHeader);
     const sessionCount = headers.filter(isSessionColumnHeader).length;
     const preRecordedCount = headers.filter(isPreRecordedColumnHeader).length;
+    const dateCount = headers.filter(isDateAttendanceHeader).length;
     let score = 0;
     if (emailIdx >= 0) score += 10;
     score += sessionCount * 3;
     score += preRecordedCount * 3;
+    score += dateCount * 3;
     if (score > bestScore) {
       bestScore = score;
       bestIdx = i;
