@@ -65,6 +65,11 @@ export function incubator14WeekRange(week: number): { start: Date; end: Date } |
   return { start, end };
 }
 
+function formatHourValue(n: number): string {
+  if (!Number.isFinite(n)) return '0';
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
 function formatShortDate(d: Date): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
@@ -148,6 +153,7 @@ function preRecordedGapNames(classWise: ClassWiseAttendanceEntry | null | undefi
           : durationMin && durationMin > 0
             ? Math.round((durationMin / 60) * 1000) / 1000
             : 0;
+      if (!(maxCredit > 0)) return false;
       const pct = preRecordedCompletionPct(s.hours, maxCredit);
       return pct < PRE_PCT_GAP;
     })
@@ -241,7 +247,9 @@ type Props = {
   assignmentRows: StudentAssignmentItem[];
   quizBarData: { name: string; score: number | null; display: string }[];
   liveSessions: number;
-  preRecordedTotalHours: number;
+  liveHours: number;
+  preRecordedHours: number;
+  preRecordedAttendancePct: number;
   cohortName?: string | null;
   /** Data-source upload time. Current week follows this, not the phone clock. */
   dataAsOf?: string | null;
@@ -252,7 +260,9 @@ export default function ProgramJourneyCard({
   assignmentRows,
   quizBarData,
   liveSessions,
-  preRecordedTotalHours,
+  liveHours,
+  preRecordedHours,
+  preRecordedAttendancePct,
   cohortName,
   dataAsOf,
 }: Props) {
@@ -271,11 +281,17 @@ export default function ProgramJourneyCard({
   );
 
   const sessionsLabel = (() => {
-    if (liveSessions <= 0 && preRecordedTotalHours <= 0) return null;
-    const preText = Number.isInteger(preRecordedTotalHours)
-      ? String(preRecordedTotalHours)
-      : preRecordedTotalHours.toFixed(2);
-    return `(${liveSessions} live-session + ${preText} Pre-recorded)`;
+    if (liveSessions <= 0 && preRecordedHours <= 0 && preRecordedAttendancePct <= 0) return null;
+    const liveText = liveSessions > 0
+      ? `${formatHourValue(liveHours)} / ${liveSessions} live-session`
+      : null;
+    const preText = preRecordedAttendancePct > 0
+      ? `${preRecordedAttendancePct.toFixed(2)}% Pre-recorded`
+      : preRecordedHours > 0
+        ? `${formatHourValue(preRecordedHours)} Pre-recorded`
+        : null;
+    const parts = [liveText, preText].filter(Boolean);
+    return parts.length ? `(${parts.join(' · ')})` : null;
   })();
 
   const allClear = gapGroups.length === 0;

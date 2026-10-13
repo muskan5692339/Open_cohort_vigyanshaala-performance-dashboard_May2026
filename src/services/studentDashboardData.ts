@@ -5,6 +5,8 @@ import type { ClassWiseAttendanceEntry } from './classWiseAttendance';
 import {
   attendedPreRecordedHours,
   countAttendedSessions,
+  liveSessionsAttendancePct,
+  preRecordedAttendancePercent,
   totalAttendedProgramHours,
   totalPreRecordedCreditHours,
   totalProgramHoursFromClassWise,
@@ -209,6 +211,7 @@ export interface StudentDashboardView {
   liveHours: number;
   preRecordedHours: number;
   preRecordedTotalHours: number;
+  preRecordedAttendancePct: number;
 }
 
 export function buildStudentDashboardView(input: {
@@ -273,13 +276,19 @@ export function buildStudentDashboardView(input: {
   const liveHours = classWise ? totalSessionHours(classWise) : 0;
   const preRecordedTotalHours = classWise ? totalPreRecordedCreditHours(classWise) : 0;
   const preRecordedHours = classWise ? attendedPreRecordedHours(classWise) : 0;
+  const preRecordedAttendancePct = classWise ? preRecordedAttendancePercent(classWise) : 0;
   let attendedHours = classWise ? totalAttendedProgramHours(classWise) : 0;
   const totalHours = classWise
     ? totalProgramHoursFromClassWise(classWise)
     : 0;
 
-  // Prefer Attendance % from the performance sheet. Do not override with hours-based session math.
-  let attendancePct = sheetAttendancePct ?? 0;
+  // Live-session % is date credit (1 = live, decimal = recording) ÷ dates.
+  // Pre-recorded % stays separate. Fall back to the performance sheet only when
+  // every date cell is empty.
+  const computedLivePct = classWise && sessions > 0 ? liveSessionsAttendancePct(classWise) : null;
+  let attendancePct = computedLivePct != null && liveHours > 0
+    ? computedLivePct
+    : (sheetAttendancePct ?? 0);
   if (attendancePct === 0 && student.imported_attendance_pct != null && student.imported_attendance_pct > 0) {
     attendancePct = Math.round(student.imported_attendance_pct * 100) / 100;
   }
@@ -364,8 +373,8 @@ export function buildStudentDashboardView(input: {
         }));
 
   const programHoursLabel =
-    totalHours > 0
-      ? `${attendedHours.toFixed(2)} / ${totalHours} hrs (${sessions} live-session + ${preRecordedTotalHours.toFixed(2)} Pre-recorded)`
+    sessions > 0 || preRecordedHours > 0
+      ? `Live ${liveHours.toFixed(2)} / ${sessions} hrs · Pre-recorded ${preRecordedHours.toFixed(2)} hrs`
       : attendancePctCol
         ? 'From Attendance %'
         : attendedSessionCount > 0 || sessions > 0
@@ -450,5 +459,6 @@ export function buildStudentDashboardView(input: {
     liveHours,
     preRecordedHours,
     preRecordedTotalHours,
+    preRecordedAttendancePct,
   };
 }

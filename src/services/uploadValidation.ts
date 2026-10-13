@@ -2,7 +2,11 @@ import type { UploadValidationIssue, UploadValidationResult } from '../types/pro
 import { excelCellToString, isUncachedFormulaCell, type ExcelReadableRow } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 import { isAssignmentPerfSheetName } from './assessmentPerfSheets';
-import { isDailyAttendanceSheetName } from './classWiseAttendance';
+import {
+  isDailyAttendanceSheetName,
+  isOverallAttendanceSheetName,
+  isWatchTimeAttendanceSheetName,
+} from './classWiseAttendance';
 import {
   findOverallSheetName,
   isAllowedCohortSheetName,
@@ -14,8 +18,22 @@ const MAX_ROWS_WARNING = 10_000;
 const SUPPORTED = /\.xlsx?$/i;
 
 /** Header row used for uniqueness checks (1-based). Matches import readers. */
-function validationHeaderRowIndex(sheetName: string): number {
-  if (isDailyAttendanceSheetName(sheetName) || isAssignmentPerfSheetName(sheetName)) return 2;
+function validationHeaderRowIndex(ws: {
+  name: string;
+  rowCount?: number;
+  getRow: (n: number) => ExcelReadableRow;
+}): number {
+  if (isDailyAttendanceSheetName(ws.name) || isAssignmentPerfSheetName(ws.name)) return 2;
+  if (isOverallAttendanceSheetName(ws.name) || isWatchTimeAttendanceSheetName(ws.name)) {
+    const limit = Math.min(12, Math.max(ws.rowCount ?? 1, 1));
+    for (let r = 1; r <= limit; r++) {
+      const row = ws.getRow(r);
+      const count = Math.max(row.cellCount ?? 0, 8);
+      for (let c = 1; c <= count; c++) {
+        if (/email/i.test(excelCellToString(row.getCell(c)))) return r;
+      }
+    }
+  }
   return 1;
 }
 
@@ -24,10 +42,10 @@ function validationHeaderRowIndex(sheetName: string): number {
  * over Status|Score (row 2) — composite names match how the sheet is structured.
  */
 function headersForValidation(
-  ws: { getRow: (n: number) => ExcelReadableRow },
+  ws: { name: string; rowCount?: number; getRow: (n: number) => ExcelReadableRow },
   sheetName: string,
 ): string[] {
-  const headerRowIdx = validationHeaderRowIndex(sheetName);
+  const headerRowIdx = validationHeaderRowIndex(ws);
   const headerRow = ws.getRow(headerRowIdx);
   const cellCount = Math.max(headerRow.cellCount, ws.getRow(1).cellCount, 1);
 
@@ -141,7 +159,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
           'OTHER_SHEETS_IGNORED',
           'warning',
           `Ignoring ${ignoredOtherSheets.length} other sheet(s): ${ignoredOtherSheets.slice(0, 4).join(', ')}${ignoredOtherSheets.length > 4 ? '…' : ''}.`,
-          'Only these sheets are imported when present: Overall Performance, Daily Attendance, Assignment_Perf, Quiz_Perf. Assignment_Source (feedback) and Quiz_Source are also read when needed.',
+          'Only these sheets are imported when present: Overall Performance, Overall Attendance, Assignment_Perf, Quiz_Perf. Daily Attendance is used only when Overall Attendance is not in the file. Assignment_Source (feedback) and Quiz_Source are also read when needed.',
         ),
       );
     }
@@ -150,7 +168,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
 
     const allEmpty = sheetsToValidate.length > 0
       && sheetsToValidate.every(ws => {
-        const minRows = validationHeaderRowIndex(ws.name);
+        const minRows = validationHeaderRowIndex(ws);
         return (ws.rowCount ?? 0) <= minRows;
       });
     if (sheetsToValidate.length > 0 && allEmpty) {
@@ -166,7 +184,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
 
     for (const ws of sheetsToValidate) {
       const rowCount = ws.rowCount ?? 0;
-      const minHeaderRows = validationHeaderRowIndex(ws.name);
+      const minHeaderRows = validationHeaderRowIndex(ws);
       if (rowCount <= minHeaderRows) {
         issues.push(
           issue('EMPTY_SHEET', 'warning', `Sheet "${ws.name}" has no data rows.`, 'Select a different sheet or add data.'),
@@ -174,7 +192,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
         continue;
       }
 
-      const headerRowIdx = validationHeaderRowIndex(ws.name);
+      const headerRowIdx = validationHeaderRowIndex(ws);
       const headers = headersForValidation(ws, ws.name);
 
       if (headers.every(h => !h)) {

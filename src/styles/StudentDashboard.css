@@ -172,6 +172,10 @@
   min-width: 0;
 }
 
+.charts-grid .session-trend-panel {
+  grid-column: 1 / -1;
+}
+
 .panel-card {
   border: 1px solid var(--sd-border);
   border-radius: 12px;

@@ -3,8 +3,14 @@ import {
   buildSessionTrendFromClassWise,
   computeHoursBasedAttendance,
   formatSessionDateLabel,
+  isOverallAttendanceSheetName,
   isSessionColumnHeader,
+  isWatchTimeAttendanceSheetName,
+  liveSessionsAttendancePct,
   parseClassWiseAttendanceRows,
+  preRecordedAttendancePercent,
+  preferAttendanceSource,
+  totalSessionHours,
 } from './classWiseAttendance';
 
 describe('parse Daily Attendance date columns', () => {
@@ -45,6 +51,73 @@ describe('parse Daily Attendance date columns', () => {
       '24 Sept',
       '25 Sept',
     ]);
+  });
+});
+
+describe('Attendance_WatchTime daily credit', () => {
+  it('keeps recording decimals, caps a date above 1, and separates pre-recorded %', () => {
+    const rows = [
+      [
+        'EMAIL',
+        'STUDENT_ID',
+        'Pre-recorded Hours Spent',
+        'Pre-recorded Attendance %',
+        '2026-08-22',
+        '2026-08-24',
+        '2026-08-27',
+      ],
+      ['a@x.com', '19121', '0.514', '34.959', '1', '0.53', '1.4'],
+    ];
+    const parsed = parseClassWiseAttendanceRows(rows, 'Attendance_WatchTime');
+    expect(parsed).not.toBeNull();
+    const entry = parsed!.entries[0];
+    expect(entry.sessions.map(s => s.hours)).toEqual([1, 0.53, 1]);
+    expect(entry.sessions.map(s => s.kind)).toEqual(['live', 'recording', 'missed'].map((_, i) => (
+      i === 1 ? 'recording' : 'live'
+    )));
+    expect(totalSessionHours(entry)).toBe(2.53);
+    expect(liveSessionsAttendancePct(entry)).toBe(84.33);
+    expect(entry.preRecorded?.[0].hours).toBe(0.51);
+    expect(preRecordedAttendancePercent(entry)).toBe(34.96);
+    expect(isWatchTimeAttendanceSheetName('WatchTimeHours')).toBe(true);
+    expect(isOverallAttendanceSheetName('Overall Attendance')).toBe(true);
+    const fromOverall = parseClassWiseAttendanceRows(rows, 'Overall Attendance');
+    expect(fromOverall?.entries[0].sessions.map(s => s.hours)).toEqual([1, 0.53, 1]);
+    expect(fromOverall?.entries[0].preRecorded?.[0].hours).toBe(0.51);
+    expect(preRecordedAttendancePercent(fromOverall!.entries[0])).toBe(34.96);
+  });
+
+  it('uses Overall Attendance instead of Daily Attendance', () => {
+    const watch = parseClassWiseAttendanceRows(
+      [
+        ['EMAIL', '2026-08-22'],
+        ['a@x.com', '0.4'],
+      ],
+      'Attendance_WatchTime',
+    );
+    const daily = parseClassWiseAttendanceRows(
+      [
+        ['EMAIL', '2026-08-22'],
+        ['a@x.com', '1'],
+      ],
+      'Daily Attendance',
+    );
+    const overall = parseClassWiseAttendanceRows(
+      [
+        ['EMAIL', '2026-08-22', 'Pre-recorded Hours Spent'],
+        ['a@x.com', '1', '0.53'],
+      ],
+      'Overall Attendance',
+    );
+    const chosen = preferAttendanceSource(overall, watch, daily, null);
+    expect(chosen?.sheetName).toBe('Overall Attendance');
+    expect(chosen?.entries[0].sessions[0].hours).toBe(1);
+    expect(chosen?.entries[0].sessions[0].kind).toBe('live');
+    expect(chosen?.entries[0].preRecorded?.[0].hours).toBe(0.53);
+
+    const fallback = preferAttendanceSource(null, watch, daily, null);
+    expect(fallback?.sheetName).toBe('Attendance_WatchTime');
+    expect(fallback?.entries[0].sessions[0].hours).toBe(0.4);
   });
 });
 

@@ -62,6 +62,23 @@ describe('allowed cohort sheets', () => {
     ]);
   });
 
+  it('imports Overall Attendance instead of Daily Attendance', () => {
+    const filtered = filterAllowedCohortSheets([
+      { name: 'Daily Attendance' },
+      { name: 'Overall Attendance' },
+      { name: 'Attendance_WatchTime' },
+      { name: 'Overall Performance' },
+      { name: 'Quiz_Perf' },
+      { name: 'Form Responses 1' },
+    ]);
+    expect(filtered.map(s => s.name)).toEqual([
+      'Overall Performance',
+      'Overall Attendance',
+      'Quiz_Perf',
+    ]);
+    expect(isAllowedCohortSheetName('Overall Attendance')).toBe(true);
+  });
+
   it('recommends Overall over Overall_to_be_graduated', () => {
     const recommended = recommendImportSheet({
       sheetNames: ['Overall_to_be_graduated', 'Overall', 'Class-wise Attendance'],

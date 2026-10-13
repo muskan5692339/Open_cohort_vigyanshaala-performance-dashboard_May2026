@@ -1,6 +1,10 @@
 import type { WorkbookPreview } from '../../types/productionTypes';
 import { BRAND } from '../../types/adminTypes';
-import { isDailyAttendanceSheetName } from '../../services/classWiseAttendance';
+import {
+  isDailyAttendanceSheetName,
+  isOverallAttendanceSheetName,
+  isWatchTimeAttendanceSheetName,
+} from '../../services/classWiseAttendance';
 import { isAssignmentPerfSheetName, isQuizPerfSheetName } from '../../services/assessmentPerfSheets';
 import { isOverallPerformanceSheetName, isClassWiseAttendanceSheetName } from '../../services/sheetSelection';
 
@@ -22,7 +26,9 @@ export default function FilePreviewPanel({
   confirming,
 }: FilePreviewPanelProps) {
   const sheet = preview.sheets.find(s => s.name === selectedSheet) ?? preview.sheets[0];
-  const sessionSheet = preview.sheets.find(s => isDailyAttendanceSheetName(s.name) || isClassWiseAttendanceSheetName(s.name));
+  const sessionSheet = preview.sheets.find(s => isOverallAttendanceSheetName(s.name))
+    ?? preview.sheets.find(s => isWatchTimeAttendanceSheetName(s.name))
+    ?? preview.sheets.find(s => isDailyAttendanceSheetName(s.name) || isClassWiseAttendanceSheetName(s.name));
   const scoreSheet = preview.sheets.find(s => isOverallPerformanceSheetName(s.name));
   const assignmentSheet = preview.sheets.find(s => isAssignmentPerfSheetName(s.name));
   const quizSheet = preview.sheets.find(s => isQuizPerfSheetName(s.name));
@@ -50,7 +56,10 @@ export default function FilePreviewPanel({
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         {preview.sheets.map(s => {
-          const role = isDailyAttendanceSheetName(s.name) || isClassWiseAttendanceSheetName(s.name)
+          const role = isOverallAttendanceSheetName(s.name)
+            || isWatchTimeAttendanceSheetName(s.name)
+            || isDailyAttendanceSheetName(s.name)
+            || isClassWiseAttendanceSheetName(s.name)
             ? 'Session trend'
             : isAssignmentPerfSheetName(s.name)
               ? 'Assignments'

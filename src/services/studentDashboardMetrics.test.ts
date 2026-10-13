@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { isAssignmentAccepted, isAssignmentSubmitted } from './studentAssignmentDisplay';
 import {
+  liveSessionsAttendancePct,
   normalizeSessionHours,
+  preRecordedAttendancePercent,
   totalAttendedProgramHours,
   totalPreRecordedCreditHours,
   totalProgramHoursFromClassWise,
@@ -102,9 +104,61 @@ describe('cohort-wide assignment and session rules', () => {
     });
 
     expect(view.attendancePct).toBe(62);
+    expect(view.preRecordedAttendancePct).toBe(0);
     expect(view.totalHours).toBeCloseTo(25.04, 1);
     expect(view.attendedHours).toBeGreaterThan(0);
     expect(view.attendedHours).toBeCloseTo(15.5, 0);
     expect(view.attendedSessionCount).toBe(16);
+  });
+
+  it('keeps live-session % and pre-recorded % separate', () => {
+    const email = 'a@x.com';
+    const classWise = {
+      student_email: email,
+      sessions: [
+        { key: '22 Aug', hours: 1 },
+        { key: '24 Aug', hours: 0.5 },
+        { key: '27 Aug', hours: 0 },
+      ],
+      preRecorded: [{ key: 'Pre-recorded', hours: 0.514, maxCreditHours: 1.47 }],
+      preRecordedAttendancePct: 34.96,
+    };
+    const student: ParsedStudent = {
+      student_id: '1',
+      name: 'A',
+      email,
+      college: 'Test',
+      program: 'BTech',
+      cohort: 'Incubator 14.0',
+      state: 'Kerala',
+      status: 'Active',
+    };
+    const payload = {
+      cohortName: 'Incubator 14.0',
+      fileName: 'test.xlsx',
+      headers: ['Email', 'Name', 'Attendance %'],
+      rawRows: [{ Email: email, Name: 'A', 'Attendance %': '90' }],
+      students: [student],
+      attendance: [],
+      assignments: [],
+      quiz: [],
+      classWiseAttendance: [classWise],
+    } satisfies ParsedExcelPayload;
+
+    const view = buildStudentDashboardView({
+      payload,
+      email,
+      student,
+      matched: payload.rawRows![0],
+      mapping: {},
+      classWise,
+    });
+
+    expect(liveSessionsAttendancePct(classWise)).toBe(50);
+    expect(view.attendancePct).toBe(50);
+    expect(view.liveHours).toBe(1.5);
+    expect(preRecordedAttendancePercent(classWise)).toBe(34.96);
+    expect(view.preRecordedAttendancePct).toBe(34.96);
+    expect(view.programHoursLabel).toBe('Live 1.50 / 3 hrs · Pre-recorded 0.51 hrs');
   });
 });

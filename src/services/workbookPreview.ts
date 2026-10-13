@@ -1,9 +1,30 @@
 import type { SheetPreview, WorkbookPreview } from '../types/productionTypes';
-import { readExcelRow } from './excelCellValue';
+import { readExcelRow, type ExcelReadableRow } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
 import { filterAllowedCohortSheets, recommendImportSheet } from './sheetSelection';
-import { isDailyAttendanceSheetName } from './classWiseAttendance';
+import {
+  isDailyAttendanceSheetName,
+  isOverallAttendanceSheetName,
+  isWatchTimeAttendanceSheetName,
+} from './classWiseAttendance';
 import { isAssignmentPerfSheetName } from './assessmentPerfSheets';
+
+function previewHeaderRow(ws: {
+  name: string;
+  rowCount?: number;
+  getRow: (n: number) => ExcelReadableRow;
+}): number {
+  if (isDailyAttendanceSheetName(ws.name) || isAssignmentPerfSheetName(ws.name)) return 2;
+  if (isOverallAttendanceSheetName(ws.name) || isWatchTimeAttendanceSheetName(ws.name)) {
+    const limit = Math.min(12, Math.max(ws.rowCount ?? 1, 1));
+    for (let r = 1; r <= limit; r++) {
+      const row = ws.getRow(r);
+      const cells = readExcelRow(row, Math.max(row.cellCount ?? 0, 8));
+      if (cells.some(cell => /email/i.test(cell))) return r;
+    }
+  }
+  return 1;
+}
 
 export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): Promise<WorkbookPreview> {
   const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
@@ -11,7 +32,7 @@ export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): P
 
   const allSheets: SheetPreview[] = wb.worksheets.map(ws => {
     const rowCount = Math.max(0, (ws.rowCount ?? 0) - 1);
-    const headerSourceRow = isDailyAttendanceSheetName(ws.name) || isAssignmentPerfSheetName(ws.name) ? 2 : 1;
+    const headerSourceRow = previewHeaderRow(ws);
     const headerRow = ws.getRow(headerSourceRow);
     const colCount = Math.max(headerRow.cellCount, ws.columnCount ?? 0);
     const headers = readExcelRow(headerRow, colCount).map((h, i) => h || `Column ${i + 1}`);

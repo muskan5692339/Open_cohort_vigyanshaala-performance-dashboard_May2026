@@ -1,5 +1,9 @@
 import type { WorkbookPreview } from '../types/productionTypes';
-import { isDailyAttendanceSheetName } from './classWiseAttendance';
+import {
+  isDailyAttendanceSheetName,
+  isOverallAttendanceSheetName,
+  isWatchTimeAttendanceSheetName,
+} from './classWiseAttendance';
 import { isAssignmentPerfSheetName, isQuizPerfSheetName } from './assessmentPerfSheets';
 
 export function normalizeSheetKey(name: string): string {
@@ -31,7 +35,9 @@ export function isClassWiseAttendanceSheetName(name: string): boolean {
 export function isAllowedCohortSheetName(name: string): boolean {
   return isPerformanceImportSheetName(name)
     || isClassWiseAttendanceSheetName(name)
+    || isOverallAttendanceSheetName(name)
     || isDailyAttendanceSheetName(name)
+    || isWatchTimeAttendanceSheetName(name)
     || isAssignmentPerfSheetName(name)
     || isQuizPerfSheetName(name);
 }
@@ -41,10 +47,14 @@ export function filterAllowedCohortSheets<T extends { name: string }>(sheets: T[
   if (overallPerformance) {
     // Inc 14 color-coded set only — ignore Form Responses, sources, FFE, etc.
     const ordered: T[] = [overallPerformance];
+    const overallAttendance = sheets.find(s => isOverallAttendanceSheetName(s.name));
+    const watch = sheets.find(s => isWatchTimeAttendanceSheetName(s.name));
     const daily = sheets.find(s => isDailyAttendanceSheetName(s.name));
     const assignment = sheets.find(s => isAssignmentPerfSheetName(s.name));
     const quiz = sheets.find(s => isQuizPerfSheetName(s.name));
-    if (daily) ordered.push(daily);
+    // One attendance sheet: Overall Attendance replaces Daily Attendance.
+    const attendance = overallAttendance ?? watch ?? daily;
+    if (attendance) ordered.push(attendance);
     if (assignment) ordered.push(assignment);
     if (quiz) ordered.push(quiz);
     return ordered;

@@ -59,7 +59,7 @@
   color: #1e3a2f;
   background: #e8f5e1;
   border: 1px solid #c5e4b4;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .program-journey__track {

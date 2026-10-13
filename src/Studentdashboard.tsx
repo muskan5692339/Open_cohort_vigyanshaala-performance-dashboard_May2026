@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
-  PieChart,
-  Pie,
   Cell,
   BarChart,
   Bar,
@@ -40,7 +38,6 @@ import {
 import {
   buildSessionTrendFromClassWise,
   buildPreRecordedTrendFromClassWise,
-  buildAttendanceDonutFromHours,
   getClassWiseAttendanceForStudent,
   sessionHoursIndicatorColor,
   sessionHoursIndicatorFill,
@@ -278,7 +275,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const {
     profile,
     attendancePct,
-    missedAttendancePct,
     assignmentSubmissionPct,
     assignmentAcceptancePct,
     avgQuiz,
@@ -287,10 +283,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
     quizBarData: quizData,
     assignmentRows,
     sessions,
-    attendedSessionCount,
-    attendedHours,
-    totalHours,
-    preRecordedTotalHours,
+    liveHours,
+    preRecordedHours,
+    preRecordedAttendancePct,
   } = dashboardView;
 
   // Show acceptance % as the main Assignments KPI (rejected ≠ full credit).
@@ -299,8 +294,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
     assignmentSubmissionPct !== assignmentAcceptancePct
       ? `${assignmentSubmissionPct}% submitted · ${assignmentRows.length} items`
       : `${assignmentRows.length} tracked items`;
-
-  const attendanceDonut = buildAttendanceDonutFromHours(attendancePct, missedAttendancePct);
 
   const sessionTrend = classWise ? buildSessionTrendFromClassWise(classWise) : [];
   const preRecordedTrend = classWise ? buildPreRecordedTrendFromClassWise(classWise) : [];
@@ -362,7 +355,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
           <ProgramJourneyCard
             classWise={classWise}
             liveSessions={sessions}
-            preRecordedTotalHours={preRecordedTotalHours}
+            liveHours={liveHours}
+            preRecordedHours={preRecordedHours}
+            preRecordedAttendancePct={preRecordedAttendancePct}
             assignmentRows={assignmentRows}
             quizBarData={quizData}
             cohortName={
@@ -424,7 +419,18 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
         <div className="section-body">
           <div className="stat-row">
-            <StatCard label="Attendance" value={`${attendancePct.toFixed(2)}%`} subtitle="From data source" warn={attendancePct === 0} />
+            <StatCard
+              label="Live sessions"
+              value={`${attendancePct.toFixed(2)}%`}
+              subtitle={sessions > 0 ? `${liveHours.toFixed(2)} / ${sessions} hrs` : 'No live dates yet'}
+              warn={attendancePct === 0}
+            />
+            <StatCard
+              label="Pre-recorded"
+              value={preRecordedAttendancePct > 0 ? `${preRecordedAttendancePct.toFixed(2)}%` : preRecordedHours > 0 ? `${preRecordedHours.toFixed(2)} hrs` : '0%'}
+              subtitle={preRecordedHours > 0 ? `${preRecordedHours.toFixed(2)} hrs watched` : 'No pre-recorded watch time yet'}
+              warn={preRecordedAttendancePct === 0 && preRecordedHours === 0}
+            />
             <div className={`metric-alert-wrap ${assignmentPct === 0 ? 'metric-alert-wrap--hot' : ''}`}>
               <StatCard label="Assignments" value={`${assignmentPct}%`} subtitle={assignmentSubtitle} warn={assignmentPct === 0} />
               <AnimeMetricAlert
@@ -443,162 +449,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
                 message="No quiz scores yet. Attempt quizzes when they open — they count toward your profile!"
               />
             </div>
-            <StatCard
-              label="Sessions"
-              value={attendedHours > 0 ? attendedHours.toFixed(2) : String(attendedSessionCount || 0)}
-              subtitle={
-                totalHours > 0
-                  ? `of ${Number.isInteger(totalHours) ? totalHours : totalHours.toFixed(2)} hrs (${sessions} live-session + ${Number(preRecordedTotalHours).toFixed(2)} Pre-recorded)`
-                  : `${sessions || 0} total sessions`
-              }
-              warn={attendedHours === 0 && attendedSessionCount === 0 && sessions === 0}
-            />
           </div>
 
           <div className="charts-grid">
-            <article className="panel-card panel-large panel-card-wrap">
-              <h3>Attendance breakdown</h3>
-              <ChartMobileFrame chartKey="attendance" height={220}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={attendanceDonut} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92}>
-                      <Cell fill="var(--sd-success)" />
-                      <Cell fill="var(--sd-amber)" />
-                    </Pie>
-                    <Tooltip
-                      formatter={(value, name) => [`${Number(value ?? 0).toFixed(1)}%`, String(name ?? '')]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartMobileFrame>
-              <div className="legend-row">
-                <span><i className="legend-dot attended" />Attended ({attendancePct.toFixed(1)}%)</span>
-                <span><i className="legend-dot missed" />Missed ({missedAttendancePct.toFixed(1)}%)</span>
-              </div>
-            </article>
-
-            <article className="panel-card panel-large panel-card-wrap">
-              <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="quiz" delayMs={600} />
-              <h3>Quiz performance</h3>
-              {quizChartData.length === 0 ? (
-                <div style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--sd-text-muted)', fontSize: 13 }}>
-                  No quiz scores yet
-                </div>
-              ) : (
-                <ChartMobileFrame
-                  chartKey="quiz"
-                  height={220}
-                  needsHorizontalScroll={quizNeedsScroll}
-                  innerWidth={quizChartWidth}
-                  showScrollLadder={quizNeedsScroll}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={quizChartData} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
-                      <XAxis
-                        dataKey="name"
-                        stroke="var(--sd-text-muted)"
-                        fontSize={isMobile ? 10 : 11}
-                        interval={0}
-                        angle={isMobile ? -20 : 0}
-                        textAnchor={isMobile ? 'end' : 'middle'}
-                        height={isMobile ? 52 : 30}
-                        tickFormatter={value => {
-                          const text = String(value ?? '');
-                          return text.length > (isMobile ? 18 : 26) ? `${text.slice(0, isMobile ? 18 : 26)}...` : text;
-                        }}
-                      />
-                      <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} width={isMobile ? 28 : 36} />
-                      <Tooltip
-                        formatter={(value, _name, item) => {
-                          const row = item.payload as { display?: string; score?: number | null };
-                          return [row.display ?? value, 'Score'];
-                        }}
-                      />
-                      <Bar dataKey="chartScore" radius={[6, 6, 0, 0]} barSize={isMobile ? 36 : 48}>
-                        {quizChartData.map((entry, idx) => (
-                          <Cell
-                            key={`${entry.name}-${idx}`}
-                            fill={
-                              entry.score == null
-                                ? 'var(--sd-border)'
-                                : entry.score >= 100
-                                  ? 'var(--sd-light-green)'
-                                  : 'var(--sd-accent)'
-                            }
-                          />
-                        ))}
-                        <LabelList
-                          dataKey="display"
-                          position="top"
-                          fontSize={11}
-                          fill="var(--sd-text)"
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartMobileFrame>
-              )}
-              <div className="quiz-summary">
-                <MiniStat label="Average" value={`${avgQuiz}%`} />
-                <MiniStat label="Highest" value={`${quizHighest}%`} />
-                <MiniStat label="Count" value={String(scoredQuizCount || quizChartData.length)} />
-              </div>
-            </article>
-
-            <article className="panel-card panel-large panel-card-wrap">
-              <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="assignments" delayMs={900} />
-              <h3>Assignments</h3>
-              <div className="assignment-list">
-                {assignmentRows.map(item => {
-                  if (isAssignmentCommentColumn(item.name)) return null;
-                  const display = resolveAssignmentDisplayFields(item);
-                  const explanation = getAssignmentStatusExplanation(display.kind, Boolean(display.feedbackText));
-                  const statusClass =
-                    display.kind === 'accepted'
-                      ? 'accepted'
-                      : display.kind === 'rejected'
-                        ? 'rejected'
-                        : display.kind === 'pending'
-                          ? 'pending'
-                          : '';
-                  return (
-                    <div className="assignment-block" key={item.name}>
-                      <div className="assignment-row">
-                        <div className="assignment-name-wrap">
-                          <div className="assignment-name">{item.name}</div>
-                          <div className="assignment-date">{item.date}</div>
-                        </div>
-                        <span className={`status-pill ${statusClass}`} title={display.statusLabel}>
-                          {display.statusLabel}
-                        </span>
-                      </div>
-                      {explanation && (
-                        <div className={`assignment-explainer assignment-explainer--${display.kind}`}>
-                          {explanation}
-                        </div>
-                      )}
-                      {display.kind === 'rejected' && (
-                        <ol className="assignment-action-steps">
-                          {REJECTED_ASSIGNMENT_STEPS.map(step => (
-                            <li key={step}>{step}</li>
-                          ))}
-                        </ol>
-                      )}
-                      {display.feedbackText && (
-                        <div className={`assignment-feedback assignment-feedback--${display.kind}`}>
-                          <div className="assignment-feedback__label">Facilitator feedback — scroll to read all</div>
-                          <div className="assignment-feedback__scroll" tabIndex={0}>
-                            {display.feedbackText}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </article>
-
             <article className="panel-card panel-large session-trend-panel panel-card-wrap">
               <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="sessions" delayMs={1200} />
               <h3>Session-wise trend</h3>
@@ -739,7 +592,16 @@ export default function StudentDashboard({ email, onBack }: Props) {
                               label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
                             />
                             <Tooltip
-                              formatter={(value) => [`${Number(value ?? 0).toFixed(2)} hrs`, 'Live class']}
+                              formatter={(value, _name, item) => {
+                                const point = (item?.payload ?? {}) as { kind?: string };
+                                const hrs = Number(value ?? 0);
+                                const label = point.kind === 'live' || hrs >= 1
+                                  ? 'Live attended'
+                                  : hrs > 0
+                                    ? 'Recording watched'
+                                    : 'Missed';
+                                return [`${hrs.toFixed(2)} hrs`, label];
+                              }}
                             />
                             <Line
                               type="monotone"
@@ -756,17 +618,137 @@ export default function StudentDashboard({ email, onBack }: Props) {
                 </div>
               ) : hasAnySessionTrend ? (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
-                  No pre-recorded video data for this student yet. Re-upload the workbook with
-                  {' '}&quot;Pre-recorded&quot; columns in the Class-wise Attendance sheet
-                  {' '}(include duration in header, e.g. Pre-rec WK3 (7 min)).
+                  No pre-recorded video data for this student yet. Re-upload the workbook with the
+                  {' '}Overall Attendance sheet (live dates, recording decimals, and pre-recorded %).
                 </p>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
-                  No class-wise attendance data for this student. Re-upload the workbook and ensure it includes a
-                  {' '}&quot;Class-wise Attendance&quot; sheet with session columns (e.g. WK0_SUK, WK1_WS).
+                  No attendance dates for this student yet. Re-upload the workbook with the Overall Attendance sheet.
                 </p>
               )}
             </article>
+            <article className="panel-card panel-large panel-card-wrap">
+              <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="quiz" delayMs={600} />
+              <h3>Quiz performance</h3>
+              {quizChartData.length === 0 ? (
+                <div style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--sd-text-muted)', fontSize: 13 }}>
+                  No quiz scores yet
+                </div>
+              ) : (
+                <ChartMobileFrame
+                  chartKey="quiz"
+                  height={220}
+                  needsHorizontalScroll={quizNeedsScroll}
+                  innerWidth={quizChartWidth}
+                  showScrollLadder={quizNeedsScroll}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={quizChartData} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
+                      <XAxis
+                        dataKey="name"
+                        stroke="var(--sd-text-muted)"
+                        fontSize={isMobile ? 10 : 11}
+                        interval={0}
+                        angle={isMobile ? -20 : 0}
+                        textAnchor={isMobile ? 'end' : 'middle'}
+                        height={isMobile ? 52 : 30}
+                        tickFormatter={value => {
+                          const text = String(value ?? '');
+                          return text.length > (isMobile ? 18 : 26) ? `${text.slice(0, isMobile ? 18 : 26)}...` : text;
+                        }}
+                      />
+                      <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} width={isMobile ? 28 : 36} />
+                      <Tooltip
+                        formatter={(value, _name, item) => {
+                          const row = item.payload as { display?: string; score?: number | null };
+                          return [row.display ?? value, 'Score'];
+                        }}
+                      />
+                      <Bar dataKey="chartScore" radius={[6, 6, 0, 0]} barSize={isMobile ? 36 : 48}>
+                        {quizChartData.map((entry, idx) => (
+                          <Cell
+                            key={`${entry.name}-${idx}`}
+                            fill={
+                              entry.score == null
+                                ? 'var(--sd-border)'
+                                : entry.score >= 100
+                                  ? 'var(--sd-light-green)'
+                                  : 'var(--sd-accent)'
+                            }
+                          />
+                        ))}
+                        <LabelList
+                          dataKey="display"
+                          position="top"
+                          fontSize={11}
+                          fill="var(--sd-text)"
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartMobileFrame>
+              )}
+              <div className="quiz-summary">
+                <MiniStat label="Average" value={`${avgQuiz}%`} />
+                <MiniStat label="Highest" value={`${quizHighest}%`} />
+                <MiniStat label="Count" value={String(scoredQuizCount || quizChartData.length)} />
+              </div>
+            </article>
+
+            <article className="panel-card panel-large panel-card-wrap">
+              <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="assignments" delayMs={900} />
+              <h3>Assignments</h3>
+              <div className="assignment-list">
+                {assignmentRows.map(item => {
+                  if (isAssignmentCommentColumn(item.name)) return null;
+                  const display = resolveAssignmentDisplayFields(item);
+                  const explanation = getAssignmentStatusExplanation(display.kind, Boolean(display.feedbackText));
+                  const statusClass =
+                    display.kind === 'accepted'
+                      ? 'accepted'
+                      : display.kind === 'rejected'
+                        ? 'rejected'
+                        : display.kind === 'pending'
+                          ? 'pending'
+                          : '';
+                  return (
+                    <div className="assignment-block" key={item.name}>
+                      <div className="assignment-row">
+                        <div className="assignment-name-wrap">
+                          <div className="assignment-name">{item.name}</div>
+                          <div className="assignment-date">{item.date}</div>
+                        </div>
+                        <span className={`status-pill ${statusClass}`} title={display.statusLabel}>
+                          {display.statusLabel}
+                        </span>
+                      </div>
+                      {explanation && (
+                        <div className={`assignment-explainer assignment-explainer--${display.kind}`}>
+                          {explanation}
+                        </div>
+                      )}
+                      {display.kind === 'rejected' && (
+                        <ol className="assignment-action-steps">
+                          {REJECTED_ASSIGNMENT_STEPS.map(step => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      )}
+                      {display.feedbackText && (
+                        <div className={`assignment-feedback assignment-feedback--${display.kind}`}>
+                          <div className="assignment-feedback__label">Facilitator feedback — scroll to read all</div>
+                          <div className="assignment-feedback__scroll" tabIndex={0}>
+                            {display.feedbackText}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+
           </div>
 
           <div className="back-row">
