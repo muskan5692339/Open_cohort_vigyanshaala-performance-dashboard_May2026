@@ -116,7 +116,13 @@
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
-  touch-action: pan-y pinch-zoom;
+  touch-action: pan-y;
+  background: #fff;
+}
+
+.chart-mobile-viewport--fit {
+  overflow: hidden;
+  touch-action: pan-y;
 }
 
 .chart-mobile-viewport--scroll {

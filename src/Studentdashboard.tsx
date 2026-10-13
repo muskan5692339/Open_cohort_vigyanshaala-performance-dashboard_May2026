@@ -168,6 +168,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const sessionChartCaptureRef = useRef<HTMLDivElement>(null);
   const [sessionTrendFocus, setSessionTrendFocus] = useState<SessionTrendFocus>('start');
   const [sessionChartSeries, setSessionChartSeries] = useState<SessionChartSeries>('live');
+  const [sessionChartExpanded, setSessionChartExpanded] = useState(false);
+  const [quizChartExpanded, setQuizChartExpanded] = useState(false);
   const [approvedCorrection, setApprovedCorrection] = useState<StudentProfileCorrection | null>(null);
   const isMobile = useMediaQuery('(max-width: 640px)');
 
@@ -310,14 +312,16 @@ export default function StudentDashboard({ email, onBack }: Props) {
     : Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
   const sessionTrendYLabel = sessionChartSeries === 'prerecorded' ? 'Completion %' : 'Hours';
   const sessionTrendChartWidth = Math.max(activeSessionTrend.length * SESSION_TREND_SLOT_WIDTH, isMobile ? 300 : 320);
-  const sessionTrendNeedsScroll = activeSessionTrend.length > (isMobile ? 1 : 4);
+  const sessionTrendNeedsScroll = !isMobile && activeSessionTrend.length > 4;
   const quizChartData = quizData.map(entry => ({
     ...entry,
     chartScore: entry.score ?? 0,
   }));
   const scoredQuizCount = quizData.filter(entry => entry.score != null).length;
   const quizChartWidth = Math.max(quizChartData.length * QUIZ_SLOT_WIDTH, isMobile ? 300 : 320);
-  const quizNeedsScroll = quizChartData.length > (isMobile ? 1 : 3);
+  const quizNeedsScroll = !isMobile && quizChartData.length > 3;
+  const sessionAxisCompact = isMobile && !sessionChartExpanded;
+  const quizAxisCompact = isMobile && !quizChartExpanded;
   const sessionTrendScrollHint = sessionChartSeries === 'live'
     ? `${activeSessionTrend.length} classes · scroll sideways →`
     : `${activeSessionTrend.length} videos · scroll sideways →`;
@@ -534,24 +538,26 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     innerWidth={sessionTrendChartWidth}
                     scrollRef={sessionTrendScrollRef}
                     showScrollLadder={sessionTrendNeedsScroll}
+                    onExpandedChange={setSessionChartExpanded}
                   >
                     <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={activeSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                          <LineChart data={activeSessionTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
                             <XAxis
                               dataKey="name"
                               stroke="var(--sd-text-muted)"
-                              fontSize={10}
-                              interval={0}
-                              angle={-25}
-                              textAnchor="end"
-                              height={56}
+                              fontSize={sessionAxisCompact ? 9 : 10}
+                              interval={sessionAxisCompact ? 'preserveStartEnd' : 0}
+                              angle={sessionAxisCompact ? 0 : -25}
+                              textAnchor={sessionAxisCompact ? 'middle' : 'end'}
+                              height={sessionAxisCompact ? 28 : 56}
                             />
                             <YAxis
                               domain={[0, sessionTrendYMax]}
                               stroke="var(--sd-text-muted)"
                               fontSize={11}
-                              label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                              width={sessionAxisCompact ? 28 : 48}
+                              label={sessionAxisCompact ? undefined : { value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
                             />
                             <Tooltip
                               contentStyle={{ background: '#fff', border: '1px solid #e3e7ef', color: '#223D62' }}
@@ -598,6 +604,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                   needsHorizontalScroll={quizNeedsScroll}
                   innerWidth={quizChartWidth}
                   showScrollLadder={quizNeedsScroll}
+                  onExpandedChange={setQuizChartExpanded}
                 >
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={quizChartData} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
@@ -605,14 +612,15 @@ export default function StudentDashboard({ email, onBack }: Props) {
                       <XAxis
                         dataKey="name"
                         stroke="var(--sd-text-muted)"
-                        fontSize={isMobile ? 10 : 11}
-                        interval={0}
-                        angle={isMobile ? -20 : 0}
-                        textAnchor={isMobile ? 'end' : 'middle'}
-                        height={isMobile ? 52 : 30}
+                        fontSize={quizAxisCompact ? 9 : 11}
+                        interval={quizAxisCompact ? 'preserveStartEnd' : 0}
+                        angle={0}
+                        textAnchor="middle"
+                        height={quizAxisCompact ? 32 : 30}
                         tickFormatter={value => {
                           const text = String(value ?? '');
-                          return text.length > (isMobile ? 18 : 26) ? `${text.slice(0, isMobile ? 18 : 26)}...` : text;
+                          const limit = quizAxisCompact ? 10 : 26;
+                          return text.length > limit ? `${text.slice(0, limit)}...` : text;
                         }}
                       />
                       <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} width={isMobile ? 28 : 36} />
@@ -623,7 +631,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                           return [row.display ?? value, 'Score'];
                         }}
                       />
-                      <Bar dataKey="chartScore" radius={[6, 6, 0, 0]} barSize={isMobile ? 36 : 48}>
+                      <Bar dataKey="chartScore" radius={[6, 6, 0, 0]} barSize={quizAxisCompact ? undefined : 48}>
                         {quizChartData.map((entry, idx) => (
                           <Cell
                             key={`${entry.name}-${idx}`}
@@ -636,12 +644,14 @@ export default function StudentDashboard({ email, onBack }: Props) {
                             }
                           />
                         ))}
-                        <LabelList
-                          dataKey="display"
-                          position="top"
-                          fontSize={11}
-                          fill="var(--sd-text)"
-                        />
+                        {!quizAxisCompact && (
+                          <LabelList
+                            dataKey="display"
+                            position="top"
+                            fontSize={11}
+                            fill="var(--sd-text)"
+                          />
+                        )}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
