@@ -297,7 +297,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
   const sessionTrend = classWise ? buildSessionTrendFromClassWise(classWise) : [];
   const preRecordedTrend = classWise ? buildPreRecordedTrendFromClassWise(classWise) : [];
-  const activeSessionTrend = sessionChartSeries === 'live' ? sessionTrend : preRecordedTrend;
+  // Per-video hours are not in the workbook yet, so the pre-recorded tab stays blank.
+  const activeSessionTrend = sessionChartSeries === 'live' ? sessionTrend : [];
   const hasLiveTrend = sessionTrend.length > 0;
   const hasPreRecordedTrend = preRecordedTrend.length > 0;
   const hasAnySessionTrend = hasLiveTrend || hasPreRecordedTrend;
@@ -492,7 +493,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                   )}
                   {sessionChartSeries === 'prerecorded' && (
                     <span className="session-trend-scroll-hint session-trend-explainer">
-                      Short videos show % watched (100% = full video). Hover for program credit in hours.
+                      Individual pre-recorded video hours are not available yet.
                     </span>
                   )}
                   {activeSessionTrend.length > 0 && sessionTrendNeedsScroll && (
@@ -520,7 +521,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
                   )}
                 </div>
               )}
-              {activeSessionTrend.length > 0 ? (
+              {sessionChartSeries === 'prerecorded' ? (
+                <div className="session-trend-vacant">
+                  This view stays blank until each pre-recorded video has its own hours. Quiz scores are in the chart below.
+                </div>
+              ) : activeSessionTrend.length > 0 ? (
                 <div ref={sessionChartCaptureRef} className="session-trend-capture-root">
                   <ChartMobileFrame
                     chartKey="sessions"
@@ -531,49 +536,6 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     showScrollLadder={sessionTrendNeedsScroll}
                   >
                     <ResponsiveContainer width="100%" height="100%">
-                        {sessionChartSeries === 'prerecorded' ? (
-                          <BarChart data={activeSessionTrend} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
-                            <XAxis
-                              dataKey="name"
-                              stroke="var(--sd-text-muted)"
-                              fontSize={10}
-                              interval={0}
-                              angle={-25}
-                              textAnchor="end"
-                              height={56}
-                            />
-                            <YAxis
-                              domain={[0, sessionTrendYMax]}
-                              stroke="var(--sd-text-muted)"
-                              fontSize={11}
-                              label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
-                            />
-                            <Tooltip
-                              formatter={(value, _name, item) => {
-                                const point = (item?.payload ?? {}) as { hoursCredit?: number; durationMin?: number | null };
-                                const hrs = point.hoursCredit ?? 0;
-                                const dur = point.durationMin ? `${Math.round(point.durationMin * 10) / 10} min · ` : '';
-                                return [`${Math.round(Number(value ?? 0))}% watched · ${dur}${hrs.toFixed(2)} hr credit`, 'Pre-recorded'];
-                              }}
-                            />
-                            <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>
-                              {activeSessionTrend.map((entry, idx) => (
-                                <Cell
-                                  key={`${entry.name}-${idx}`}
-                                  fill={sessionHoursIndicatorColor(Math.min(1, entry.value / 100))}
-                                />
-                              ))}
-                              <LabelList
-                                dataKey="value"
-                                position="top"
-                                fontSize={10}
-                                fill="var(--sd-text-muted)"
-                                formatter={(value) => `${Math.round(Number(value ?? 0))}%`}
-                              />
-                            </Bar>
-                          </BarChart>
-                        ) : (
                           <LineChart data={activeSessionTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
                             <XAxis
@@ -592,6 +554,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                               label={{ value: sessionTrendYLabel, angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
                             />
                             <Tooltip
+                              contentStyle={{ background: '#fff', border: '1px solid #e3e7ef', color: '#223D62' }}
                               formatter={(value, _name, item) => {
                                 const point = (item?.payload ?? {}) as { kind?: string };
                                 const hrs = Number(value ?? 0);
@@ -612,15 +575,9 @@ export default function StudentDashboard({ email, onBack }: Props) {
                               activeDot={(props) => <SessionTrendDot {...props} scale="hours" active />}
                             />
                           </LineChart>
-                        )}
                       </ResponsiveContainer>
                   </ChartMobileFrame>
                 </div>
-              ) : hasAnySessionTrend ? (
-                <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
-                  No pre-recorded video data for this student yet. Re-upload the workbook with the
-                  {' '}Overall Attendance sheet (live dates, recording decimals, and pre-recorded %).
-                </p>
               ) : (
                 <p style={{ fontSize: 13, color: 'var(--sd-text-muted)', margin: '24px 0', lineHeight: 1.6 }}>
                   No attendance dates for this student yet. Re-upload the workbook with the Overall Attendance sheet.
@@ -660,6 +617,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                       />
                       <YAxis domain={[0, 100]} stroke="var(--sd-text-muted)" fontSize={11} width={isMobile ? 28 : 36} />
                       <Tooltip
+                        contentStyle={{ background: '#fff', border: '1px solid #e3e7ef', color: '#223D62' }}
                         formatter={(value, _name, item) => {
                           const row = item.payload as { display?: string; score?: number | null };
                           return [row.display ?? value, 'Score'];

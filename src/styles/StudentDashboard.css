@@ -14,23 +14,17 @@
   --sd-danger: #B84C4C;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --sd-bg: #111827;
-    --sd-surface: #1f2937;
-    --sd-text: #e5e7eb;
-    --sd-text-muted: #9ca3af;
-    --sd-border: #374151;
-    --sd-header-bg: #101728;
-  }
-}
-
 .student-page {
-  min-height: 100vh;
-  background: var(--sd-bg);
+  min-height: 100dvh;
+  height: auto;
+  background: #FDFDFD;
+  color-scheme: light;
   padding: 20px;
   font-family: Inter, system-ui, -apple-system, sans-serif;
   color: var(--sd-text);
+  overflow-x: visible;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
 }
 
 .student-shell {
@@ -281,6 +275,23 @@
 
 .session-trend-scroll {
   height: 100%;
+}
+
+.session-trend-vacant {
+  min-height: 140px;
+  margin: 4px 0 8px;
+  padding: 28px 12px;
+  background: #fff;
+  color: var(--sd-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.session-trend-capture-root,
+.chart-mobile-inner,
+.recharts-responsive-container,
+.recharts-wrapper {
+  background: #fff;
 }
 
 .legend-row {
@@ -591,8 +602,13 @@
 
 @media (max-width: 640px) {
   .student-page {
-    padding: 10px;
-    overflow-x: hidden;
+    padding: 10px 10px 96px;
+    overflow: visible;
+  }
+
+  .student-shell,
+  .section-body {
+    overflow: visible;
   }
 
   .student-header {

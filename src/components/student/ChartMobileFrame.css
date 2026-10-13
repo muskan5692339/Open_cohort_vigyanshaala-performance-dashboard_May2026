@@ -121,12 +121,15 @@
 
 .chart-mobile-viewport--scroll {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: clip;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  touch-action: pan-x pan-y pinch-zoom;
   overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--sd-primary) transparent;
+  background: #fff;
 }
 
 .chart-mobile-viewport--scroll::-webkit-scrollbar {
