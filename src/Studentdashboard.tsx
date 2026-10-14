@@ -20,6 +20,7 @@ import {
 import AnimeMetricAlert from './components/student/AnimeMetricAlert';
 import AnimeHelpAssistant from './components/student/AnimeHelpAssistant';
 import ChartDataUpdatedBubble from './components/student/ChartDataUpdatedBubble';
+import BrandBanner from './components/brand/BrandBanner';
 import ChartMobileFrame from './components/student/ChartMobileFrame';
 import ChartSnapshotActions from './components/student/ChartSnapshotActions';
 import StudentProfileEditPanel from './components/student/StudentProfileEditPanel';
@@ -380,6 +381,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
           )}
         </div>
         <header className="student-header">
+          <BrandBanner
+            className="student-header__brand"
+            title="VigyanShaala Performance Dashboard"
+            subtitle="Live sessions, pre-recorded hours, quizzes and assignments"
+          />
           <div className="student-header-top">
             <h1 className="student-name">{studentName}</h1>
             <span className="engagement-badge">{engagementLabel}</span>

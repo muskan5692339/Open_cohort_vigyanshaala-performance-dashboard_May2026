@@ -8,6 +8,7 @@ import {
   searchStudentEmails,
 } from './services/studentEmailLookup';
 import './styles/HomePage.css';
+import BrandBanner from './components/brand/BrandBanner';
 import RosterSyncStatus from './components/student/RosterSyncStatus';
 import { adminDataUpdatedAt, formatAdminUpdateTime } from './utils/formatAdminUpdateTime';
 
@@ -129,12 +130,11 @@ export default function HomePage({
 
   return (
     <div className="student-home">
-      <header className="student-home__header">
-        <div className="student-home__brand">
-          <img src="/favicon.svg" alt="VigyanShaala logo" width="28" height="28" />
-          <span>VigyanShaala</span>
-        </div>
-        {showAdminNav && onAdminView && (
+      <BrandBanner
+        className="student-home__header"
+        title="VigyanShaala Performance Dashboard"
+        subtitle="Attendance, assignments and quizzes"
+        trailing={showAdminNav && onAdminView ? (
           <nav className="student-home__nav">
             <button type="button" className="student-home__nav-btn student-home__nav-btn--active">
               Student
@@ -143,8 +143,8 @@ export default function HomePage({
               Admin
             </button>
           </nav>
-        )}
-      </header>
+        ) : undefined}
+      />
 
       <main className={`student-home__main${studentOnly ? ' student-home__main--single' : ''}`}>
         <div className="student-home__login">

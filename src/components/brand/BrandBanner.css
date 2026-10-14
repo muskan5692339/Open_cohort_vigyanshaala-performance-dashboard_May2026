@@ -1,0 +1,73 @@
+.brand-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  color: #fff;
+  background: linear-gradient(90deg, #1a4f86 0%, #1f6a62 46%, #4c9a3c 100%);
+}
+
+.brand-banner__logo {
+  width: 58px;
+  height: 58px;
+  flex-shrink: 0;
+  object-fit: cover;
+  object-position: left center;
+  background: #fff;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+}
+
+.brand-banner__text {
+  min-width: 0;
+  flex: 1;
+}
+
+.brand-banner__title {
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.brand-banner__subtitle {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.brand-banner__trailing {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .brand-banner {
+    padding: 10px 12px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .brand-banner__logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  .brand-banner__title {
+    font-size: 16px;
+  }
+
+  .brand-banner__subtitle {
+    font-size: 12px;
+  }
+
+  .brand-banner__trailing {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}

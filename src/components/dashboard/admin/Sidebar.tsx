@@ -109,22 +109,18 @@ export default function Sidebar({ active, onChange, onBackToStudent }: SidebarPr
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div
+            <img
+              src="/vigyanshaala-logo.jpg"
+              alt="VigyanShaala"
               style={{
-                width: 36,
-                height: 36,
+                width: 40,
+                height: 40,
+                objectFit: 'cover',
+                objectPosition: 'left center',
+                background: '#fff',
                 borderRadius: 10,
-                background: BRAND.yellow,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: BRAND.navy,
-                fontWeight: 800,
-                fontSize: 16,
               }}
-            >
-              VS
-            </div>
+            />
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.1 }}>VigyanShaala</div>
               <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>Admin Console</div>

@@ -10,13 +10,7 @@
 
 .student-home__header {
   flex-shrink: 0;
-  padding: 10px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: #fff;
+  border-bottom: none;
 }
 
 .student-home__brand {
@@ -40,9 +34,9 @@
 .student-home__nav-btn {
   padding: 6px 14px;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.45);
   background: transparent;
-  color: #6b7280;
+  color: #fff;
   cursor: pointer;
   font-size: 13px;
   font-family: inherit;
@@ -50,9 +44,9 @@
 
 .student-home__nav-btn--active {
   border: none;
-  background: #f0e8ff;
-  color: #863bff;
-  font-weight: 600;
+  background: #fff;
+  color: #1a4f86;
+  font-weight: 700;
 }
 
 .student-home__main {

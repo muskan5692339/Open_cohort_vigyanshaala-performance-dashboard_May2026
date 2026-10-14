@@ -43,9 +43,25 @@
 }
 
 .student-header {
-  background: var(--sd-header-bg);
+  background: linear-gradient(90deg, #1a4f86 0%, #1f6a62 46%, #4c9a3c 100%);
   color: #fff;
-  padding: 20px 28px;
+  padding: 0 0 20px;
+}
+
+.student-header__brand {
+  border-radius: 0;
+}
+
+.student-header-top,
+.student-meta,
+.header-profile-grid,
+.student-header .profile-edit-panel {
+  margin-left: 28px;
+  margin-right: 28px;
+}
+
+.student-header-top {
+  margin-top: 16px;
 }
 
 .student-notice-strip {
@@ -612,7 +628,15 @@
   }
 
   .student-header {
-    padding: 16px;
+    padding: 0 0 16px;
+  }
+
+  .student-header-top,
+  .student-meta,
+  .header-profile-grid,
+  .student-header .profile-edit-panel {
+    margin-left: 16px;
+    margin-right: 16px;
   }
 
   .student-name {
