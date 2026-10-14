@@ -28,7 +28,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       const chunkError = isChunkLoadError(this.state.error);
       const storageError = isStorageQuotaError(this.state.error.message);
       return (
-        <div style={{ padding: 24, fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div style={{ padding: 24, fontFamily: 'Poppins, system-ui, sans-serif' }}>
           <div style={{ background: '#fff', border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 20, maxWidth: 640 }}>
             <div style={{ fontWeight: 800, color: BRAND.navy, fontSize: 18, marginBottom: 8 }}>
               {this.props.title ?? 'Something went wrong'}

@@ -601,7 +601,7 @@ export default function ExcelUpload({ onDataImported }: Props) {
 
   /* ── render ── */
   return (
-    <div style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{ fontFamily: 'Poppins, system-ui, sans-serif' }}>
 
       {/* Student links stay visible for both running cohorts */}
       <div style={{ ...S.card, display: 'grid', gap: 12, marginBottom: 18 }}>

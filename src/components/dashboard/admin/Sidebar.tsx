@@ -70,7 +70,7 @@ export default function Sidebar({ active, onChange, onBackToStudent }: SidebarPr
     minHeight: '100vh',
     position: 'sticky',
     top: 0,
-    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+    fontFamily: 'Poppins, system-ui, -apple-system, sans-serif',
   };
 
   return (

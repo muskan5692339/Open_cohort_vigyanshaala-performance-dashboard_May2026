@@ -79,7 +79,7 @@ export default function SyncHistory() {
   useEffect(() => { void fetchLogs(); }, [fetchLogs]);
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: 900, fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{ padding: '32px 40px', maxWidth: 900, fontFamily: 'Poppins, system-ui, sans-serif' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1e2d45', margin: '0 0 6px' }}>Sync History</h1>

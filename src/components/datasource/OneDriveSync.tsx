@@ -10,7 +10,7 @@ import { scoreLabelColor } from '../../services/syncInsights';
 import type { SyncIntervalMinutes } from '../../types/syncOrchestrationTypes';
 
 const S: Record<string, React.CSSProperties> = {
-  wrap:    { padding: '32px 40px', maxWidth: 800, fontFamily: 'Inter, system-ui, sans-serif' },
+  wrap:    { padding: '32px 40px', maxWidth: 800, fontFamily: 'Poppins, system-ui, sans-serif' },
   card:    { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '24px 28px', marginBottom: 20 },
   h2:      { fontSize: 16, fontWeight: 700, color: '#1e2d45', margin: '0 0 4px' },
   sub:     { fontSize: 13, color: '#6b7280', margin: '0 0 18px', lineHeight: 1.5 },

@@ -645,7 +645,7 @@ export default function AdminDashboardPage({ onBackToStudent }: AdminDashboardPa
         minHeight: '100vh',
         background: BRAND.bg,
         display: 'flex',
-        fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+        fontFamily: 'Poppins, system-ui, -apple-system, sans-serif',
         color: BRAND.text,
       }}
     >

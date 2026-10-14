@@ -6,7 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 
 /* ── Styles ─────────────────────────────────────────────── */
 const S: Record<string, React.CSSProperties> = {
-  wrap:    { padding: '32px 40px', maxWidth: 780, fontFamily: 'Inter, system-ui, sans-serif' },
+  wrap:    { padding: '32px 40px', maxWidth: 780, fontFamily: 'Poppins, system-ui, sans-serif' },
   card:    { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '26px 30px', marginBottom: 20 },
   h2:      { fontSize: 17, fontWeight: 700, color: '#1e2d45', margin: '0 0 4px' },
   sub:     { fontSize: 13, color: '#6b7280', margin: '0 0 20px', lineHeight: 1.5 },
