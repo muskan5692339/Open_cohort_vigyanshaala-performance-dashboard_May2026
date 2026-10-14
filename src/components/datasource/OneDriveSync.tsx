@@ -268,7 +268,7 @@ export default function OneDriveSync({ onDataImported }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         <button
           onClick={handleSave}
-          style={{ ...S.btn, background: '#863bff', color: '#fff', padding: '10px 24px' }}
+          style={{ ...S.btn, background: '#2c4869', color: '#fff', padding: '10px 24px' }}
         >
           Save Configuration
         </button>

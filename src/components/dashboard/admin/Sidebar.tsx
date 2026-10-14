@@ -108,23 +108,21 @@ export default function Sidebar({ active, onChange, onBackToStudent }: SidebarPr
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
             <img
               src="/vigyanshaala-logo.jpg"
               alt="VigyanShaala"
               style={{
-                width: 40,
-                height: 40,
-                objectFit: 'cover',
-                objectPosition: 'left center',
-                background: '#fff',
-                borderRadius: 10,
+                width: '100%',
+                maxWidth: 196,
+                height: 'auto',
+                objectFit: 'contain',
+                background: '#fffeff',
+                borderRadius: 8,
+                padding: '4px 6px',
               }}
             />
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.1 }}>VigyanShaala</div>
-              <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>Admin Console</div>
-            </div>
+            <div style={{ fontSize: 11, opacity: 0.75 }}>Admin Console</div>
           </div>
           {mobileOpen && (
             <button

@@ -234,7 +234,7 @@ export default function SyncConfigPanel({ onSaved }: Props) {
             </div>
             {resolved.webUrl && (
               <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                File: <a href={resolved.webUrl} target="_blank" rel="noreferrer" style={{ color: '#863bff' }}>{resolved.name}</a>
+                File: <a href={resolved.webUrl} target="_blank" rel="noreferrer" style={{ color: '#2c4869' }}>{resolved.name}</a>
               </p>
             )}
           </div>
@@ -317,7 +317,7 @@ export default function SyncConfigPanel({ onSaved }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <button
           onClick={handleSave}
-          style={{ ...S.btn, background: '#863bff', color: '#fff', padding: '12px 30px', fontSize: 15 }}
+          style={{ ...S.btn, background: '#2c4869', color: '#fff', padding: '12px 30px', fontSize: 15 }}
         >
           Save configuration
         </button>

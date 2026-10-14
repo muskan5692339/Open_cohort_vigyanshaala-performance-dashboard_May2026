@@ -13,16 +13,11 @@ import RosterSyncStatus from './components/student/RosterSyncStatus';
 import { adminDataUpdatedAt, formatAdminUpdateTime } from './utils/formatAdminUpdateTime';
 
 const BRAND = {
-  purple: '#863bff',
-  purpleDark: '#6b2fd4',
-  purpleLight: '#f0e8ff',
-  navy: '#1e2d45',
-  navyLight: '#2d3f5a',
-  white: '#ffffff',
-  bg: '#f8f9fa',
-  text: '#111827',
-  textLight: '#6b7280',
-  border: '#e5e7eb',
+  navy: '#2c4869',
+  green: '#69ab4a',
+  yellow: '#ffcd29',
+  sky: '#91d8f7',
+  white: '#fffeff',
 };
 
 interface HomePageProps {
@@ -121,10 +116,10 @@ export default function HomePage({
   };
 
   const submitBg = canViewDashboard
-    ? BRAND.navy
+    ? BRAND.green
     : canSubmitEmail
-      ? BRAND.purple
-      : '#9ca3af';
+      ? BRAND.navy
+      : BRAND.sky;
 
   const adminUpdatedAt = adminDataUpdatedAt(meta);
 
@@ -229,6 +224,7 @@ export default function HomePage({
                 className="student-home__submit-btn"
                 style={{
                   background: submitBg,
+                  color: canViewDashboard || canSubmitEmail ? BRAND.white : BRAND.navy,
                   cursor: canSubmitEmail && !datasetLoading ? 'pointer' : 'not-allowed',
                 }}
               >

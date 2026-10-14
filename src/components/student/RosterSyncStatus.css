@@ -6,23 +6,23 @@
   gap: 10px;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid #bbf7d0;
-  background: #f0fdf4;
+  border: 1px solid #9dd3af;
+  background: #fffeff;
   font-size: 12px;
   line-height: 1.45;
-  color: #14532d;
+  color: #2c4869;
 }
 
 .roster-sync--warn {
-  border-color: #fcd34d;
-  background: #fffbeb;
-  color: #92400e;
+  border-color: #ffcd29;
+  background: #fffeff;
+  color: #2c4869;
 }
 
 .roster-sync--loading {
-  border-color: #c4b5fd;
-  background: #f5f3ff;
-  color: #5b21b6;
+  border-color: #91d8f7;
+  background: #fffeff;
+  color: #2c4869;
   align-items: center;
 }
 
@@ -56,8 +56,8 @@
   padding: 8px 14px;
   border: none;
   border-radius: 8px;
-  background: #863bff;
-  color: #fff;
+  background: #ffcd29;
+  color: #2c4869;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -70,14 +70,15 @@
 }
 
 .roster-sync--warn .roster-sync__btn {
-  background: #d97706;
+  background: #f58434;
+  color: #fffeff;
 }
 
 .roster-sync__spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid #c4b5fd;
-  border-top-color: #863bff;
+  border: 2px solid #91d8f7;
+  border-top-color: #2c4869;
   border-radius: 50%;
   animation: roster-spin 0.7s linear infinite;
 }

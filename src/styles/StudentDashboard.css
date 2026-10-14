@@ -1,23 +1,24 @@
 :root {
-  --sd-primary: #2A4769;
-  --sd-secondary: #223D62;
-  --sd-accent: #FDCB29;
-  --sd-success: #68A74C;
-  --sd-light-green: #A8C93A;
-  --sd-bg: #FDFDFD;
-  --sd-surface: #FFFFFF;
-  --sd-text: #223D62;
-  --sd-text-muted: #525C69;
-  --sd-border: #e3e7ef;
-  --sd-header-bg: #1a2340;
-  --sd-amber: #EF9F27;
-  --sd-danger: #B84C4C;
+  --sd-primary: #2c4869;
+  --sd-secondary: #2c4869;
+  --sd-accent: #ffcd29;
+  --sd-success: #69ab4a;
+  --sd-light-green: #9dd3af;
+  --sd-bg: #fffeff;
+  --sd-surface: #fffeff;
+  --sd-text: #2c4869;
+  --sd-text-muted: #2c4869;
+  --sd-border: #9dd3af;
+  --sd-header-bg: #2c4869;
+  --sd-sky: #91d8f7;
+  --sd-amber: #f58434;
+  --sd-danger: #f58434;
 }
 
 .student-page {
   min-height: 100dvh;
   height: auto;
-  background: #FDFDFD;
+  background: #fffeff;
   color-scheme: light;
   padding: 20px;
   font-family: Inter, system-ui, -apple-system, sans-serif;
@@ -43,7 +44,7 @@
 }
 
 .student-header {
-  background: linear-gradient(90deg, #1a4f86 0%, #1f6a62 46%, #4c9a3c 100%);
+  background: linear-gradient(90deg, #2c4869 0%, #69ab4a 100%);
   color: #fff;
   padding: 0 0 20px;
 }
@@ -528,7 +529,7 @@
 }
 
 .assignment-feedback__scroll:focus {
-  outline: 2px solid #c4b5fd;
+  outline: 2px solid #91d8f7;
   outline-offset: -2px;
 }
 

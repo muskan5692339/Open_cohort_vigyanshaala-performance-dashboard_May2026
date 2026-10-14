@@ -67,7 +67,7 @@ interface Props {
 /* ── Helpers ────────────────────────────────────────────── */
 
 const BRAND = {
-  navy: '#1e2d45', purple: '#863bff', green: '#15803d', greenBg: '#f0fdf4', greenBorder: '#86efac',
+  navy: '#2c4869', purple: '#2c4869', green: '#69ab4a', greenBg: '#fffeff', greenBorder: '#9dd3af',
   red: '#dc2626', redBg: '#fef2f2', redBorder: '#fca5a5',
   yellow: '#92400e', yellowBg: '#fffbeb', yellowBorder: '#fde68a',
   text: '#111827', textLight: '#6b7280', border: '#e5e7eb', bg: '#f9fafb', card: '#fff',
