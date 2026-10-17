@@ -159,7 +159,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
           'OTHER_SHEETS_IGNORED',
           'warning',
           `Ignoring ${ignoredOtherSheets.length} other sheet(s): ${ignoredOtherSheets.slice(0, 4).join(', ')}${ignoredOtherSheets.length > 4 ? '…' : ''}.`,
-          'Only these sheets are imported when present: Overall Performance, Overall Attendance, Assignment_Perf, Quiz_Perf. Daily Attendance is used only when Overall Attendance is not in the file. Assignment_Source (feedback) and Quiz_Source are also read when needed.',
+          'Only these sheets are imported when present: Overall Performance, Overall Attendance, Attendance_WatchTime (pre-recorded videos), Assignment_Perf, Quiz_Perf. Daily Attendance is used only when Overall Attendance is not in the file. Assignment_Source (feedback) and Quiz_Source are also read when needed.',
         ),
       );
     }

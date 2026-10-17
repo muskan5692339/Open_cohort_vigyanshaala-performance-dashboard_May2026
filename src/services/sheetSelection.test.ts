@@ -74,6 +74,7 @@ describe('allowed cohort sheets', () => {
     expect(filtered.map(s => s.name)).toEqual([
       'Overall Performance',
       'Overall Attendance',
+      'Attendance_WatchTime',
       'Quiz_Perf',
     ]);
     expect(isAllowedCohortSheetName('Overall Attendance')).toBe(true);

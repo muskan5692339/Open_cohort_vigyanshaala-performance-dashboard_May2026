@@ -29,6 +29,9 @@ export default function FilePreviewPanel({
   const sessionSheet = preview.sheets.find(s => isOverallAttendanceSheetName(s.name))
     ?? preview.sheets.find(s => isWatchTimeAttendanceSheetName(s.name))
     ?? preview.sheets.find(s => isDailyAttendanceSheetName(s.name) || isClassWiseAttendanceSheetName(s.name));
+  const videoSheet = sessionSheet && !isWatchTimeAttendanceSheetName(sessionSheet.name)
+    ? preview.sheets.find(s => isWatchTimeAttendanceSheetName(s.name))
+    : undefined;
   const scoreSheet = preview.sheets.find(s => isOverallPerformanceSheetName(s.name));
   const assignmentSheet = preview.sheets.find(s => isAssignmentPerfSheetName(s.name));
   const quizSheet = preview.sheets.find(s => isQuizPerfSheetName(s.name));
@@ -36,6 +39,7 @@ export default function FilePreviewPanel({
   const importBits = [
     scoreSheet?.name,
     sessionSheet?.name,
+    videoSheet?.name,
     assignmentSheet?.name,
     quizSheet?.name,
   ].filter(Boolean);
@@ -48,6 +52,7 @@ export default function FilePreviewPanel({
           ? [
               `${scoreSheet.name} → scores & roster`,
               sessionSheet ? `${sessionSheet.name} → session trend` : null,
+              videoSheet ? `${videoSheet.name} → pre-recorded videos` : null,
               assignmentSheet ? `${assignmentSheet.name} → assignment status` : null,
               quizSheet ? `${quizSheet.name} → quiz scores` : null,
             ].filter(Boolean).join(' · ')
@@ -56,7 +61,9 @@ export default function FilePreviewPanel({
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         {preview.sheets.map(s => {
-          const role = isOverallAttendanceSheetName(s.name)
+          const role = videoSheet?.name === s.name
+            ? 'Pre-recorded videos'
+            : isOverallAttendanceSheetName(s.name)
             || isWatchTimeAttendanceSheetName(s.name)
             || isDailyAttendanceSheetName(s.name)
             || isClassWiseAttendanceSheetName(s.name)

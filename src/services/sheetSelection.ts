@@ -52,9 +52,11 @@ export function filterAllowedCohortSheets<T extends { name: string }>(sheets: T[
     const daily = sheets.find(s => isDailyAttendanceSheetName(s.name));
     const assignment = sheets.find(s => isAssignmentPerfSheetName(s.name));
     const quiz = sheets.find(s => isQuizPerfSheetName(s.name));
-    // One attendance sheet: Overall Attendance replaces Daily Attendance.
+    // One live attendance sheet: Overall Attendance replaces Daily Attendance.
     const attendance = overallAttendance ?? watch ?? daily;
     if (attendance) ordered.push(attendance);
+    // Attendance_WatchTime still supplies per-video pre-recorded hours next to Overall Attendance.
+    if (watch && attendance !== watch) ordered.push(watch);
     if (assignment) ordered.push(assignment);
     if (quiz) ordered.push(quiz);
     return ordered;
