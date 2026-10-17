@@ -511,7 +511,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                   {isPreRecordedSeries && (
                     <span className="session-trend-scroll-hint session-trend-explainer">
                       {hasPerVideoHours
-                        ? 'WK# is the program week and VDO# is the video number. Each point shows how much of that video you watched.'
+                        ? 'WK# is the program week and VDO# is the video number. Each bar is your watch-time % for that video: green is fully watched, red is not watched.'
                         : 'Individual pre-recorded video hours are not available yet.'}
                     </span>
                   )}
@@ -548,7 +548,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                 <div ref={sessionChartCaptureRef} className="session-trend-capture-root">
                   <ChartMobileFrame
                     chartKey="sessions"
-                    height={240}
+                    height={isPreRecordedSeries && !sessionAxisCompact ? 290 : 240}
                     needsHorizontalScroll={sessionTrendNeedsScroll}
                     innerWidth={sessionTrendChartWidth}
                     scrollRef={sessionTrendScrollRef}
@@ -556,6 +556,55 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     onExpandedChange={setSessionChartExpanded}
                   >
                     <ResponsiveContainer width="100%" height="100%">
+                        {isPreRecordedSeries ? (
+                          <BarChart data={activeSessionTrend} margin={{ top: 18, right: 8, left: sessionAxisCompact ? 0 : 24, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" vertical={false} />
+                            <XAxis
+                              dataKey="name"
+                              stroke="var(--sd-text-muted)"
+                              fontSize={sessionAxisCompact ? 9 : 10}
+                              interval={sessionAxisCompact ? 'preserveStartEnd' : 0}
+                              angle={sessionAxisCompact ? 0 : -30}
+                              textAnchor={sessionAxisCompact ? 'middle' : 'end'}
+                              height={sessionAxisCompact ? 28 : 84}
+                            />
+                            <YAxis
+                              domain={[0, 100]}
+                              stroke="var(--sd-text-muted)"
+                              fontSize={11}
+                              width={sessionAxisCompact ? 28 : 48}
+                              tickFormatter={v => `${v}%`}
+                              label={sessionAxisCompact ? undefined : { value: 'Watch-time %', angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--sd-text-muted)' }}
+                            />
+                            <Tooltip
+                              cursor={{ fill: 'rgba(44, 72, 105, 0.06)' }}
+                              contentStyle={{ background: '#fff', border: '1px solid #e3e7ef', color: '#223D62' }}
+                              formatter={(value, _name, item) => {
+                                const point = (item?.payload ?? {}) as { hoursCredit?: number; maxCreditHours?: number };
+                                const watched = Number(point.hoursCredit ?? 0);
+                                const max = Number(point.maxCreditHours ?? 0);
+                                const hoursText = max > 0
+                                  ? `${watched.toFixed(4)} of ${max.toFixed(4)} hrs`
+                                  : `${watched.toFixed(4)} hrs`;
+                                return [`${Number(value ?? 0).toFixed(1)}% · ${hoursText}`, 'Watch-time'];
+                              }}
+                            />
+                            <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={sessionAxisCompact ? undefined : 40}>
+                              {activeSessionTrend.map((point, idx) => (
+                                <Cell key={`${point.name}-${idx}`} fill={sessionHoursIndicatorColor(point.value / 100)} />
+                              ))}
+                              {!sessionAxisCompact && (
+                                <LabelList
+                                  dataKey="value"
+                                  position="top"
+                                  fontSize={11}
+                                  fill="var(--sd-text)"
+                                  formatter={(v: unknown) => `${Math.round(Number(v ?? 0))}%`}
+                                />
+                              )}
+                            </Bar>
+                          </BarChart>
+                        ) : (
                           <LineChart data={activeSessionTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--sd-border)" />
                             <XAxis
@@ -577,19 +626,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                             <Tooltip
                               contentStyle={{ background: '#fff', border: '1px solid #e3e7ef', color: '#223D62' }}
                               formatter={(value, _name, item) => {
-                                const point = (item?.payload ?? {}) as {
-                                  kind?: string;
-                                  hoursCredit?: number;
-                                  maxCreditHours?: number;
-                                };
-                                if (isPreRecordedSeries) {
-                                  const watched = Number(point.hoursCredit ?? 0);
-                                  const max = Number(point.maxCreditHours ?? 0);
-                                  const hoursText = max > 0
-                                    ? `${watched.toFixed(4)} of ${max.toFixed(4)} hrs`
-                                    : `${watched.toFixed(4)} hrs`;
-                                  return [`${Number(value ?? 0).toFixed(1)}% · ${hoursText}`, 'Watched'];
-                                }
+                                const point = (item?.payload ?? {}) as { kind?: string };
                                 const hrs = Number(value ?? 0);
                                 const label = point.kind === 'live' || hrs >= 1
                                   ? 'Live attended'
@@ -604,10 +641,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
                               dataKey="value"
                               stroke="var(--sd-primary)"
                               strokeWidth={2.5}
-                              dot={(props) => <SessionTrendDot {...props} scale={isPreRecordedSeries ? 'percent' : 'hours'} />}
-                              activeDot={(props) => <SessionTrendDot {...props} scale={isPreRecordedSeries ? 'percent' : 'hours'} active />}
+                              dot={(props) => <SessionTrendDot {...props} scale="hours" />}
+                              activeDot={(props) => <SessionTrendDot {...props} scale="hours" active />}
                             />
                           </LineChart>
+                        )}
                       </ResponsiveContainer>
                   </ChartMobileFrame>
                 </div>
