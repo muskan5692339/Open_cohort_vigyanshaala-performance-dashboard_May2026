@@ -207,7 +207,7 @@ export function buildGapGroups(input: {
   if (live.length) {
     groups.push({
       id: 'live',
-      title: 'Live classes (< 0.7 hr)',
+      title: 'Live classes (< 70% attendance)',
       names: live,
       tone: 'warn',
     });
@@ -390,12 +390,12 @@ export default function ProgramJourneyCard({
       >
         <div className="program-journey__miss-head">
           <h3 className="program-journey__miss-title">
-            {allClear ? 'All clear' : 'Your open gaps'}
+            {allClear ? 'All clear' : 'Take action now — complete these to get your Certificate'}
           </h3>
           <p className="program-journey__miss-sub">
             {allClear
               ? 'Nothing below the cut-offs right now.'
-              : `${gapCount} item${gapCount === 1 ? '' : 's'} below cut-off — fix these.`}
+              : `${gapCount} item${gapCount === 1 ? '' : 's'} still below the cut-off.`}
           </p>
         </div>
 
