@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import type { StudentAssignmentItem } from '../../services/studentAssignmentDisplay';
 import type { ClassWiseAttendanceEntry } from '../../services/classWiseAttendance';
 import {
+  buildPreRecordedVideoLabels,
   normalizeSessionHours,
+  orderPreRecordedSessions,
   parseDurationFromPreRecordedHeader,
   preRecordedChartLabel,
   preRecordedCompletionPct,
@@ -144,7 +146,9 @@ function liveSessionGapNames(classWise: ClassWiseAttendanceEntry | null | undefi
 
 function preRecordedGapNames(classWise: ClassWiseAttendanceEntry | null | undefined): string[] {
   if (!classWise?.preRecorded?.length) return [];
-  return classWise.preRecorded
+  const videos = orderPreRecordedSessions(classWise.preRecorded);
+  const labels = buildPreRecordedVideoLabels(videos.map(s => s.key));
+  return videos
     .filter(s => {
       const durationMin = s.durationMin ?? parseDurationFromPreRecordedHeader(s.key);
       const maxCredit =
@@ -166,7 +170,7 @@ function preRecordedGapNames(classWise: ClassWiseAttendanceEntry | null | undefi
             ? Math.round((durationMin / 60) * 1000) / 1000
             : 0;
       const pct = Math.round(preRecordedCompletionPct(s.hours, maxCredit));
-      return `${shortenGapLabel(preRecordedChartLabel(s.key), 22)} · ${pct}%`;
+      return `${shortenGapLabel(labels.get(s.key) ?? preRecordedChartLabel(s.key), 30)} · ${pct}%`;
     });
 }
 

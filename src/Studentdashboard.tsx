@@ -62,6 +62,8 @@ interface Props {
 
 /** Minimum chart width per session so labels stay readable when scrolling. */
 const SESSION_TREND_SLOT_WIDTH = 72;
+/** Pre-recorded labels like WK3_VDO2_SWOT_1 need more room than a date. */
+const PRE_RECORDED_SLOT_WIDTH = 104;
 /** Minimum chart width per quiz bar on narrow screens. */
 const QUIZ_SLOT_WIDTH = 108;
 type SessionTrendFocus = 'start' | 'latest';
@@ -300,8 +302,12 @@ export default function StudentDashboard({ email, onBack }: Props) {
 
   const sessionTrend = classWise ? buildSessionTrendFromClassWise(classWise) : [];
   const preRecordedTrend = classWise ? buildPreRecordedTrendFromClassWise(classWise) : [];
-  // Per-video hours are not in the workbook yet, so the pre-recorded tab stays blank.
-  const activeSessionTrend = sessionChartSeries === 'live' ? sessionTrend : [];
+  // A single "Pre-recorded" summary total has no per-video hours, so the tab stays blank for it.
+  const hasPerVideoHours = (classWise?.preRecorded ?? []).some(s => s.key !== 'Pre-recorded');
+  const isPreRecordedSeries = sessionChartSeries === 'prerecorded';
+  const activeSessionTrend = !isPreRecordedSeries
+    ? sessionTrend
+    : hasPerVideoHours ? preRecordedTrend : [];
   const hasLiveTrend = sessionTrend.length > 0;
   const hasPreRecordedTrend = preRecordedTrend.length > 0;
   const hasAnySessionTrend = hasLiveTrend || hasPreRecordedTrend;
@@ -312,7 +318,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
     ? 100
     : Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
   const sessionTrendYLabel = sessionChartSeries === 'prerecorded' ? 'Completion %' : 'Hours';
-  const sessionTrendChartWidth = Math.max(activeSessionTrend.length * SESSION_TREND_SLOT_WIDTH, isMobile ? 300 : 320);
+  const sessionTrendSlotWidth = isPreRecordedSeries ? PRE_RECORDED_SLOT_WIDTH : SESSION_TREND_SLOT_WIDTH;
+  const sessionTrendChartWidth = Math.max(activeSessionTrend.length * sessionTrendSlotWidth, isMobile ? 300 : 320);
   const sessionTrendNeedsScroll = !isMobile && activeSessionTrend.length > 4;
   const quizChartData = quizData.map(entry => ({
     ...entry,
@@ -501,9 +508,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
                       }}
                     />
                   )}
-                  {sessionChartSeries === 'prerecorded' && (
+                  {isPreRecordedSeries && (
                     <span className="session-trend-scroll-hint session-trend-explainer">
-                      Individual pre-recorded video hours are not available yet.
+                      {hasPerVideoHours
+                        ? 'WK# is the program week and VDO# is the video number. Each point shows how much of that video you watched.'
+                        : 'Individual pre-recorded video hours are not available yet.'}
                     </span>
                   )}
                   {activeSessionTrend.length > 0 && sessionTrendNeedsScroll && (
@@ -531,7 +540,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                   )}
                 </div>
               )}
-              {sessionChartSeries === 'prerecorded' ? (
+              {isPreRecordedSeries && !hasPerVideoHours ? (
                 <div className="session-trend-vacant">
                   This view stays blank until each pre-recorded video has its own hours. Quiz scores are in the chart below.
                 </div>
@@ -568,7 +577,19 @@ export default function StudentDashboard({ email, onBack }: Props) {
                             <Tooltip
                               contentStyle={{ background: '#fff', border: '1px solid #e3e7ef', color: '#223D62' }}
                               formatter={(value, _name, item) => {
-                                const point = (item?.payload ?? {}) as { kind?: string };
+                                const point = (item?.payload ?? {}) as {
+                                  kind?: string;
+                                  hoursCredit?: number;
+                                  maxCreditHours?: number;
+                                };
+                                if (isPreRecordedSeries) {
+                                  const watched = Number(point.hoursCredit ?? 0);
+                                  const max = Number(point.maxCreditHours ?? 0);
+                                  const hoursText = max > 0
+                                    ? `${watched.toFixed(4)} of ${max.toFixed(4)} hrs`
+                                    : `${watched.toFixed(4)} hrs`;
+                                  return [`${Number(value ?? 0).toFixed(1)}% · ${hoursText}`, 'Watched'];
+                                }
                                 const hrs = Number(value ?? 0);
                                 const label = point.kind === 'live' || hrs >= 1
                                   ? 'Live attended'
@@ -583,8 +604,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
                               dataKey="value"
                               stroke="var(--sd-primary)"
                               strokeWidth={2.5}
-                              dot={(props) => <SessionTrendDot {...props} scale="hours" />}
-                              activeDot={(props) => <SessionTrendDot {...props} scale="hours" active />}
+                              dot={(props) => <SessionTrendDot {...props} scale={isPreRecordedSeries ? 'percent' : 'hours'} />}
+                              activeDot={(props) => <SessionTrendDot {...props} scale={isPreRecordedSeries ? 'percent' : 'hours'} active />}
                             />
                           </LineChart>
                       </ResponsiveContainer>

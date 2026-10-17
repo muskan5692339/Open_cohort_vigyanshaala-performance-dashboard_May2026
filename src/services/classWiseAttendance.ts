@@ -22,6 +22,7 @@ export type SessionTrendPoint = {
   name: string;
   value: number;
   hoursCredit?: number;
+  maxCreditHours?: number;
   durationMin?: number | null;
   kind?: DateAttendanceKind;
 };
@@ -86,7 +87,7 @@ function normalizeHeader(h: string): string {
 export function isPreRecordedColumnHeader(header: string): boolean {
   const h = normalizeHeader(header);
   if (!h) return false;
-  return /pre[-\s]?recorded/.test(h) || /^prerecorded/.test(h);
+  return /pre[-\s]?recorded/.test(h) || /^prerecorded/.test(h) || /^vdo[_\s-]/.test(h);
 }
 
 /** Summary rollups, not a single pre-recorded video column. */
@@ -151,6 +152,59 @@ export function preRecordedChartLabel(header: string): string {
     .replace(/\s+\d{1,3}:\d{2}\s*(?:min(?:ute)?s?)?\s*$/i, '')
     .replace(/\s+\d+(?:\.\d+)?\s*m(?:in(?:ute)?s?)?\s*$/i, '')
     .trim();
+}
+
+/** Program week for each pre-recorded module topic, in teaching order within a week. */
+const PRE_RECORDED_TOPIC_WEEKS: Array<{ topic: string; week: number }> = [
+  { topic: 'careerexploration', week: 2 },
+  { topic: 'swot', week: 3 },
+  { topic: 'goalsetting', week: 4 },
+  { topic: 'careerplanner', week: 4 },
+];
+
+function parseVdoHeader(header: string): { topic: string; topicKey: string; part: number } | null {
+  const m = header.replace(/^\uFEFF/, '').trim().match(/^VDO[_\s-]*([A-Za-z][A-Za-z\s-]*?)[_\s-]*(\d+)?\s*$/i);
+  if (!m) return null;
+  const topic = m[1].replace(/[\s-]+/g, '');
+  return { topic, topicKey: topic.toLowerCase(), part: m[2] ? parseInt(m[2], 10) : 1 };
+}
+
+/**
+ * Chart names for pre-recorded videos: WK#_VDO#_Topic_n.
+ * VDO# is a running count across all videos in week order.
+ */
+export function buildPreRecordedVideoLabels(keys: string[]): Map<string, string> {
+  const ranked = keys.map((key, idx) => {
+    const vdo = parseVdoHeader(key);
+    const topicIdx = vdo ? PRE_RECORDED_TOPIC_WEEKS.findIndex(t => t.topic === vdo.topicKey) : -1;
+    const week = topicIdx >= 0 ? PRE_RECORDED_TOPIC_WEEKS[topicIdx].week : null;
+    return { key, idx, vdo, week, topicIdx };
+  });
+  const ordered = [...ranked].sort((a, b) => {
+    const wa = a.week ?? Number.MAX_SAFE_INTEGER;
+    const wb = b.week ?? Number.MAX_SAFE_INTEGER;
+    if (wa !== wb) return wa - wb;
+    if (a.topicIdx !== b.topicIdx) return (a.topicIdx < 0 ? 99 : a.topicIdx) - (b.topicIdx < 0 ? 99 : b.topicIdx);
+    if (a.vdo && b.vdo && a.vdo.part !== b.vdo.part) return a.vdo.part - b.vdo.part;
+    return a.idx - b.idx;
+  });
+  const labels = new Map<string, string>();
+  ordered.forEach((item, i) => {
+    if (!item.vdo) {
+      labels.set(item.key, preRecordedChartLabel(item.key));
+      return;
+    }
+    const name = `VDO${i + 1}_${item.vdo.topic}_${item.vdo.part}`;
+    labels.set(item.key, item.week != null ? `WK${item.week}_${name}` : name);
+  });
+  return labels;
+}
+
+/** Pre-recorded videos sorted into week order for charts. */
+export function orderPreRecordedSessions(sessions: ClassWiseSession[]): ClassWiseSession[] {
+  const labels = buildPreRecordedVideoLabels(sessions.map(s => s.key));
+  const order = [...labels.keys()];
+  return [...sessions].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
 }
 
 function maxCreditHoursForPreRecordedColumn(
@@ -397,7 +451,7 @@ function parsePercentValue(raw: string): number | null {
 function parsePreRecordedHours(raw: string): number {
   const n = parseFloat(String(raw ?? '').replace(/,/g, '').trim());
   if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.round(n * 100) / 100;
+  return Math.round(n * 10000) / 10000;
 }
 
 /** Each session slot counts at most 1 hour; values above 1 are treated as full attendance. */
@@ -478,6 +532,13 @@ export function parseClassWiseAttendanceRows(
     ? sessionColumns.map(col => formatSessionDateLabel(col))
     : sessionColumns;
   const keepDecimals = overallSheet || watchSheet || (isDailySheet && !dailySheet);
+  // Attendance_WatchTime puts each video's full length (hours) in the row above its header.
+  const creditRow = headerRowIdx > 0 ? rows[headerRowIdx - 1] ?? [] : [];
+  const videoCreditByColumn = new Map<string, number>();
+  for (const col of preRecordedColumns) {
+    const credit = parsePreRecordedHours(creditRow[headers.indexOf(col)] ?? '');
+    if (credit > 0 && credit < 24) videoCreditByColumn.set(col, credit);
+  }
 
   const entries: ClassWiseAttendanceEntry[] = [];
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
@@ -538,7 +599,8 @@ export function parseClassWiseAttendanceRows(
   for (const entry of entries) {
     if (!entry.preRecorded?.length) continue;
     entry.preRecorded = entry.preRecorded.map(session => {
-      const maxCreditHours = maxCreditHoursForPreRecordedColumn(
+      if (session.maxCreditHours && session.maxCreditHours > 0) return session;
+      const maxCreditHours = videoCreditByColumn.get(session.key) ?? maxCreditHoursForPreRecordedColumn(
         session.key,
         session.durationMin ?? null,
         entries,
@@ -645,15 +707,45 @@ export function readClassWiseAttendanceFromWorkbook(
     return parseClassWiseAttendanceRows(readSheetRows(ws), sheetName);
   };
 
+  const watch = parseNamed(watchName);
   const chosen = preferAttendanceSource(
     parseNamed(overallName),
-    parseNamed(watchName),
+    watch,
     parseNamed(dailyName),
     parseNamed(classWiseName),
   );
   if (!chosen) return null;
   if (!watchName) return chosen;
-  return attachSourcePreRecordedHours(chosen, preRecordedHoursByStudentId(wb));
+  return attachSourcePreRecordedHours(
+    attachWatchTimeVideos(chosen, watch),
+    preRecordedHoursByStudentId(wb),
+  );
+}
+
+/** Per-video pre-recorded hours from Attendance_WatchTime, kept alongside the chosen sheet's live dates. */
+export function attachWatchTimeVideos(
+  chosen: ClassWiseAttendanceData,
+  watch: ClassWiseAttendanceData | null,
+): ClassWiseAttendanceData {
+  if (!watch || watch === chosen || !watch.preRecordedColumns.length) return chosen;
+  const byEmail = new Map(watch.entries.map(e => [e.student_email, e]));
+  const byId = new Map(
+    watch.entries.filter(e => e.student_id).map(e => [e.student_id as string, e]),
+  );
+  return {
+    ...chosen,
+    preRecordedColumns: watch.preRecordedColumns,
+    entries: chosen.entries.map(entry => {
+      const match = byEmail.get(entry.student_email)
+        ?? (entry.student_id ? byId.get(entry.student_id) : undefined);
+      if (!match?.preRecorded?.length) return entry;
+      return {
+        ...entry,
+        preRecorded: match.preRecorded,
+        preRecordedAttendancePct: entry.preRecordedAttendancePct ?? match.preRecordedAttendancePct,
+      };
+    }),
+  };
 }
 
 export async function loadClassWiseAttendanceFromFile(
@@ -697,7 +789,9 @@ export function buildSessionTrendFromClassWise(
 export function buildPreRecordedTrendFromClassWise(
   entry: ClassWiseAttendanceEntry,
 ): SessionTrendPoint[] {
-  return (entry.preRecorded ?? []).map(s => {
+  const videos = orderPreRecordedSessions(entry.preRecorded ?? []);
+  const labels = buildPreRecordedVideoLabels(videos.map(s => s.key));
+  return videos.map(s => {
     const durationMin = s.durationMin ?? parseDurationFromPreRecordedHeader(s.key);
     const maxCredit =
       s.maxCreditHours && s.maxCreditHours > 0
@@ -706,9 +800,10 @@ export function buildPreRecordedTrendFromClassWise(
           ? Math.round((durationMin / 60) * 1000) / 1000
           : 0;
     return {
-      name: preRecordedChartLabel(s.key),
+      name: labels.get(s.key) ?? preRecordedChartLabel(s.key),
       value: preRecordedCompletionPct(s.hours, maxCredit),
       hoursCredit: s.hours,
+      maxCreditHours: maxCredit,
       durationMin,
     };
   });
