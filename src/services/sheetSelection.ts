@@ -42,7 +42,7 @@ export function isAllowedCohortSheetName(name: string): boolean {
     || isQuizPerfSheetName(name);
 }
 
-export function filterAllowedCohortSheets<T extends { name: string }>(sheets: T[]): T[] {
+export function filterAllowedCohortSheets<T extends { name: string; isGraduate?: boolean }>(sheets: T[]): T[] {
   const overallPerformance = sheets.find(s => isOverallPerformanceSheetName(s.name));
   if (overallPerformance) {
     // Inc 14 color-coded set only — ignore Form Responses, sources, FFE, etc.
@@ -59,7 +59,7 @@ export function filterAllowedCohortSheets<T extends { name: string }>(sheets: T[
     if (watch && attendance !== watch) ordered.push(watch);
     if (assignment) ordered.push(assignment);
     if (quiz) ordered.push(quiz);
-    const graduate = sheets.find(s => isGraduateSheetName(s.name));
+    const graduate = sheets.find(s => s.isGraduate || isGraduateSheetName(s.name));
     if (graduate) ordered.push(graduate);
     return ordered;
   }

@@ -125,7 +125,19 @@ function isStatusSubHeader(header: string): boolean {
 
 /** Graduation sheet, e.g. "Overall Graduate" or "Overall_to_be_graduated". */
 export function isGraduateSheetName(name: string): boolean {
-  return normalizeSheetKey(name).includes('graduat');
+  const n = normalizeSheetKey(name);
+  return n.includes('graduat') || n.includes('gradaut') || /^overallgrad/.test(n);
+}
+
+/** Graduation sheet by name, or any non-form sheet with an Endline column next to Email / STUDENT_ID. */
+export function looksLikeGraduateSheet(name: string, topRows: string[][]): boolean {
+  if (isGraduateSheetName(name)) return true;
+  if (/form|response|source|quiz|assignment|attendance|watch/i.test(name)) return false;
+  return topRows.some(row => {
+    const cells = row.map(c => String(c ?? '').toLowerCase());
+    return cells.some(c => c.includes('endline'))
+      && cells.some(c => c.includes('email') || c.replace(/[^a-z]/g, '') === 'studentid');
+  });
 }
 
 /**
@@ -331,7 +343,7 @@ export function parseAssessmentPerfSheets(
 
   const otherColumns: string[] = [];
   let surveyById: Map<string, string> | undefined;
-  const graduateSheets = sheets.filter(s => isGraduateSheetName(s.name));
+  const graduateSheets = sheets.filter(s => looksLikeGraduateSheet(s.name, s.rows.slice(0, 15)));
   for (const graduateSheet of graduateSheets) {
     const survey = parseGraduateSurveyStatus(graduateSheet.rows);
     if (!survey.byEmail.size && !survey.byId.size) continue;
@@ -413,22 +425,35 @@ export async function loadAssessmentPerfFromFile(
 ): Promise<AssessmentPerfMerge | null> {
   const buffer = cachedBuffer ?? await readFileAsArrayBuffer(file);
   const wb = await loadWorkbookFromBuffer(buffer);
+  const fullWidth = (ws: { columnCount?: number; actualColumnCount?: number }) =>
+    Math.max(ws.columnCount ?? 0, ws.actualColumnCount ?? 0, 1);
+  const topRows = (ws: { getRow: (n: number) => ExcelReadableRow; columnCount?: number; actualColumnCount?: number }) => {
+    const out: string[][] = [];
+    for (let r = 1; r <= 15; r++) out.push(readExcelRow(ws.getRow(r), fullWidth(ws)));
+    return out;
+  };
   const sheets = wb.worksheets
-    .filter(ws =>
+    .map(ws => ({
+      ws,
+      graduate: !isAssignmentPerfSheetName(ws.name)
+        && !isQuizPerfSheetName(ws.name)
+        && looksLikeGraduateSheet(ws.name, topRows(ws)),
+    }))
+    .filter(({ ws, graduate }) =>
       isAssignmentPerfSheetName(ws.name)
       || isQuizPerfSheetName(ws.name)
       || isQuizSourceSheetName(ws.name)
       || isAssignmentSourceSheetName(ws.name)
-      || isGraduateSheetName(ws.name),
+      || graduate,
     )
-    .map(ws => ({
+    .map(({ ws, graduate }) => ({
       name: ws.name,
       rows: readSheetRows(
         ws,
         isAssignmentSourceSheetName(ws.name)
           ? ASSIGNMENT_SOURCE_NAME_COL + 1
-          : isGraduateSheetName(ws.name)
-            ? Math.max(ws.columnCount ?? 0, ws.actualColumnCount ?? 0, 1)
+          : graduate
+            ? fullWidth(ws)
             : 1,
       ),
     }));

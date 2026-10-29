@@ -218,7 +218,7 @@ export function buildGapGroups(input: {
   if (videos.length) {
     groups.push({
       id: 'video',
-      title: 'Pre-recorded (< 70%)',
+      title: 'Pre-recorded short videos (< 70%)',
       names: videos,
       tone: 'warn',
     });
@@ -296,7 +296,7 @@ export default function ProgramJourneyCard({
         : `${formatHourValue(liveHours)} / ${liveSessions} live-session`
       : null;
     const preText = preRecordedAttendancePct > 0 || preRecordedHours > 0
-      ? `${preRecordedAttendancePct.toFixed(2)}% Pre-recorded`
+      ? `${preRecordedAttendancePct.toFixed(2)}% Pre-recorded short videos`
       : null;
     const parts = [liveText, preText].filter(Boolean);
     return parts.length ? `(${parts.join(' · ')})` : null;

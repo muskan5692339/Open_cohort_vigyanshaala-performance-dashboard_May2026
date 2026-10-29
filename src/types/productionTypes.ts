@@ -21,6 +21,8 @@ export interface SheetPreview {
   headers: string[];
   previewRows: string[][];
   isEmpty: boolean;
+  /** Graduation sheet with the endline survey column. */
+  isGraduate?: boolean;
 }
 
 export interface WorkbookPreview {

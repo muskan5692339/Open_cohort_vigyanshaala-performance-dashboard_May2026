@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isGraduateSheetName,
+  looksLikeGraduateSheet,
   mergeAssessmentPerfIntoRows,
   parseAssessmentPerfSheets,
   SURVEY_STATUS_COLUMN,
@@ -26,6 +27,27 @@ describe('Overall Graduate endline survey', () => {
     ], parsed);
     expect(merged.headers).toContain(SURVEY_STATUS_COLUMN);
     expect(merged.rawRows.map(r => r[SURVEY_STATUS_COLUMN])).toEqual(['Submitted', 'Not Submitted', 'Not Submitted']);
+  });
+
+  it('reads the Inc 14 "Overall Graduate" sheet with an "Endline Form" column', () => {
+    const parsed = parseAssessmentPerfSheets([
+      {
+        name: 'Overall Graduate',
+        rows: [
+          ['S.NO', 'STUDENT_ID', 'EMAIL', 'FULL NAME', 'Activity\nStatus', 'Attendance\n> 70%', 'Endline Form', 'Final\nSelection\nVariable'],
+          ['1', '18665', 'm@x.com', 'M', 'Highly Active', 'ELIGIBLE', 'Submitted', '3'],
+          ['2', '18666', 'n@x.com', 'N', 'Highly Active', 'ELIGIBLE', '#N/A', '3'],
+        ],
+      },
+    ]);
+    expect(parsed.byEmail.get('m@x.com')?.[SURVEY_STATUS_COLUMN]).toBe('Submitted');
+    expect(parsed.byEmail.get('n@x.com')?.[SURVEY_STATUS_COLUMN]).toBe('Not Submitted');
+  });
+
+  it('detects a graduation sheet by its Endline column when the name differs', () => {
+    expect(looksLikeGraduateSheet('Final List', [['EMAIL', 'Name', 'Endline Status']])).toBe(true);
+    expect(looksLikeGraduateSheet('Form Responses 1', [['Email', 'Endline Q1']])).toBe(false);
+    expect(looksLikeGraduateSheet('Overall Gradautes', [])).toBe(true);
   });
 
   it('matches by STUDENT_ID when the sheet has no email column', () => {

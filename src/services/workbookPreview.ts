@@ -7,7 +7,7 @@ import {
   isOverallAttendanceSheetName,
   isWatchTimeAttendanceSheetName,
 } from './classWiseAttendance';
-import { isAssignmentPerfSheetName, isGraduateSheetName } from './assessmentPerfSheets';
+import { isAssignmentPerfSheetName, isGraduateSheetName, looksLikeGraduateSheet } from './assessmentPerfSheets';
 
 function previewHeaderRow(ws: {
   name: string;
@@ -32,7 +32,12 @@ export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): P
 
   const allSheets: SheetPreview[] = wb.worksheets.map(ws => {
     const rowCount = Math.max(0, (ws.rowCount ?? 0) - 1);
-    const headerSourceRow = previewHeaderRow(ws);
+    const width = Math.max(ws.columnCount ?? 0, 8);
+    const topRows: string[][] = [];
+    for (let r = 1; r <= Math.min(15, Math.max(ws.rowCount ?? 1, 1)); r++) topRows.push(readExcelRow(ws.getRow(r), width));
+    const isGraduate = !isAssignmentPerfSheetName(ws.name) && looksLikeGraduateSheet(ws.name, topRows);
+    const endlineRow = isGraduate ? topRows.findIndex(row => row.some(c => /endline/i.test(c))) : -1;
+    const headerSourceRow = endlineRow >= 0 ? endlineRow + 1 : previewHeaderRow(ws);
     const headerRow = ws.getRow(headerSourceRow);
     const colCount = Math.max(headerRow.cellCount, ws.columnCount ?? 0);
     const headers = readExcelRow(headerRow, colCount).map((h, i) => h || `Column ${i + 1}`);
@@ -48,6 +53,7 @@ export async function previewWorkbook(file: File, cachedBuffer?: ArrayBuffer): P
       headers,
       previewRows,
       isEmpty: rowCount === 0,
+      isGraduate,
     };
   });
 

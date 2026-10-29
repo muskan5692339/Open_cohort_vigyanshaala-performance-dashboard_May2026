@@ -35,7 +35,7 @@ export default function FilePreviewPanel({
   const scoreSheet = preview.sheets.find(s => isOverallPerformanceSheetName(s.name));
   const assignmentSheet = preview.sheets.find(s => isAssignmentPerfSheetName(s.name));
   const quizSheet = preview.sheets.find(s => isQuizPerfSheetName(s.name));
-  const graduateSheet = preview.sheets.find(s => isGraduateSheetName(s.name));
+  const graduateSheet = preview.sheets.find(s => s.isGraduate || isGraduateSheetName(s.name));
 
   const importBits = [
     scoreSheet?.name,
@@ -77,7 +77,7 @@ export default function FilePreviewPanel({
                 ? 'Quizzes'
                 : isOverallPerformanceSheetName(s.name)
                   ? 'Scores'
-                  : isGraduateSheetName(s.name)
+                  : graduateSheet?.name === s.name
                     ? 'Endline survey'
                     : '';
           return (

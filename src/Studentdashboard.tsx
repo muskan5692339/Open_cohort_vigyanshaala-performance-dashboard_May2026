@@ -401,7 +401,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
           <BrandBanner
             className="student-header__brand"
             title="VigyanShaala Performance Dashboard"
-            subtitle="Live sessions, pre-recorded hours, quizzes and assignments"
+            subtitle="Live sessions, pre-recorded short videos, quizzes and assignments"
           />
           <div className="student-header-top">
             <h1 className="student-name">{studentName}</h1>
@@ -454,11 +454,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
               warn={attendancePct === 0}
             />
             <StatCard
-              label="Pre-recorded"
+              label="Pre-recorded short videos"
               value={`${preRecordedAttendancePct.toFixed(2)}%`}
               subtitle={preRecordedAttendancePct > 0 || preRecordedHours > 0
-                ? (preRecordedVideoCount ? `${preRecordedVideoCount} videos so far` : 'Pre-recorded videos')
-                : 'No pre-recorded watch time yet'}
+                ? (preRecordedVideoCount ? `${preRecordedVideoCount} short videos so far` : 'Pre-recorded short videos')
+                : 'No pre-recorded short video watch time yet'}
               warn={preRecordedAttendancePct === 0 && preRecordedHours === 0}
             />
             <div className={`metric-alert-wrap ${assignmentPct === 0 ? 'metric-alert-wrap--hot' : ''}`}>
@@ -512,7 +512,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                       onMouseEnter={() => setSessionChartSeries('prerecorded')}
                       aria-pressed={sessionChartSeries === 'prerecorded'}
                     >
-                      Pre-recorded videos
+                      Pre-recorded short videos
                     </button>
                     <button
                       type="button"
@@ -531,7 +531,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                       disabled={activeSessionTrend.length === 0}
                       fileName={`session-wise-${sessionChartSeries}-${studentName.replace(/\s+/g, '-').toLowerCase() || 'chart'}.png`}
                       meta={{
-                        title: `Session-wise trend · ${sessionChartSeries === 'live' ? 'Live classes' : 'Pre-recorded videos'}`,
+                        title: `Session-wise trend · ${sessionChartSeries === 'live' ? 'Live classes' : 'Pre-recorded short videos'}`,
                         subtitle: [studentName !== '—' ? studentName : '', studentEmail !== '—' ? studentEmail : '']
                           .filter(Boolean)
                           .join(' · ') || undefined,
@@ -548,7 +548,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                     <span className="session-trend-scroll-hint session-trend-explainer">
                       {hasPerVideoHours
                         ? 'WK# is the program week and VDO# is the video number. Each bar is your watch-time % for that video: green is fully watched, red is not watched.'
-                        : 'Individual pre-recorded video hours are not available yet.'}
+                        : 'Individual pre-recorded short video data is not available yet.'}
                     </span>
                   )}
                   {activeSessionTrend.length > 0 && sessionTrendNeedsScroll && (
@@ -578,7 +578,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
               )}
               {isPreRecordedSeries && !hasPerVideoHours ? (
                 <div className="session-trend-vacant">
-                  This view stays blank until each pre-recorded video has its own hours. Quiz scores are in the chart below.
+                  This view stays blank until each pre-recorded short video has its own watch-time. Quiz scores are in the chart below.
                 </div>
               ) : activeSessionTrend.length > 0 ? (
                 <div ref={sessionChartCaptureRef} className="session-trend-capture-root">
