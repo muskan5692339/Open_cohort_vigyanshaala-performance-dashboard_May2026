@@ -1,8 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isGraduateSheetName,
   mergeAssessmentPerfIntoRows,
   parseAssessmentPerfSheets,
+  SURVEY_STATUS_COLUMN,
 } from './assessmentPerfSheets';
+
+describe('Overall Graduate endline survey', () => {
+  it('maps #N/A and missing students to Not Submitted', () => {
+    expect(isGraduateSheetName('Overall Graduate')).toBe(true);
+    expect(isGraduateSheetName('Overall Performance')).toBe(false);
+    const parsed = parseAssessmentPerfSheets([
+      {
+        name: 'Overall Graduate',
+        rows: [
+          ['Email', 'Name', 'Endline Survey'],
+          ['a@x.com', 'A', 'Submitted'],
+          ['b@x.com', 'B', '#N/A'],
+        ],
+      },
+    ]);
+    expect(parsed.otherColumns).toEqual([SURVEY_STATUS_COLUMN]);
+    const merged = mergeAssessmentPerfIntoRows(['Email'], [
+      { Email: 'a@x.com' }, { Email: 'b@x.com' }, { Email: 'c@x.com' },
+    ], parsed);
+    expect(merged.headers).toContain(SURVEY_STATUS_COLUMN);
+    expect(merged.rawRows.map(r => r[SURVEY_STATUS_COLUMN])).toEqual(['Submitted', 'Not Submitted', 'Not Submitted']);
+  });
+});
 
 describe('parseAssessmentPerfSheets', () => {
   it('maps Assignment_Perf status and Quiz_Perf scores by email', () => {

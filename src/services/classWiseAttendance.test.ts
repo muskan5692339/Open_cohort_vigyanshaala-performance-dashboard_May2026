@@ -1,4 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import { parseClassWiseAttendanceRows as parseRowsForSummary } from './classWiseAttendance';
+
+describe('Overall Attendance summary columns', () => {
+  it('reads live % and pre-recorded hours from the sheet', () => {
+    const data = parseRowsForSummary([
+      ['S.I', 'STUDENT ID', 'EMAIL', 'FULL NAME', 'Pre-recorded Hours Spent', 'Pre-recorded Attendance %', 'Live Sessions Attended', 'Hours of Recordings Watched', 'Total Hours Spent_Live Sessions', 'Live Session Attendance %', '% Overall Attendance', '22 Aug'],
+      ['1', '18665', 'meghana@x.com', 'M', '0.821', '55.871', '10', '25.492', '36.313', '100', '95.59', '1'],
+    ], 'Overall Attendance');
+    const e = data?.entries[0];
+    expect(e?.preRecordedHoursSummary).toBe(0.821);
+    expect(e?.preRecordedAttendancePct).toBe(55.87);
+    expect(e?.liveAttendancePct).toBe(100);
+    expect(e?.liveSessionsAttended).toBe(10);
+    expect(e?.liveRecordingHours).toBe(25.492);
+  });
+});
 import {
   attachWatchTimeVideos,
   buildPreRecordedTrendFromClassWise,

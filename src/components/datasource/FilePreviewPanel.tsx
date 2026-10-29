@@ -5,7 +5,7 @@ import {
   isOverallAttendanceSheetName,
   isWatchTimeAttendanceSheetName,
 } from '../../services/classWiseAttendance';
-import { isAssignmentPerfSheetName, isQuizPerfSheetName } from '../../services/assessmentPerfSheets';
+import { isAssignmentPerfSheetName, isGraduateSheetName, isQuizPerfSheetName } from '../../services/assessmentPerfSheets';
 import { isOverallPerformanceSheetName, isClassWiseAttendanceSheetName } from '../../services/sheetSelection';
 
 interface FilePreviewPanelProps {
@@ -35,6 +35,7 @@ export default function FilePreviewPanel({
   const scoreSheet = preview.sheets.find(s => isOverallPerformanceSheetName(s.name));
   const assignmentSheet = preview.sheets.find(s => isAssignmentPerfSheetName(s.name));
   const quizSheet = preview.sheets.find(s => isQuizPerfSheetName(s.name));
+  const graduateSheet = preview.sheets.find(s => isGraduateSheetName(s.name));
 
   const importBits = [
     scoreSheet?.name,
@@ -42,6 +43,7 @@ export default function FilePreviewPanel({
     videoSheet?.name,
     assignmentSheet?.name,
     quizSheet?.name,
+    graduateSheet?.name,
   ].filter(Boolean);
 
   return (
@@ -55,6 +57,7 @@ export default function FilePreviewPanel({
               videoSheet ? `${videoSheet.name} → pre-recorded videos` : null,
               assignmentSheet ? `${assignmentSheet.name} → assignment status` : null,
               quizSheet ? `${quizSheet.name} → quiz scores` : null,
+              graduateSheet ? `${graduateSheet.name} → endline survey` : null,
             ].filter(Boolean).join(' · ')
           : `${preview.sheetNames.length} sheet(s) found · select the data sheet to import`}
       </div>
@@ -74,7 +77,9 @@ export default function FilePreviewPanel({
                 ? 'Quizzes'
                 : isOverallPerformanceSheetName(s.name)
                   ? 'Scores'
-                  : '';
+                  : isGraduateSheetName(s.name)
+                    ? 'Endline survey'
+                    : '';
           return (
             <button
               key={s.name}

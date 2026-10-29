@@ -275,7 +275,9 @@ export function buildStudentDashboardView(input: {
   // Live (each class capped at 1 hr) + pre-recorded video hours.
   const liveHours = classWise ? totalSessionHours(classWise) : 0;
   const preRecordedTotalHours = classWise ? totalPreRecordedCreditHours(classWise) : 0;
-  const preRecordedHours = classWise ? attendedPreRecordedHours(classWise) : 0;
+  const preRecordedHours = classWise
+    ? classWise.preRecordedHoursSummary ?? attendedPreRecordedHours(classWise)
+    : 0;
   const preRecordedAttendancePct = classWise ? preRecordedAttendancePercent(classWise) : 0;
   let attendedHours = classWise ? totalAttendedProgramHours(classWise) : 0;
   const totalHours = classWise
@@ -286,9 +288,12 @@ export function buildStudentDashboardView(input: {
   // Pre-recorded % stays separate. Fall back to the performance sheet only when
   // every date cell is empty.
   const computedLivePct = classWise && sessions > 0 ? liveSessionsAttendancePct(classWise) : null;
-  let attendancePct = computedLivePct != null && liveHours > 0
-    ? computedLivePct
-    : (sheetAttendancePct ?? 0);
+  const sheetLivePct = classWise?.liveAttendancePct;
+  let attendancePct = sheetLivePct != null && Number.isFinite(sheetLivePct)
+    ? Math.min(100, Math.round(sheetLivePct * 100) / 100)
+    : computedLivePct != null && liveHours > 0
+      ? computedLivePct
+      : (sheetAttendancePct ?? 0);
   if (attendancePct === 0 && student.imported_attendance_pct != null && student.imported_attendance_pct > 0) {
     attendancePct = Math.round(student.imported_attendance_pct * 100) / 100;
   }

@@ -203,7 +203,8 @@ export function buildGapGroups(input: {
 }): GapGroup[] {
   const groups: GapGroup[] = [];
 
-  const live = liveSessionGapNames(input.classWise);
+  const sheetLivePct = input.classWise?.liveAttendancePct;
+  const live = sheetLivePct != null && sheetLivePct >= 70 ? [] : liveSessionGapNames(input.classWise);
   if (live.length) {
     groups.push({
       id: 'live',

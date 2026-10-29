@@ -51,6 +51,7 @@ import {
   type StudentProfileCorrection,
 } from './services/studentProfileCorrections';
 import { isClassWiseOnlySheet } from './services/sheetSelection';
+import { isSurveySubmitted, normalizeSurveyStatus, SURVEY_STATUS_COLUMN } from './services/assessmentPerfSheets';
 import { adminDataUpdatedAt } from './utils/formatAdminUpdateTime';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import './styles/StudentDashboard.css';
@@ -66,6 +67,7 @@ const SESSION_TREND_SLOT_WIDTH = 72;
 const PRE_RECORDED_SLOT_WIDTH = 104;
 /** Minimum chart width per quiz bar on narrow screens. */
 const QUIZ_SLOT_WIDTH = 108;
+const ENDLINE_SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeupoXbv93N3HKOUhLiOFsQtTB-jjQgzYTRU4AbveXgZAcsIA/viewform?usp=header';
 type SessionTrendFocus = 'start' | 'latest';
 type SessionChartSeries = 'live' | 'prerecorded';
 
@@ -199,6 +201,13 @@ export default function StudentDashboard({ email, onBack }: Props) {
     return { ...lookup.rawRow, ...matched };
   }, [lookup, matched]);
 
+  const endlineSurveyStatus = useMemo(() => {
+    const raw = (dataRow as Record<string, unknown> | null)?.[SURVEY_STATUS_COLUMN];
+    if (raw === undefined || raw === null) return '';
+    return normalizeSurveyStatus(String(raw));
+  }, [dataRow]);
+  const endlineSubmitted = Boolean(endlineSurveyStatus) && isSurveySubmitted(endlineSurveyStatus);
+
   const classWiseEntry = useMemo(
     () => getClassWiseAttendanceForStudent(payload, email),
     [payload, email],
@@ -216,16 +225,17 @@ export default function StudentDashboard({ email, onBack }: Props) {
   );
   const liveTrendLength = classWiseEntry?.sessions.length ?? 0;
   const preRecordedTrendLength = classWiseEntry?.preRecorded?.length ?? 0;
+  const hasPerVideoTrend = Boolean(classWiseEntry?.preRecorded?.some(s => s.key !== 'Pre-recorded'));
 
   useEffect(() => {
     setSessionTrendFocus('start');
-    if (!liveTrendLength && preRecordedTrendLength) {
+    if (hasPerVideoTrend || (!liveTrendLength && preRecordedTrendLength)) {
       setSessionChartSeries('prerecorded');
     } else {
       setSessionChartSeries('live');
     }
     sessionTrendScrollRef.current?.scrollTo({ left: 0, behavior: 'auto' });
-  }, [email, liveTrendLength, preRecordedTrendLength]);
+  }, [email, liveTrendLength, preRecordedTrendLength, hasPerVideoTrend]);
 
   const activeTrendLength = sessionChartSeries === 'live' ? liveTrendLength : preRecordedTrendLength;
 
@@ -440,7 +450,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <StatCard
               label="Live sessions"
               value={`${attendancePct.toFixed(2)}%`}
-              subtitle={sessions > 0 ? `${liveHours.toFixed(2)} / ${sessions} hrs` : 'No live dates yet'}
+              subtitle={
+                classWise?.liveSessionsAttended != null && classWise.liveRecordingHours != null
+                  ? `${classWise.liveSessionsAttended.toFixed(2)} live + ${classWise.liveRecordingHours.toFixed(2)} recording hrs${sessions > 0 ? ` / ${sessions}` : ''}`
+                  : sessions > 0 ? `${liveHours.toFixed(2)} / ${sessions} hrs` : 'No live dates yet'
+              }
               warn={attendancePct === 0}
             />
             <StatCard
@@ -469,6 +483,23 @@ export default function StudentDashboard({ email, onBack }: Props) {
             </div>
           </div>
 
+          {endlineSurveyStatus && (
+            <section className={`endline-survey-card${endlineSubmitted ? '' : ' endline-survey-card--pending'}`}>
+              <div>
+                <h3>Endline survey</h3>
+                <span className="endline-survey-status">{endlineSurveyStatus}</span>
+                {!endlineSubmitted && (
+                  <p className="endline-survey-note">
+                    Take a minute to think about your background and the opportunities given to you, and frame your answers accordingly.
+                  </p>
+                )}
+              </div>
+              <a className="endline-survey-link" href={ENDLINE_SURVEY_URL} target="_blank" rel="noopener noreferrer">
+                {endlineSubmitted ? 'View survey' : 'Fill endline survey'}
+              </a>
+            </section>
+          )}
+
           <div className="charts-grid">
             <article className="panel-card panel-large session-trend-panel panel-card-wrap">
               <ChartDataUpdatedBubble updatedAt={adminUpdatedAt} chartKey="sessions" delayMs={1200} />
@@ -478,20 +509,22 @@ export default function StudentDashboard({ email, onBack }: Props) {
                   <div className="session-trend-view-toggle session-trend-series-toggle">
                     <button
                       type="button"
+                      className={`session-trend-toggle-btn${sessionChartSeries === 'prerecorded' ? ' active' : ''}`}
+                      onClick={() => setSessionChartSeries('prerecorded')}
+                      onMouseEnter={() => setSessionChartSeries('prerecorded')}
+                      aria-pressed={sessionChartSeries === 'prerecorded'}
+                    >
+                      Pre-recorded videos
+                    </button>
+                    <button
+                      type="button"
                       className={`session-trend-toggle-btn${sessionChartSeries === 'live' ? ' active' : ''}`}
                       onClick={() => setSessionChartSeries('live')}
+                      onMouseEnter={() => { if (hasLiveTrend) setSessionChartSeries('live'); }}
                       aria-pressed={sessionChartSeries === 'live'}
                       disabled={!hasLiveTrend}
                     >
                       Live classes
-                    </button>
-                    <button
-                      type="button"
-                      className={`session-trend-toggle-btn${sessionChartSeries === 'prerecorded' ? ' active' : ''}`}
-                      onClick={() => setSessionChartSeries('prerecorded')}
-                      aria-pressed={sessionChartSeries === 'prerecorded'}
-                    >
-                      Pre-recorded videos
                     </button>
                   </div>
                   {activeSessionTrend.length > 0 && (
@@ -508,6 +541,11 @@ export default function StudentDashboard({ email, onBack }: Props) {
                       }}
                     />
                   )}
+                  <span className="session-trend-guideline">
+                    {isPreRecordedSeries
+                      ? 'Watch every video in full · no skipping · max 1.5x speed to get credit.'
+                      : 'Attend live classes in full · missed one? Watch its recording fully, no skipping, max 1.5x speed.'}
+                  </span>
                   {isPreRecordedSeries && (
                     <span className="session-trend-scroll-hint session-trend-explainer">
                       {hasPerVideoHours

@@ -36,6 +36,14 @@ export interface ClassWiseAttendanceEntry {
   preRecorded?: ClassWiseSession[];
   /** "Pre-recorded Attendance %" from the watch-time sheet, when present. */
   preRecordedAttendancePct?: number;
+  /** "Pre-recorded Hours Spent" from the sheet, when present. */
+  preRecordedHoursSummary?: number;
+  /** "Live Session Attendance %" from the sheet (live + recordings of live classes). */
+  liveAttendancePct?: number;
+  /** "Live Sessions Attended" from the sheet. */
+  liveSessionsAttended?: number;
+  /** "Hours of Recordings Watched" (recordings of live classes) from the sheet. */
+  liveRecordingHours?: number;
 }
 
 export interface ClassWiseAttendanceData {
@@ -516,6 +524,20 @@ export function parseClassWiseAttendanceRows(
     const n = normalizeHeader(h);
     return isPreRecordedSummaryHeader(h) && (n.includes('%') || n.includes('percent') || n.includes('pct'));
   });
+  const livePctCol = headers.findIndex(h => {
+    const n = normalizeHeader(h);
+    return /\blive\b/.test(n) && n.includes('attendance') && (n.includes('%') || n.includes('percent') || n.includes('pct'))
+      && !isPreRecordedColumnHeader(h);
+  });
+  const liveAttendedCol = headers.findIndex(h => /^live sessions? attended$/.test(normalizeHeader(h)));
+  const liveRecordingCol = headers.findIndex(h => {
+    const n = normalizeHeader(h);
+    return /recordings?/.test(n) && /hour/.test(n) && /watched/.test(n) && !isPreRecordedColumnHeader(h);
+  });
+  const toNumberOrUndefined = (raw: string | undefined): number | undefined => {
+    const n = parseFloat(String(raw ?? '').replace(/,/g, '').trim());
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 10000) / 10000 : undefined;
+  };
 
   let sessionColumns = headers.filter(isSessionColumnHeader);
   let preRecordedColumns = headers.filter(isPreRecordedVideoHeader);
@@ -591,6 +613,10 @@ export function parseClassWiseAttendanceRows(
       sessions,
       preRecorded: preRecorded.length ? preRecorded : undefined,
       preRecordedAttendancePct: summaryPct ?? undefined,
+      preRecordedHoursSummary: preHoursCol >= 0 ? toNumberOrUndefined(r[preHoursCol]) : undefined,
+      liveAttendancePct: livePctCol >= 0 ? parsePercentValue(r[livePctCol] ?? '') ?? undefined : undefined,
+      liveSessionsAttended: liveAttendedCol >= 0 ? toNumberOrUndefined(r[liveAttendedCol]) : undefined,
+      liveRecordingHours: liveRecordingCol >= 0 ? toNumberOrUndefined(r[liveRecordingCol]) : undefined,
     });
   }
 

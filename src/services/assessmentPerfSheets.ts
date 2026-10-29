@@ -123,9 +123,58 @@ function isStatusSubHeader(header: string): boolean {
   return h === 'status' || /^status(\s|$)/.test(h);
 }
 
+/** Graduation sheet, e.g. "Overall Graduate" or "Overall_to_be_graduated". */
+export function isGraduateSheetName(name: string): boolean {
+  const n = normalizeSheetKey(name);
+  return n.startsWith('overall') && n.includes('graduat');
+}
+
+/**
+ * Roster column for the endline survey status. The name avoids "endline" so
+ * assignment detectors do not count it as an assignment.
+ */
+export const SURVEY_STATUS_COLUMN = 'Graduation Survey Status';
+export const SURVEY_NOT_SUBMITTED = 'Not Submitted';
+
+export function normalizeSurveyStatus(raw: string): string {
+  const s = String(raw ?? '').trim();
+  if (!s || /^#?n\/?a$/i.test(s) || /^#(value|ref|div\/0|null|name)!?$/i.test(s) || s === '0' || /^-+$/.test(s)) {
+    return SURVEY_NOT_SUBMITTED;
+  }
+  if (/^(no|false|not\s*submitted|pending|no\s*submission)$/i.test(s)) return SURVEY_NOT_SUBMITTED;
+  if (/^(1|yes|true|y|done|filled)$/i.test(s)) return 'Submitted';
+  return s;
+}
+
+export function isSurveySubmitted(status: string): boolean {
+  return normalizeSurveyStatus(status) !== SURVEY_NOT_SUBMITTED;
+}
+
+/** email → endline survey status from the graduation sheet's Endline column. */
+export function parseGraduateSurveyStatus(rows: string[][]): Map<string, string> {
+  const out = new Map<string, string>();
+  const limit = Math.min(rows.length, 12);
+  for (let h = 0; h < limit; h++) {
+    const headers = rows[h] ?? [];
+    const emailIdx = findEmailCol(headers);
+    const endlineIdx = headers.findIndex(x => /endline/i.test(x ?? ''));
+    if (emailIdx < 0 || endlineIdx < 0) continue;
+    for (let r = h + 1; r < rows.length; r++) {
+      const row = rows[r] ?? [];
+      const email = normalizeEmail(row[emailIdx] ?? '');
+      if (!isValidEmail(email)) continue;
+      out.set(email, normalizeSurveyStatus(row[endlineIdx] ?? ''));
+    }
+    break;
+  }
+  return out;
+}
+
 export interface AssessmentPerfMerge {
   assignmentColumns: string[];
   quizColumns: string[];
+  /** Extra roster columns, e.g. the graduation survey status. */
+  otherColumns?: string[];
   byEmail: Map<string, Record<string, string>>;
   /** email → normalized assignment key → facilitator feedback from Assignment_Source */
   feedbackByEmail: Map<string, Map<string, string>>;
@@ -255,7 +304,21 @@ export function parseAssessmentPerfSheets(
     feedbackByEmail = parseAssignmentSourceFeedback(sourceSheet.rows);
   }
 
-  return { assignmentColumns, quizColumns, byEmail, feedbackByEmail };
+  const otherColumns: string[] = [];
+  const graduateSheet = sheets.find(s => isGraduateSheetName(s.name));
+  if (graduateSheet) {
+    const survey = parseGraduateSurveyStatus(graduateSheet.rows);
+    if (survey.size) {
+      otherColumns.push(SURVEY_STATUS_COLUMN);
+      for (const [email, status] of survey) {
+        const fields = byEmail.get(email) ?? {};
+        fields[SURVEY_STATUS_COLUMN] = status;
+        byEmail.set(email, fields);
+      }
+    }
+  }
+
+  return { assignmentColumns, quizColumns, otherColumns, byEmail, feedbackByEmail };
 }
 
 export function mergeAssessmentPerfIntoRows(
@@ -269,7 +332,7 @@ export function mergeAssessmentPerfIntoRows(
     ?? headers.find(h => /email/i.test(h));
   if (!emailKey) return { headers, rawRows };
 
-  const extraHeaders = [...merge.assignmentColumns, ...merge.quizColumns]
+  const extraHeaders = [...merge.assignmentColumns, ...merge.quizColumns, ...(merge.otherColumns ?? [])]
     .filter(h => !headers.includes(h));
   let nextHeaders = [...headers, ...extraHeaders];
 
@@ -305,6 +368,10 @@ export function mergeAssessmentPerfIntoRows(
       }
     }
 
+    if (merge.otherColumns?.includes(SURVEY_STATUS_COLUMN) && !String(next[SURVEY_STATUS_COLUMN] ?? '').trim()) {
+      next[SURVEY_STATUS_COLUMN] = SURVEY_NOT_SUBMITTED;
+    }
+
     return next;
   });
 
@@ -322,13 +389,18 @@ export async function loadAssessmentPerfFromFile(
       isAssignmentPerfSheetName(ws.name)
       || isQuizPerfSheetName(ws.name)
       || isQuizSourceSheetName(ws.name)
-      || isAssignmentSourceSheetName(ws.name),
+      || isAssignmentSourceSheetName(ws.name)
+      || isGraduateSheetName(ws.name),
     )
     .map(ws => ({
       name: ws.name,
       rows: readSheetRows(
         ws,
-        isAssignmentSourceSheetName(ws.name) ? ASSIGNMENT_SOURCE_NAME_COL + 1 : 1,
+        isAssignmentSourceSheetName(ws.name)
+          ? ASSIGNMENT_SOURCE_NAME_COL + 1
+          : isGraduateSheetName(ws.name)
+            ? Math.max(ws.columnCount ?? 0, ws.actualColumnCount ?? 0, 1)
+            : 1,
       ),
     }));
   if (!sheets.length) return null;

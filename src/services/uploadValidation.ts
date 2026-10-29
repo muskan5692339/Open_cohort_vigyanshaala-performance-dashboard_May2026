@@ -1,7 +1,7 @@
 import type { UploadValidationIssue, UploadValidationResult } from '../types/productionTypes';
 import { excelCellToString, isUncachedFormulaCell, type ExcelReadableRow } from './excelCellValue';
 import { loadWorkbookFromBuffer, readFileAsArrayBuffer } from './workbookBuffer';
-import { isAssignmentPerfSheetName } from './assessmentPerfSheets';
+import { isAssignmentPerfSheetName, isGraduateSheetName } from './assessmentPerfSheets';
 import {
   isDailyAttendanceSheetName,
   isOverallAttendanceSheetName,
@@ -131,7 +131,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
     const sheetNames = wb.worksheets.map(ws => ws.name);
     const overallName = findOverallSheetName(sheetNames);
     const classWiseName = sheetNames.find(isClassWiseAttendanceSheetName);
-    const ignoredOtherSheets = sheetNames.filter(n => !isAllowedCohortSheetName(n));
+    const ignoredOtherSheets = sheetNames.filter(n => !isAllowedCohortSheetName(n) && !isGraduateSheetName(n));
 
     if (!overallName && !classWiseName) {
       issues.push(
@@ -159,7 +159,7 @@ export async function validateUploadFile(file: File, cachedBuffer?: ArrayBuffer)
           'OTHER_SHEETS_IGNORED',
           'warning',
           `Ignoring ${ignoredOtherSheets.length} other sheet(s): ${ignoredOtherSheets.slice(0, 4).join(', ')}${ignoredOtherSheets.length > 4 ? '…' : ''}.`,
-          'Only these sheets are imported when present: Overall Performance, Overall Attendance, Attendance_WatchTime (pre-recorded videos), Assignment_Perf, Quiz_Perf. Daily Attendance is used only when Overall Attendance is not in the file. Assignment_Source (feedback) and Quiz_Source are also read when needed.',
+          'Only these sheets are imported when present: Overall Performance, Overall Attendance, Attendance_WatchTime (pre-recorded videos), Assignment_Perf, Quiz_Perf, Overall Graduate (endline survey). Daily Attendance is used only when Overall Attendance is not in the file. Assignment_Source (feedback) and Quiz_Source are also read when needed.',
         ),
       );
     }

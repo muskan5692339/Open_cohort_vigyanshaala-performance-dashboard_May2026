@@ -4,7 +4,7 @@ import {
   isOverallAttendanceSheetName,
   isWatchTimeAttendanceSheetName,
 } from './classWiseAttendance';
-import { isAssignmentPerfSheetName, isQuizPerfSheetName } from './assessmentPerfSheets';
+import { isAssignmentPerfSheetName, isGraduateSheetName, isQuizPerfSheetName } from './assessmentPerfSheets';
 
 export function normalizeSheetKey(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -59,6 +59,8 @@ export function filterAllowedCohortSheets<T extends { name: string }>(sheets: T[
     if (watch && attendance !== watch) ordered.push(watch);
     if (assignment) ordered.push(assignment);
     if (quiz) ordered.push(quiz);
+    const graduate = sheets.find(s => isGraduateSheetName(s.name));
+    if (graduate) ordered.push(graduate);
     return ordered;
   }
   return sheets.filter(s => isAllowedCohortSheetName(s.name));

@@ -7,7 +7,7 @@ import {
   isOverallAttendanceSheetName,
   isWatchTimeAttendanceSheetName,
 } from './classWiseAttendance';
-import { isAssignmentPerfSheetName } from './assessmentPerfSheets';
+import { isAssignmentPerfSheetName, isGraduateSheetName } from './assessmentPerfSheets';
 
 function previewHeaderRow(ws: {
   name: string;
@@ -15,7 +15,7 @@ function previewHeaderRow(ws: {
   getRow: (n: number) => ExcelReadableRow;
 }): number {
   if (isDailyAttendanceSheetName(ws.name) || isAssignmentPerfSheetName(ws.name)) return 2;
-  if (isOverallAttendanceSheetName(ws.name) || isWatchTimeAttendanceSheetName(ws.name)) {
+  if (isOverallAttendanceSheetName(ws.name) || isWatchTimeAttendanceSheetName(ws.name) || isGraduateSheetName(ws.name)) {
     const limit = Math.min(12, Math.max(ws.rowCount ?? 1, 1));
     for (let r = 1; r <= limit; r++) {
       const row = ws.getRow(r);
