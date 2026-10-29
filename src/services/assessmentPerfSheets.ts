@@ -125,8 +125,7 @@ function isStatusSubHeader(header: string): boolean {
 
 /** Graduation sheet, e.g. "Overall Graduate" or "Overall_to_be_graduated". */
 export function isGraduateSheetName(name: string): boolean {
-  const n = normalizeSheetKey(name);
-  return n.startsWith('overall') && n.includes('graduat');
+  return normalizeSheetKey(name).includes('graduat');
 }
 
 /**
@@ -150,24 +149,48 @@ export function isSurveySubmitted(status: string): boolean {
   return normalizeSurveyStatus(status) !== SURVEY_NOT_SUBMITTED;
 }
 
-/** email → endline survey status from the graduation sheet's Endline column. */
-export function parseGraduateSurveyStatus(rows: string[][]): Map<string, string> {
-  const out = new Map<string, string>();
-  const limit = Math.min(rows.length, 12);
+function normalizeStudentIdKey(raw: string): string {
+  const s = String(raw ?? '').trim();
+  if (/^\d+(\.0+)?$/.test(s)) return String(parseInt(s, 10));
+  return s.toLowerCase();
+}
+
+function findStudentIdCol(headers: string[]): number {
+  return headers.findIndex(h => {
+    const k = String(h ?? '').toLowerCase().replace(/[^a-z]/g, '');
+    return k === 'studentid' || k === 'id';
+  });
+}
+
+function findSurveyCol(headers: string[]): number {
+  const flat = headers.map(h => String(h ?? '').toLowerCase().replace(/\s+/g, ' '));
+  const endline = flat.findIndex(h => h.includes('endline'));
+  if (endline >= 0) return endline;
+  return flat.findIndex(h => /(survey|form)/.test(h) && /(status|submi)/.test(h));
+}
+
+/** Endline survey status from the graduation sheet, keyed by email and student ID. */
+export function parseGraduateSurveyStatus(rows: string[][]): { byEmail: Map<string, string>; byId: Map<string, string> } {
+  const byEmail = new Map<string, string>();
+  const byId = new Map<string, string>();
+  const limit = Math.min(rows.length, 15);
   for (let h = 0; h < limit; h++) {
     const headers = rows[h] ?? [];
     const emailIdx = findEmailCol(headers);
-    const endlineIdx = headers.findIndex(x => /endline/i.test(x ?? ''));
-    if (emailIdx < 0 || endlineIdx < 0) continue;
+    const idIdx = findStudentIdCol(headers);
+    const surveyIdx = findSurveyCol(headers);
+    if ((emailIdx < 0 && idIdx < 0) || surveyIdx < 0) continue;
     for (let r = h + 1; r < rows.length; r++) {
       const row = rows[r] ?? [];
-      const email = normalizeEmail(row[emailIdx] ?? '');
-      if (!isValidEmail(email)) continue;
-      out.set(email, normalizeSurveyStatus(row[endlineIdx] ?? ''));
+      const status = normalizeSurveyStatus(row[surveyIdx] ?? '');
+      const email = emailIdx >= 0 ? normalizeEmail(row[emailIdx] ?? '') : '';
+      if (isValidEmail(email)) byEmail.set(email, status);
+      const id = idIdx >= 0 ? normalizeStudentIdKey(row[idIdx] ?? '') : '';
+      if (id) byId.set(id, status);
     }
     break;
   }
-  return out;
+  return { byEmail, byId };
 }
 
 export interface AssessmentPerfMerge {
@@ -175,6 +198,8 @@ export interface AssessmentPerfMerge {
   quizColumns: string[];
   /** Extra roster columns, e.g. the graduation survey status. */
   otherColumns?: string[];
+  /** student ID → survey status, for graduation sheets without an email column. */
+  surveyById?: Map<string, string>;
   byEmail: Map<string, Record<string, string>>;
   /** email → normalized assignment key → facilitator feedback from Assignment_Source */
   feedbackByEmail: Map<string, Map<string, string>>;
@@ -305,20 +330,22 @@ export function parseAssessmentPerfSheets(
   }
 
   const otherColumns: string[] = [];
-  const graduateSheet = sheets.find(s => isGraduateSheetName(s.name));
-  if (graduateSheet) {
+  let surveyById: Map<string, string> | undefined;
+  const graduateSheets = sheets.filter(s => isGraduateSheetName(s.name));
+  for (const graduateSheet of graduateSheets) {
     const survey = parseGraduateSurveyStatus(graduateSheet.rows);
-    if (survey.size) {
-      otherColumns.push(SURVEY_STATUS_COLUMN);
-      for (const [email, status] of survey) {
-        const fields = byEmail.get(email) ?? {};
-        fields[SURVEY_STATUS_COLUMN] = status;
-        byEmail.set(email, fields);
-      }
+    if (!survey.byEmail.size && !survey.byId.size) continue;
+    otherColumns.push(SURVEY_STATUS_COLUMN);
+    for (const [email, status] of survey.byEmail) {
+      const fields = byEmail.get(email) ?? {};
+      fields[SURVEY_STATUS_COLUMN] = status;
+      byEmail.set(email, fields);
     }
+    if (survey.byId.size) surveyById = survey.byId;
+    break;
   }
 
-  return { assignmentColumns, quizColumns, otherColumns, byEmail, feedbackByEmail };
+  return { assignmentColumns, quizColumns, otherColumns, surveyById, byEmail, feedbackByEmail };
 }
 
 export function mergeAssessmentPerfIntoRows(
@@ -326,11 +353,12 @@ export function mergeAssessmentPerfIntoRows(
   rawRows: Record<string, string>[],
   merge: AssessmentPerfMerge,
 ): { headers: string[]; rawRows: Record<string, string>[] } {
-  if (!merge.byEmail.size && !merge.feedbackByEmail.size) return { headers, rawRows };
+  if (!merge.byEmail.size && !merge.feedbackByEmail.size && !merge.surveyById?.size) return { headers, rawRows };
 
   const emailKey = headers.find(h => /^email$/i.test(h.trim()))
     ?? headers.find(h => /email/i.test(h));
   if (!emailKey) return { headers, rawRows };
+  const idKey = headers.find(h => h.toLowerCase().replace(/[^a-z]/g, '') === 'studentid');
 
   const extraHeaders = [...merge.assignmentColumns, ...merge.quizColumns, ...(merge.otherColumns ?? [])]
     .filter(h => !headers.includes(h));
@@ -369,7 +397,8 @@ export function mergeAssessmentPerfIntoRows(
     }
 
     if (merge.otherColumns?.includes(SURVEY_STATUS_COLUMN) && !String(next[SURVEY_STATUS_COLUMN] ?? '').trim()) {
-      next[SURVEY_STATUS_COLUMN] = SURVEY_NOT_SUBMITTED;
+      const byId = idKey && merge.surveyById?.get(normalizeStudentIdKey(row[idKey] ?? ''));
+      next[SURVEY_STATUS_COLUMN] = byId || SURVEY_NOT_SUBMITTED;
     }
 
     return next;
@@ -405,7 +434,7 @@ export async function loadAssessmentPerfFromFile(
     }));
   if (!sheets.length) return null;
   const parsed = parseAssessmentPerfSheets(sheets);
-  if (!parsed.byEmail.size && !parsed.feedbackByEmail.size) return null;
+  if (!parsed.byEmail.size && !parsed.feedbackByEmail.size && !parsed.surveyById?.size) return null;
   return parsed;
 }
 

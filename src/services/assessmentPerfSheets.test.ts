@@ -27,6 +27,24 @@ describe('Overall Graduate endline survey', () => {
     expect(merged.headers).toContain(SURVEY_STATUS_COLUMN);
     expect(merged.rawRows.map(r => r[SURVEY_STATUS_COLUMN])).toEqual(['Submitted', 'Not Submitted', 'Not Submitted']);
   });
+
+  it('matches by STUDENT_ID when the sheet has no email column', () => {
+    const parsed = parseAssessmentPerfSheets([
+      {
+        name: 'Overall Graduate',
+        rows: [
+          ['', 'Graduates list'],
+          ['STUDENT_ID', 'FULL NAME', 'Endline\nSurvey Status'],
+          ['18665', 'M', 'Submitted'],
+          ['18666', 'N', '#N/A'],
+        ],
+      },
+    ]);
+    const merged = mergeAssessmentPerfIntoRows(['STUDENT_ID', 'EMAIL'], [
+      { STUDENT_ID: '18665', EMAIL: 'm@x.com' }, { STUDENT_ID: '18666', EMAIL: 'n@x.com' },
+    ], parsed);
+    expect(merged.rawRows.map(r => r[SURVEY_STATUS_COLUMN])).toEqual(['Submitted', 'Not Submitted']);
+  });
 });
 
 describe('parseAssessmentPerfSheets', () => {

@@ -524,14 +524,15 @@ export function parseClassWiseAttendanceRows(
     const n = normalizeHeader(h);
     return isPreRecordedSummaryHeader(h) && (n.includes('%') || n.includes('percent') || n.includes('pct'));
   });
+  const flatHeader = (h: string) => normalizeHeader(h).replace(/\s+/g, ' ');
   const livePctCol = headers.findIndex(h => {
-    const n = normalizeHeader(h);
+    const n = flatHeader(h);
     return /\blive\b/.test(n) && n.includes('attendance') && (n.includes('%') || n.includes('percent') || n.includes('pct'))
       && !isPreRecordedColumnHeader(h);
   });
-  const liveAttendedCol = headers.findIndex(h => /^live sessions? attended$/.test(normalizeHeader(h)));
+  const liveAttendedCol = headers.findIndex(h => /^live sessions? attended$/.test(flatHeader(h)));
   const liveRecordingCol = headers.findIndex(h => {
-    const n = normalizeHeader(h);
+    const n = flatHeader(h);
     return /recordings?/.test(n) && /hour/.test(n) && /watched/.test(n) && !isPreRecordedColumnHeader(h);
   });
   const toNumberOrUndefined = (raw: string | undefined): number | undefined => {
@@ -612,9 +613,9 @@ export function parseClassWiseAttendanceRows(
       student_id: studentId || undefined,
       sessions,
       preRecorded: preRecorded.length ? preRecorded : undefined,
-      preRecordedAttendancePct: summaryPct ?? undefined,
-      preRecordedHoursSummary: preHoursCol >= 0 ? toNumberOrUndefined(r[preHoursCol]) : undefined,
-      liveAttendancePct: livePctCol >= 0 ? parsePercentValue(r[livePctCol] ?? '') ?? undefined : undefined,
+      preRecordedAttendancePct: prePctCol >= 0 ? summaryPct ?? 0 : undefined,
+      preRecordedHoursSummary: preHoursCol >= 0 ? toNumberOrUndefined(r[preHoursCol]) ?? 0 : undefined,
+      liveAttendancePct: livePctCol >= 0 ? parsePercentValue(r[livePctCol] ?? '') ?? 0 : undefined,
       liveSessionsAttended: liveAttendedCol >= 0 ? toNumberOrUndefined(r[liveAttendedCol]) : undefined,
       liveRecordingHours: liveRecordingCol >= 0 ? toNumberOrUndefined(r[liveRecordingCol]) : undefined,
     });

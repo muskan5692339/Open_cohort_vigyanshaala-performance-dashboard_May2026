@@ -14,6 +14,18 @@ describe('Overall Attendance summary columns', () => {
     expect(e?.liveSessionsAttended).toBe(10);
     expect(e?.liveRecordingHours).toBe(25.492);
   });
+
+  it('matches wrapped headers and treats blank cells as 0', () => {
+    const data = parseRowsForSummary([
+      ['EMAIL', 'Pre-recorded\nHours Spent', 'Pre-recorded\nAttendance %', 'Live Session\nAttendance\n%', '22 Aug'],
+      ['a@x.com', '0.5', '40', '82.5', '1'],
+      ['b@x.com', '', '', '', '0'],
+    ], 'Overall Attendance');
+    expect(data?.entries[0].liveAttendancePct).toBe(82.5);
+    expect(data?.entries[0].preRecordedHoursSummary).toBe(0.5);
+    expect(data?.entries[1].liveAttendancePct).toBe(0);
+    expect(data?.entries[1].preRecordedAttendancePct).toBe(0);
+  });
 });
 import {
   attachWatchTimeVideos,

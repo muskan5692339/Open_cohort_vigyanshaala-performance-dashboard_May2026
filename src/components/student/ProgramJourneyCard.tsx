@@ -255,6 +255,8 @@ type Props = {
   liveHours: number;
   preRecordedHours: number;
   preRecordedAttendancePct: number;
+  /** Live-session % shown on the stat card. */
+  livePct?: number;
   cohortName?: string | null;
   /** Data-source upload time. Current week follows this, not the phone clock. */
   dataAsOf?: string | null;
@@ -268,6 +270,7 @@ export default function ProgramJourneyCard({
   liveHours,
   preRecordedHours,
   preRecordedAttendancePct,
+  livePct,
   cohortName,
   dataAsOf,
 }: Props) {
@@ -288,13 +291,13 @@ export default function ProgramJourneyCard({
   const sessionsLabel = (() => {
     if (liveSessions <= 0 && preRecordedHours <= 0 && preRecordedAttendancePct <= 0) return null;
     const liveText = liveSessions > 0
-      ? `${formatHourValue(liveHours)} / ${liveSessions} live-session`
+      ? livePct != null
+        ? `${livePct.toFixed(2)}% Live sessions`
+        : `${formatHourValue(liveHours)} / ${liveSessions} live-session`
       : null;
-    const preText = preRecordedAttendancePct > 0
+    const preText = preRecordedAttendancePct > 0 || preRecordedHours > 0
       ? `${preRecordedAttendancePct.toFixed(2)}% Pre-recorded`
-      : preRecordedHours > 0
-        ? `${formatHourValue(preRecordedHours)} Pre-recorded`
-        : null;
+      : null;
     const parts = [liveText, preText].filter(Boolean);
     return parts.length ? `(${parts.join(' · ')})` : null;
   })();

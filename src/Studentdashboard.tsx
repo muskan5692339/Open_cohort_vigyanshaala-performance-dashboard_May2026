@@ -310,10 +310,14 @@ export default function StudentDashboard({ email, onBack }: Props) {
       ? `${assignmentSubmissionPct}% submitted · ${assignmentRows.length} items`
       : `${assignmentRows.length} tracked items`;
 
-  const sessionTrend = classWise ? buildSessionTrendFromClassWise(classWise) : [];
+  const sessionTrend = (classWise ? buildSessionTrendFromClassWise(classWise) : []).map(p => ({
+    ...p,
+    value: Math.min(100, Math.round(Math.max(0, p.value) * 1000) / 10),
+  }));
   const preRecordedTrend = classWise ? buildPreRecordedTrendFromClassWise(classWise) : [];
+  const preRecordedVideoCount = (classWise?.preRecorded ?? []).filter(s => s.key !== 'Pre-recorded').length;
   // A single "Pre-recorded" summary total has no per-video hours, so the tab stays blank for it.
-  const hasPerVideoHours = (classWise?.preRecorded ?? []).some(s => s.key !== 'Pre-recorded');
+  const hasPerVideoHours = preRecordedVideoCount > 0;
   const isPreRecordedSeries = sessionChartSeries === 'prerecorded';
   const activeSessionTrend = !isPreRecordedSeries
     ? sessionTrend
@@ -321,13 +325,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
   const hasLiveTrend = sessionTrend.length > 0;
   const hasPreRecordedTrend = preRecordedTrend.length > 0;
   const hasAnySessionTrend = hasLiveTrend || hasPreRecordedTrend;
-  const sessionTrendMax = activeSessionTrend.length
-    ? Math.max(1, ...activeSessionTrend.map(p => p.value))
-    : 1;
-  const sessionTrendYMax = sessionChartSeries === 'prerecorded'
-    ? 100
-    : Math.max(1.2, Math.ceil(sessionTrendMax * 1.15 * 10) / 10);
-  const sessionTrendYLabel = sessionChartSeries === 'prerecorded' ? 'Completion %' : 'Hours';
+  const sessionTrendYMax = sessionChartSeries === 'prerecorded' ? 100 : 115;
+  const sessionTrendYLabel = sessionChartSeries === 'prerecorded' ? 'Completion %' : 'Attendance %';
   const sessionTrendSlotWidth = isPreRecordedSeries ? PRE_RECORDED_SLOT_WIDTH : SESSION_TREND_SLOT_WIDTH;
   const sessionTrendChartWidth = Math.max(activeSessionTrend.length * sessionTrendSlotWidth, isMobile ? 300 : 320);
   const sessionTrendNeedsScroll = !isMobile && activeSessionTrend.length > 4;
@@ -381,6 +380,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
             liveHours={liveHours}
             preRecordedHours={preRecordedHours}
             preRecordedAttendancePct={preRecordedAttendancePct}
+            livePct={attendancePct}
             assignmentRows={assignmentRows}
             quizBarData={quizData}
             cohortName={
@@ -450,17 +450,15 @@ export default function StudentDashboard({ email, onBack }: Props) {
             <StatCard
               label="Live sessions"
               value={`${attendancePct.toFixed(2)}%`}
-              subtitle={
-                classWise?.liveSessionsAttended != null && classWise.liveRecordingHours != null
-                  ? `${classWise.liveSessionsAttended.toFixed(2)} live + ${classWise.liveRecordingHours.toFixed(2)} recording hrs${sessions > 0 ? ` / ${sessions}` : ''}`
-                  : sessions > 0 ? `${liveHours.toFixed(2)} / ${sessions} hrs` : 'No live dates yet'
-              }
+              subtitle={sessions > 0 ? `${sessions} live classes so far` : 'No live dates yet'}
               warn={attendancePct === 0}
             />
             <StatCard
               label="Pre-recorded"
-              value={preRecordedAttendancePct > 0 ? `${preRecordedAttendancePct.toFixed(2)}%` : preRecordedHours > 0 ? `${preRecordedHours.toFixed(2)} hrs` : '0%'}
-              subtitle={preRecordedHours > 0 ? `${preRecordedHours.toFixed(2)} hrs watched` : 'No pre-recorded watch time yet'}
+              value={`${preRecordedAttendancePct.toFixed(2)}%`}
+              subtitle={preRecordedAttendancePct > 0 || preRecordedHours > 0
+                ? (preRecordedVideoCount ? `${preRecordedVideoCount} videos so far` : 'Pre-recorded videos')
+                : 'No pre-recorded watch time yet'}
               warn={preRecordedAttendancePct === 0 && preRecordedHours === 0}
             />
             <div className={`metric-alert-wrap ${assignmentPct === 0 ? 'metric-alert-wrap--hot' : ''}`}>
@@ -617,15 +615,7 @@ export default function StudentDashboard({ email, onBack }: Props) {
                             <Tooltip
                               cursor={{ fill: 'rgba(44, 72, 105, 0.06)' }}
                               contentStyle={{ background: '#fff', border: '1px solid #e3e7ef', color: '#223D62' }}
-                              formatter={(value, _name, item) => {
-                                const point = (item?.payload ?? {}) as { hoursCredit?: number; maxCreditHours?: number };
-                                const watched = Number(point.hoursCredit ?? 0);
-                                const max = Number(point.maxCreditHours ?? 0);
-                                const hoursText = max > 0
-                                  ? `${watched.toFixed(4)} of ${max.toFixed(4)} hrs`
-                                  : `${watched.toFixed(4)} hrs`;
-                                return [`${Number(value ?? 0).toFixed(1)}% · ${hoursText}`, 'Watch-time'];
-                              }}
+                              formatter={value => [`${Number(value ?? 0).toFixed(1)}%`, 'Watch-time']}
                             />
                             <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={sessionAxisCompact ? undefined : 40}>
                               {activeSessionTrend.map((point, idx) => (
@@ -656,6 +646,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
                             />
                             <YAxis
                               domain={[0, sessionTrendYMax]}
+                              ticks={[0, 25, 50, 75, 100]}
+                              tickFormatter={v => `${v}%`}
                               stroke="var(--sd-text-muted)"
                               fontSize={11}
                               width={sessionAxisCompact ? 28 : 48}
@@ -665,13 +657,13 @@ export default function StudentDashboard({ email, onBack }: Props) {
                               contentStyle={{ background: '#fff', border: '1px solid #e3e7ef', color: '#223D62' }}
                               formatter={(value, _name, item) => {
                                 const point = (item?.payload ?? {}) as { kind?: string };
-                                const hrs = Number(value ?? 0);
-                                const label = point.kind === 'live' || hrs >= 1
+                                const pct = Number(value ?? 0);
+                                const label = point.kind === 'live' || pct >= 100
                                   ? 'Live attended'
-                                  : hrs > 0
+                                  : pct > 0
                                     ? 'Recording watched'
                                     : 'Missed';
-                                return [`${hrs.toFixed(2)} hrs`, label];
+                                return [`${Math.round(pct)}%`, label];
                               }}
                             />
                             <Line
@@ -679,8 +671,8 @@ export default function StudentDashboard({ email, onBack }: Props) {
                               dataKey="value"
                               stroke="var(--sd-primary)"
                               strokeWidth={2.5}
-                              dot={(props) => <SessionTrendDot {...props} scale="hours" />}
-                              activeDot={(props) => <SessionTrendDot {...props} scale="hours" active />}
+                              dot={(props) => <SessionTrendDot {...props} scale="percent" />}
+                              activeDot={(props) => <SessionTrendDot {...props} scale="percent" active />}
                             />
                           </LineChart>
                         )}
